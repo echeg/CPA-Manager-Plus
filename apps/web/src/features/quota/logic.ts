@@ -61,6 +61,8 @@ export function mergeQuotaReserveVerdicts(
       !next ||
       (next.quotaReserve?.percent === file.quotaReserve?.percent &&
         next.quotaReserve?.mode === file.quotaReserve?.mode &&
+        (next.quotaReserve?.steps ?? []).join(',') === (file.quotaReserve?.steps ?? []).join(',') &&
+        next.quotaReserveLevel === file.quotaReserveLevel &&
         next.quotaReserveActive === file.quotaReserveActive &&
         next.quotaReserveUntil === file.quotaReserveUntil)
     ) {
@@ -71,6 +73,7 @@ export function mergeQuotaReserveVerdicts(
       ...file,
       quotaReserve: next.quotaReserve,
       quotaReserveActive: next.quotaReserveActive,
+      quotaReserveLevel: next.quotaReserveLevel,
       quotaReserveUntil: next.quotaReserveUntil,
     };
   });

@@ -1,3 +1,4 @@
+import i18n from '@/i18n';
 import { describe, expect, vi, test } from 'vitest';
 import type { AuthFileItem } from '@/features/personal-quota-support/types';
 import { readQuotaReserveDraft } from '@/features/quota/authFiles/quotaReserve';
@@ -71,6 +72,32 @@ describe('saveQuotaReserve', () => {
     );
     expect(result).toEqual({ status: 'stale' });
     expect(d.reloadReserveVerdicts).not.toHaveBeenCalled();
+  });
+
+  test('only the stale staged-reserve conflict shows localized retry guidance', async () => {
+    await i18n.changeLanguage('en');
+    const conflict =
+      'quota_reserve has multiple levels; include steps explicitly (use [] to remove additional levels)';
+    for (const [status, message, expected] of [
+      [
+        409,
+        conflict,
+        'The reserve changed in another window. Close the editor and refresh this account before trying again.',
+      ],
+      [400, conflict, conflict],
+      [409, 'another conflict', 'another conflict'],
+    ] as const) {
+      const d = deps({
+        patchFields: vi.fn(async () => {
+          throw Object.assign(new Error(message), { status });
+        }),
+      });
+      const stored = file({ quotaReserve: { percent: 30, mode: 'soft' } });
+      expect(
+        await saveQuotaReserve({ file: stored, draft: { ...draftFor(stored), percent: '35' } }, d)
+      ).toEqual({ status: 'error', message: expected });
+      expect(d.reloadReserveVerdicts).not.toHaveBeenCalled();
+    }
   });
 
   test('a rejected write reports the server message and does not reload', async () => {

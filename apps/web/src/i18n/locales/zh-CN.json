@@ -2281,7 +2281,16 @@
       "mode_soft": "软：仅作为最后选择",
       "mode_hard": "硬：停止新会话",
       "mode_soft_hint": "低于预留时，仅当没有其他可用账号时，代理才会在此账号上开启新会话。进行中的会话不受影响。",
-      "mode_hard_hint": "低于预留时，代理在窗口重置前不会在此账号上开启新会话。进行中的会话不受影响。"
+      "mode_hard_hint": "低于预留时，代理在窗口重置前不会在此账号上开启新会话。进行中的会话不受影响。",
+      "soft_stage_label": "soft{{level}}（%）",
+      "mode_soft_staged": "软：分级后备",
+      "mode_soft_staged_hint": "新对话优先使用普通账号，然后依次使用 soft1 → soft2 → soft3。现有对话及其缓存继续使用原账号。",
+      "steps_hint": "soft2 和 soft3 可选。阈值必须递减，例如 30 → 15 → 5。清空两个可选字段即可仅保留 soft1。",
+      "steps_invalid": "每个可选阈值必须是 1 到 99 之间的整数。",
+      "steps_order_invalid": "阈值必须递减：soft1 > soft2 > soft3。",
+      "steps_gap_invalid": "添加 soft3 之前请先设置 soft2。",
+      "stages_unsupported": "请更新 CLIProxyAPI 以启用 soft2 和 soft3。此服务器仅支持一个预留阈值。",
+      "changed_elsewhere": "预留设置已在另一个窗口中更改。请关闭编辑器并刷新此账户，然后重试。"
     },
     "pagination_prev": "上一页",
     "quota_refresh_success": "已刷新 \"{{name}}\" 的额度",
@@ -5484,7 +5493,12 @@
       "held_soft": "在 {{date}} 之前，仅在没有其他可用账号时代理才会在此账号上开启新会话；现有会话继续",
       "held_soft_open": "在额度窗口恢复之前，仅在没有其他可用账号时代理才会在此账号上开启新会话；现有会话继续",
       "held_hard": "在 {{date}} 之前代理不会在此账号上开启新会话；现有会话继续",
-      "held_hard_open": "在额度窗口恢复之前代理不会在此账号上开启新会话；现有会话继续"
+      "held_hard_open": "在额度窗口恢复之前代理不会在此账号上开启新会话；现有会话继续",
+      "badge_staged": "{{tier}} · {{thresholds}}%",
+      "tier_normal": "普通",
+      "staged_hint": "{{thresholds}}。新对话使用可用的最低预留级别。现有对话及其缓存继续使用原账号。",
+      "tier_unknown": "服务器尚未报告当前级别。",
+      "staged_until": "预留完全恢复时间：{{date}}。"
     },
     "resets": {
       "cooldown_failed": "重置已使用，但代理冷却未清除——请在认证文件中手动清除",

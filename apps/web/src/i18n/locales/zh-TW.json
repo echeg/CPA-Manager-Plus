@@ -2281,7 +2281,16 @@
       "mode_soft": "軟：僅作為最後選擇",
       "mode_hard": "硬：停止新工作階段",
       "mode_soft_hint": "低於預留時，僅在沒有其他可用帳號時，代理才會在此帳號上開啟新工作階段。進行中的工作階段不受影響。",
-      "mode_hard_hint": "低於預留時，代理在視窗重置前不會在此帳號上開啟新工作階段。進行中的工作階段不受影響。"
+      "mode_hard_hint": "低於預留時，代理在視窗重置前不會在此帳號上開啟新工作階段。進行中的工作階段不受影響。",
+      "soft_stage_label": "soft{{level}}（%）",
+      "mode_soft_staged": "軟：分級後備",
+      "mode_soft_staged_hint": "新對話優先使用一般帳號，然後依序使用 soft1 → soft2 → soft3。現有對話及其快取繼續使用原帳號。",
+      "steps_hint": "soft2 和 soft3 為選填。閾值必須遞減，例如 30 → 15 → 5。清空兩個選填欄位即可僅保留 soft1。",
+      "steps_invalid": "每個選填閾值必須是 1 到 99 之間的整數。",
+      "steps_order_invalid": "閾值必須遞減：soft1 > soft2 > soft3。",
+      "steps_gap_invalid": "新增 soft3 之前請先設定 soft2。",
+      "stages_unsupported": "請更新 CLIProxyAPI 以啟用 soft2 和 soft3。此伺服器僅支援一個預留閾值。",
+      "changed_elsewhere": "預留設定已在另一個視窗中變更。請關閉編輯器並重新整理此帳戶，然後重試。"
     },
     "pagination_prev": "上一頁",
     "quota_refresh_success": "已重新整理「{{name}}」的配額",
@@ -5484,7 +5493,12 @@
       "held_soft": "在 {{date}} 之前，僅在沒有其他可用帳號時代理才會在此帳號上開啟新工作階段；現有工作階段繼續",
       "held_soft_open": "在額度視窗恢復之前，僅在沒有其他可用帳號時代理才會在此帳號上開啟新工作階段；現有工作階段繼續",
       "held_hard": "在 {{date}} 之前代理不會在此帳號上開啟新工作階段；現有工作階段繼續",
-      "held_hard_open": "在額度視窗恢復之前代理不會在此帳號上開啟新工作階段；現有工作階段繼續"
+      "held_hard_open": "在額度視窗恢復之前代理不會在此帳號上開啟新工作階段；現有工作階段繼續",
+      "badge_staged": "{{tier}} · {{thresholds}}%",
+      "tier_normal": "一般",
+      "staged_hint": "{{thresholds}}。新對話使用可用的最低預留級別。現有對話及其快取繼續使用原帳號。",
+      "tier_unknown": "伺服器尚未回報目前級別。",
+      "staged_until": "預留完全恢復時間：{{date}}。"
     },
     "resets": {
       "cooldown_failed": "重設已使用，但代理冷卻未清除——請在驗證檔案中手動清除",

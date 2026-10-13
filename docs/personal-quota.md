@@ -35,6 +35,41 @@ ownership handling. A quota reserve, a CPA runtime cooldown, and an account disa
 by CPAMP automation are separate states; a reserve edit does not enable a disabled
 account. Connection changes invalidate in-flight workbench reads and cached quotas.
 
+## Staged soft reserves
+
+Each Codex or Claude account can have up to three descending reserve thresholds.
+For example, `soft1 = 30%`, `soft2 = 15%`, and `soft3 = 5%` produce these levels:
+
+| Remaining quota | Level |
+| --- | --- |
+| At least 30% | Normal (0) |
+| At least 15%, below 30% | soft1 |
+| At least 5%, below 15% | soft2 |
+| Below 5% | soft3 |
+
+CPA selects the lowest available level among eligible accounts before applying
+manual preference, credential priority, and the selected routing strategy. The
+level reflects the most constrained usable subscription window. Window expiry or
+new observations recalculate it; soft3 remains an available fallback. Existing
+session bindings retain their account and cache. Disabled accounts and actual
+provider cooldowns still take precedence.
+
+Configure these thresholds in the inline reserve editor on the Quota page. The
+backend advertises `quota_reserve_max_levels: 3` in its v8 credential response;
+extra thresholds stay unavailable against older backends that would discard them.
+The account badge displays the server's current level and configured thresholds.
+
+The persisted policy is `{ "percent": 30, "mode": "soft", "steps": [15, 5] }`.
+`percent` is soft1; `steps` contains zero to two additional thresholds, each an
+integer from 1 to 99 and strictly lower than the previous one. An existing single
+soft reserve remains a one-level policy; it never becomes soft2 or soft3 by itself.
+Hard reserves keep their existing behavior and cannot have additional steps.
+
+An explicit `steps: []` removes extra thresholds; `quota_reserve: null` removes
+the whole reserve. A v8 client cannot silently replace a staged policy with a
+legacy payload that omits its steps. This feature is maintained in CPAMP; the old
+standalone management panel has no staged-reserve editor.
+
 ## Build and verify
 
 ```sh
@@ -45,7 +80,7 @@ npm test
 npm run build
 npm run manager-server:test
 (cd apps/manager-server && go test -race ./...)
-VERSION=v1.14.6-personal.1 bash bin/release/package-native.sh
+VERSION=v1.14.6-personal.2 bash bin/release/package-native.sh
 ```
 
 The native packaging script embeds the freshly built panel. Use the resulting

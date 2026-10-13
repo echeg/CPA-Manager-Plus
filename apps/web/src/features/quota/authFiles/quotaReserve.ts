@@ -11,13 +11,19 @@ import type {
 export type QuotaReserveDraft = {
   enabled: boolean;
   percent: string;
+  /** Optional soft2 and soft3 thresholds; empty fields mean a single soft tier. */
+  steps: [string, string];
   mode: AuthFileQuotaReserveMode;
   touched: boolean;
   /** The reserve the draft started from (auth JSON, else the listed entry); patches diff it. */
   initial?: AuthFileQuotaReserve;
 };
 
-export type QuotaReserveError = 'auth_files.reserve.percent_invalid';
+export type QuotaReserveError =
+  | 'auth_files.reserve.percent_invalid'
+  | 'auth_files.reserve.steps_invalid'
+  | 'auth_files.reserve.steps_order_invalid'
+  | 'auth_files.reserve.steps_gap_invalid';
 
 const PERCENT_PATTERN = /^\d+$/;
 
@@ -48,16 +54,30 @@ export function readQuotaReserveDraft(
     ? {
         enabled: true,
         percent: String(reserve.percent),
+        steps: [String(reserve.steps?.[0] ?? ''), String(reserve.steps?.[1] ?? '')],
         mode: reserve.mode,
         touched: false,
         initial: reserve,
       }
-    : { enabled: false, percent: '', mode: 'soft', touched: false };
+    : { enabled: false, percent: '', steps: ['', ''], mode: 'soft', touched: false };
 }
 
 export function quotaReserveError(draft?: QuotaReserveDraft): QuotaReserveError | null {
   if (!draft?.touched || !draft.enabled) return null;
-  return parsePercent(draft.percent) === null ? 'auth_files.reserve.percent_invalid' : null;
+  const percent = parsePercent(draft.percent);
+  if (percent === null) return 'auth_files.reserve.percent_invalid';
+  if (draft.mode === 'hard') return null;
+  const [second, third] = draft.steps.map((value) => value.trim());
+  if (!second && third) return 'auth_files.reserve.steps_gap_invalid';
+  let previous = percent;
+  for (const value of [second, third]) {
+    if (!value) continue;
+    const step = parsePercent(value);
+    if (step === null) return 'auth_files.reserve.steps_invalid';
+    if (step >= previous) return 'auth_files.reserve.steps_order_invalid';
+    previous = step;
+  }
+  return null;
 }
 
 export function buildQuotaReservePatch(
@@ -71,7 +91,20 @@ export function buildQuotaReservePatch(
     return initial || original.quota_reserve !== undefined ? { quota_reserve: null } : {};
   }
   const percent = parsePercent(draft.percent);
-  if (percent === null) return {};
-  if (initial && initial.percent === percent && initial.mode === draft.mode) return {};
-  return { quota_reserve: { percent, mode: draft.mode } };
+  if (percent === null || quotaReserveError(draft)) return {};
+  const steps =
+    draft.mode === 'soft'
+      ? draft.steps.filter((value) => value.trim() !== '').map((value) => Number(value.trim()))
+      : [];
+  if (
+    initial &&
+    initial.percent === percent &&
+    initial.mode === draft.mode &&
+    (initial.steps ?? []).join(',') === steps.join(',')
+  )
+    return {};
+  const reserve: AuthFileQuotaReserve = { percent, mode: draft.mode };
+  // Only clear tiers the editor actually observed; omission lets the server reject stale edits.
+  if (steps.length > 0 || (initial?.steps?.length ?? 0) > 0) reserve.steps = steps;
+  return { quota_reserve: reserve };
 }

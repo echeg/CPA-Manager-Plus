@@ -1,6 +1,11 @@
 import { apiClient } from './client';
+import {
+  getQuotaReserveMaxLevels,
+  observeQuotaReserveCapabilities,
+} from './quotaReserveCapabilities';
 import { isRecord } from '@/features/quota/utils/helpers';
 import type {
+  AuthFileItem,
   AuthFileQuotaReserve,
   AuthFilesResponse,
 } from '@/features/personal-quota-support/types/authFile';
@@ -124,19 +129,43 @@ export const parseAuthFileQuotaReserve = (value: unknown): AuthFileQuotaReserve 
   if (percent === undefined || percent < 1 || percent > 99) return undefined;
   // The backend defaults a missing mode to soft.
   const mode = value.mode ?? 'soft';
-  return mode === 'soft' || mode === 'hard' ? { percent, mode } : undefined;
+  if (mode !== 'soft' && mode !== 'hard') return undefined;
+  if (value.steps === undefined) return { percent, mode };
+  if (!Array.isArray(value.steps) || value.steps.length > 2) return undefined;
+  if (mode === 'hard' && value.steps.length > 0) return undefined;
+  const steps: number[] = [];
+  let previous = percent;
+  for (const raw of value.steps) {
+    const step = readIntegerField(raw);
+    if (step === undefined || step < 1 || step >= previous) return undefined;
+    steps.push(step);
+    previous = step;
+  }
+  return { percent, mode, steps };
 };
 
 /** The selector's verdict is only meaningful next to a configured reserve. */
-const readQuotaReserveFields = (entry: AuthFileEntry) => {
+const readQuotaReserveFields = (
+  entry: AuthFileEntry
+): Pick<
+  AuthFileItem,
+  'quotaReserve' | 'quotaReserveActive' | 'quotaReserveLevel' | 'quotaReserveUntil'
+> => {
   const quotaReserve = parseAuthFileQuotaReserve(entry['quota_reserve']);
   if (!quotaReserve) {
-    return { quotaReserve: undefined, quotaReserveActive: undefined, quotaReserveUntil: undefined };
+    return {
+      quotaReserve: undefined,
+      quotaReserveActive: undefined,
+      quotaReserveLevel: undefined,
+      quotaReserveUntil: undefined,
+    };
   }
   const active = entry['quota_reserve_active'];
   const until = entry['quota_reserve_until'];
+  const level = entry['quota_reserve_level'];
   return {
     quotaReserve,
+    quotaReserveLevel: level === 0 || level === 1 || level === 2 || level === 3 ? level : undefined,
     quotaReserveActive: typeof active === 'boolean' ? active : undefined,
     quotaReserveUntil:
       typeof until === 'string' && Number.isFinite(Date.parse(until)) ? until : undefined,
@@ -235,13 +264,15 @@ export const normalizeAuthFilesResponse = (
 };
 
 export const authFilesApi = {
-  list: async (lookup?: AuthFileLookup) =>
-    normalizeAuthFilesResponse(
-      await apiClient.get<AuthFilesResponse>(
-        '/credentials',
-        lookup ? { params: { name: lookup.name, auth_index: lookup.authIndex } } : undefined
-      )
-    ),
+  list: async (lookup?: AuthFileLookup) => {
+    const revision = apiClient.getConnectionRevision();
+    const response = await apiClient.get<AuthFilesResponse>(
+      '/credentials',
+      lookup ? { params: { name: lookup.name, auth_index: lookup.authIndex } } : undefined
+    );
+    observeQuotaReserveCapabilities(response.quota_reserve_max_levels, revision);
+    return normalizeAuthFilesResponse(response);
+  },
 
   setStatus: (name: string, disabled: boolean, authIndex?: string) =>
     apiClient.patch<AuthFileStatusResponse>('/credentials/status', {
@@ -250,8 +281,16 @@ export const authFilesApi = {
       ...(authIndex ? { auth_index: authIndex } : {}),
     }),
 
-  patchFields: (name: string, fields: AuthFileFieldsPatch) =>
-    apiClient.patch('/credentials/fields', { name, ...fields }),
+  patchFields: (name: string, fields: AuthFileFieldsPatch) => {
+    if ((fields.quota_reserve?.steps?.length ?? 0) > 0 && getQuotaReserveMaxLevels() < 3) {
+      return Promise.reject(
+        Object.assign(new Error('This CPA backend does not support staged quota reserves.'), {
+          apiCode: 'quota_reserve_stages_unsupported',
+        })
+      );
+    }
+    return apiClient.patch('/credentials/fields', { name, ...fields });
+  },
 
   resetCooldown: (authIndex: string) =>
     apiClient.post<AuthFileCooldownResetResponse>('/routing/cooldown/reset', {

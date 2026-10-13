@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { Select } from '@/features/quota/components/Select';
 import { quotaReserveError, type QuotaReserveDraft } from '@/features/quota/authFiles/quotaReserve';
 import type { AuthFileQuotaReserveMode } from '@/features/personal-quota-support/types/authFile';
+import { useQuotaReserveCapability } from '../hooks/useQuotaReserveCapability';
 import styles from './QuotaReserveInlineEditor.module.scss';
 
 interface Props {
@@ -33,7 +34,13 @@ export function QuotaReserveInlineEditor({
   const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
   const modeId = useId();
-  const validation = quotaReserveError(draft);
+  const errorId = useId();
+  const maxLevels = useQuotaReserveCapability();
+  const unsupportedStages =
+    draft.mode === 'soft' && draft.steps.some((value) => value.trim()) && maxLevels < 3;
+  const validation = unsupportedStages
+    ? 'auth_files.reserve.stages_unsupported'
+    : quotaReserveError(draft);
   useEffect(() => {
     ref.current?.querySelector<HTMLInputElement>('input')?.focus();
   }, []);
@@ -54,7 +61,14 @@ export function QuotaReserveInlineEditor({
     >
       <div className={styles.fields}>
         <label className={styles.percent}>
-          <span>{t('auth_files.reserve.percent_label')}</span>
+          <span>
+            {t(
+              draft.mode === 'soft'
+                ? 'auth_files.reserve.soft_stage_label'
+                : 'auth_files.reserve.percent_label',
+              { level: 1 }
+            )}
+          </span>
           <input
             className="input"
             type="number"
@@ -65,9 +79,33 @@ export function QuotaReserveInlineEditor({
             value={draft.percent}
             disabled={saving}
             aria-invalid={Boolean(validation)}
+            aria-describedby={validation ? errorId : undefined}
             onChange={(event) => onChange({ enabled: true, percent: event.target.value })}
           />
         </label>
+        {draft.mode === 'soft' &&
+          draft.steps.map((value, index) => (
+            <label className={styles.percent} key={index}>
+              <span>{t('auth_files.reserve.soft_stage_label', { level: index + 2 })}</span>
+              <input
+                className="input"
+                type="number"
+                min={1}
+                max={99}
+                step={1}
+                placeholder="—"
+                value={value}
+                disabled={saving || maxLevels < 3}
+                aria-invalid={Boolean(validation)}
+                aria-describedby={validation ? errorId : undefined}
+                onChange={(event) => {
+                  const steps: [string, string] = [...draft.steps];
+                  steps[index] = event.target.value;
+                  onChange({ enabled: true, steps });
+                }}
+              />
+            </label>
+          ))}
         <span className={styles.modeLabel} id={modeId}>
           {t('auth_files.reserve.mode_label')}
         </span>
@@ -76,7 +114,14 @@ export function QuotaReserveInlineEditor({
           ariaLabelledBy={modeId}
           value={draft.mode}
           options={[
-            { value: 'soft', label: t('auth_files.reserve.mode_soft') },
+            {
+              value: 'soft',
+              label: t(
+                maxLevels >= 3
+                  ? 'auth_files.reserve.mode_soft_staged'
+                  : 'auth_files.reserve.mode_soft'
+              ),
+            },
             { value: 'hard', label: t('auth_files.reserve.mode_hard') },
           ]}
           disabled={saving}
@@ -87,10 +132,25 @@ export function QuotaReserveInlineEditor({
         {t(
           draft.mode === 'hard'
             ? 'auth_files.reserve.mode_hard_hint'
-            : 'auth_files.reserve.mode_soft_hint'
+            : maxLevels >= 3
+              ? 'auth_files.reserve.mode_soft_staged_hint'
+              : 'auth_files.reserve.mode_soft_hint'
         )}
       </p>
-      {validation && <p className={styles.error}>{t(validation)}</p>}
+      {draft.mode === 'soft' && (
+        <p className={styles.hint}>
+          {t(
+            maxLevels < 3
+              ? 'auth_files.reserve.stages_unsupported'
+              : 'auth_files.reserve.steps_hint'
+          )}
+        </p>
+      )}
+      {validation && (
+        <p className={styles.error} id={errorId} role="alert">
+          {t(validation)}
+        </p>
+      )}
       {error && (
         <p className={styles.error} role="alert">
           {error}

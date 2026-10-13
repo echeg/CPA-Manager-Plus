@@ -45,8 +45,10 @@ export type AuthFileQuotaReserveMode = 'soft' | 'hard';
 export interface AuthFileQuotaReserve {
   /** Integer 1..99. */
   percent: number;
-  /** hard: no new sessions below it; soft: last resort only. */
+  /** hard: no new dialogs below it; soft: prefer accounts in a lower reserve tier. */
   mode: AuthFileQuotaReserveMode;
+  /** Up to two additional descending thresholds for soft reserve tiers. */
+  steps?: number[];
 }
 
 export interface AuthFileItem {
@@ -82,6 +84,8 @@ export interface AuthFileItem {
   quotaReserve?: AuthFileQuotaReserve;
   /** The selector's verdict: a window is below the reserve right now. */
   quotaReserveActive?: boolean;
+  /** Authoritative server tier: 0 = normal; soft tiers 1..3; active hard reserve = 1. */
+  quotaReserveLevel?: 0 | 1 | 2 | 3;
   /** RFC3339 reset of the window holding the reserve; only while active. */
   quotaReserveUntil?: string;
   [key: string]: unknown;
@@ -91,5 +95,6 @@ export interface AuthFilesResponse {
   files: AuthFileItem[];
   total?: number;
   observed_at?: unknown;
+  quota_reserve_max_levels?: unknown;
   observedAt?: string;
 }

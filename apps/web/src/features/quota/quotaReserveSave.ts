@@ -1,3 +1,4 @@
+import i18n from '@/i18n';
 import {
   buildQuotaReservePatch,
   quotaReserveError,
@@ -14,7 +15,7 @@ export type QuotaReserveSaveResult =
   | { status: 'saved' }
   | { status: 'unchanged' }
   | { status: 'stale' }
-  | { status: 'invalid'; error: QuotaReserveError }
+  | { status: 'invalid'; error: QuotaReserveError | 'auth_files.reserve.stages_unsupported' }
   | { status: 'error'; message: string };
 
 interface SaveDeps {
@@ -45,6 +46,23 @@ export async function saveQuotaReserve(
   try {
     await patchFields(file.name, patch);
   } catch (err: unknown) {
+    if (
+      err !== null &&
+      typeof err === 'object' &&
+      'apiCode' in err &&
+      err.apiCode === 'quota_reserve_stages_unsupported'
+    ) {
+      return { status: 'invalid', error: 'auth_files.reserve.stages_unsupported' };
+    }
+    if (
+      err instanceof Error &&
+      'status' in err &&
+      err.status === 409 &&
+      err.message ===
+        'quota_reserve has multiple levels; include steps explicitly (use [] to remove additional levels)'
+    ) {
+      return { status: 'error', message: i18n.t('auth_files.reserve.changed_elsewhere') };
+    }
     return { status: 'error', message: err instanceof Error ? err.message : String(err) };
   }
   if (!isCurrent()) return { status: 'stale' };

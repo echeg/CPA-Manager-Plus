@@ -2283,7 +2283,16 @@
       "mode_soft": "Soft: last resort only",
       "mode_hard": "Hard: stop new sessions",
       "mode_soft_hint": "Below the reserve, the proxy starts new sessions on this account only when no other account is available. Running sessions continue.",
-      "mode_hard_hint": "Below the reserve, the proxy won't start new sessions on this account until the window resets. Running sessions continue."
+      "mode_hard_hint": "Below the reserve, the proxy won't start new sessions on this account until the window resets. Running sessions continue.",
+      "soft_stage_label": "soft{{level}} (%)",
+      "mode_soft_staged": "Soft: tiered fallback",
+      "mode_soft_staged_hint": "New dialogs prefer normal accounts, then soft1 → soft2 → soft3. Existing dialogs and their cache stay on the same account.",
+      "steps_hint": "soft2 and soft3 are optional. Enter decreasing thresholds, for example 30 → 15 → 5. Clear both optional fields to use only soft1.",
+      "steps_invalid": "Each optional threshold must be a whole number from 1 to 99.",
+      "steps_order_invalid": "Thresholds must decrease: soft1 > soft2 > soft3.",
+      "steps_gap_invalid": "Set soft2 before adding soft3.",
+      "stages_unsupported": "Update CLIProxyAPI to enable soft2 and soft3. This server supports one reserve threshold.",
+      "changed_elsewhere": "The reserve changed in another window. Close the editor and refresh this account before trying again."
     },
     "pagination_prev": "Previous",
     "quota_refresh_success": "Quota refreshed for \"{{name}}\"",
@@ -5489,7 +5498,12 @@
       "held_soft": "Proxy starts new sessions on this account until {{date}} only when no other account is available; existing sessions continue",
       "held_soft_open": "Proxy starts new sessions on this account only when no other account is available, until its quota window recovers; existing sessions continue",
       "held_hard": "Proxy won't start new sessions on this account until {{date}}; existing sessions continue",
-      "held_hard_open": "Proxy won't start new sessions on this account until its quota window recovers; existing sessions continue"
+      "held_hard_open": "Proxy won't start new sessions on this account until its quota window recovers; existing sessions continue",
+      "badge_staged": "{{tier}} · {{thresholds}}%",
+      "tier_normal": "normal",
+      "staged_hint": "{{thresholds}}. New dialogs use the lowest available reserve tier. Existing dialogs and their cache stay on the same account.",
+      "tier_unknown": "The server has not reported the current tier.",
+      "staged_until": "Full reserve recovery: {{date}}."
     },
     "resets": {
       "cooldown_failed": "Reset used, but the proxy cooldown was not cleared — clear it manually in Auth Files",

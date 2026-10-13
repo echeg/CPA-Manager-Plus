@@ -72,7 +72,31 @@ export function ReserveBadge({
   );
   let text: string;
   let title: string;
-  if (!file.quotaReserveActive) {
+  const level = file.quotaReserveLevel;
+  const active = level === undefined ? file.quotaReserveActive : level > 0;
+  if (!hard && (level !== undefined || (reserve.steps?.length ?? 0) > 0)) {
+    const thresholds = [reserve.percent, ...(reserve.steps ?? [])];
+    const tier =
+      level === undefined
+        ? t('quota_management.reserve.mode_soft')
+        : level === 0
+          ? t('quota_management.reserve.tier_normal')
+          : `soft${level}`;
+    text = t('quota_management.reserve.badge_staged', {
+      tier,
+      thresholds: thresholds.join('/'),
+    });
+    const configured = thresholds
+      .map((percent, index) => `soft${index + 1}: ${percent}%`)
+      .join(' · ');
+    title = t('quota_management.reserve.staged_hint', { thresholds: configured });
+    if (level === undefined) title += ` ${t('quota_management.reserve.tier_unknown')}`;
+    if (active && file.quotaReserveUntil) {
+      title += ` ${t('quota_management.reserve.staged_until', {
+        date: formatInstantShort(Date.parse(file.quotaReserveUntil)),
+      })}`;
+    }
+  } else if (!active) {
     text = t('quota_management.reserve.badge', { percent: reserve.percent, mode });
     title = t(hard ? 'quota_management.reserve.idle_hard' : 'quota_management.reserve.idle_soft', {
       percent: reserve.percent,
@@ -90,13 +114,14 @@ export function ReserveBadge({
       hard ? 'quota_management.reserve.held_hard_open' : 'quota_management.reserve.held_soft_open'
     );
   }
-  const tone = file.quotaReserveActive ? 'warn' : undefined;
+  const tone = active ? 'warn' : undefined;
   if (onClick) {
     return (
       <button
         type="button"
         className={`${styles.reserve} ${styles.reserveButton}`}
         data-reserve-badge=""
+        data-reserve-level={level}
         data-tone={tone}
         title={title}
         aria-expanded={expanded}
@@ -107,7 +132,13 @@ export function ReserveBadge({
     );
   }
   return (
-    <span className={styles.reserve} data-reserve-badge="" data-tone={tone} title={title}>
+    <span
+      className={styles.reserve}
+      data-reserve-badge=""
+      data-reserve-level={level}
+      data-tone={tone}
+      title={title}
+    >
       {text}
     </span>
   );
