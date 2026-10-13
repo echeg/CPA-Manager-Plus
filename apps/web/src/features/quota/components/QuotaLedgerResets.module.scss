@@ -1,0 +1,176 @@
+.chip {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 3px 9px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  &[data-tone='warn'] {
+    border-color: var(--amber-30);
+    background: var(--amber-10);
+    color: var(--amber-text);
+  }
+  &:hover {
+    color: var(--text-primary);
+  }
+  &[data-tone='warn']:hover {
+    color: var(--amber-text);
+  }
+  &:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+  }
+}
+.caret {
+  flex: none;
+  font-size: 10px;
+}
+.error {
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+.drawer {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-secondary);
+}
+.header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  strong {
+    color: var(--text-primary);
+    font-weight: 650;
+  }
+}
+.count {
+  color: var(--text-tertiary);
+  font-family: $font-mono;
+  font-size: 12px;
+}
+.hint,
+.status {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+.list {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.line {
+  padding: 9px 0;
+  border-top: 1px solid var(--border-color);
+  min-width: 0;
+  &:last-child {
+    padding-bottom: 0;
+  }
+}
+.lineHeading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.label {
+  color: var(--text-primary);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.soonest {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--amber-10);
+  color: var(--amber-text);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.detail,
+.expiry {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+.footerCard {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.note {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+.reason {
+  flex: 1 1 100%;
+  font-size: 12px;
+  color: var(--amber-text);
+}
+.confirm {
+  flex: 1 1 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--amber-30);
+  border-radius: 8px;
+  background: var(--amber-10);
+}
+.consequence {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.confirmNote {
+  margin: 4px 0 0;
+  color: var(--amber-text);
+  font-size: 12px;
+}
+.confirmActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+@media (max-width: 700px) {
+  .drawer {
+    // The narrow row places the refresh button and windows explicitly; keep the drawer below them.
+    grid-row: 3;
+    margin-top: 0;
+  }
+  .footer,
+  .confirmActions {
+    justify-content: flex-start;
+  }
+}

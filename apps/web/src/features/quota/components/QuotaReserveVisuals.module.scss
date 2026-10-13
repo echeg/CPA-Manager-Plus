@@ -1,0 +1,67 @@
+// Moved verbatim from QuotaLedger.module.scss so Ledger and cards share one look.
+.track {
+  height: 5px;
+  background: var(--bg-tertiary);
+  border-radius: 10px;
+  overflow: hidden;
+  span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+  }
+}
+.high {
+  background: var(--viz-success);
+}
+.medium {
+  background: var(--amber-color);
+}
+.low {
+  background: var(--viz-failure);
+}
+.meter {
+  position: relative;
+}
+.reserveTick {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--text-secondary);
+}
+.reserve {
+  max-width: 100%;
+  padding: 3px 9px;
+  border: 1px dashed var(--border-color);
+  border-radius: 999px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: help;
+  &[data-tone='warn'] {
+    border-style: solid;
+    border-color: var(--amber-30);
+    background: var(--amber-10);
+    color: var(--amber-text);
+  }
+}
+.reserveButton {
+  font: inherit;
+  font-size: 12px;
+  background: transparent;
+  cursor: pointer;
+  &:hover {
+    border-color: var(--border-hover);
+    color: var(--text-secondary);
+  }
+  &:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+  }
+}

@@ -6,6 +6,7 @@ import {
   type Location,
   type RouteObject,
 } from 'react-router-dom';
+import { QuotaPage } from '@/features/quota/QuotaPage';
 import { AccountsPage } from '@/pages/AccountsPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { AiProvidersPage } from '@/pages/AiProvidersPage';
@@ -166,6 +167,7 @@ const mainRoutes: RouteObject[] = [
   { path: '/ai-providers', element: <AiProvidersPage /> },
   { path: '/ai-providers/*', element: <AiProvidersPage /> },
   { path: '/accounts', element: <AccountsPage /> },
+  { path: '/quota', element: <QuotaPage /> },
   { path: '/oauth', element: <OAuthPage /> },
   {
     path: '/usage-analytics',

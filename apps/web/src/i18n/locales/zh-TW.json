@@ -254,7 +254,8 @@
     "system_info": "系統資訊",
     "system_info_short": "系統",
     "usage_maintenance": "用量維護",
-    "usage_maintenance_short": "維護"
+    "usage_maintenance_short": "維護",
+    "quota_management": "配額管理"
   },
   "usage_maintenance": {
     "archive_management": "封存管理",
@@ -2270,7 +2271,23 @@
     "headers_hint": "按 JSON 格式填寫需要額外傳送的請求標頭，例如：{\"X-My-Header\": \"value\"}",
     "headers_invalid_json": "自訂請求標頭必須是有效的 JSON。",
     "headers_invalid_object": "自訂請求標頭必須是 JSON 物件。",
-    "headers_invalid_value": "每個自訂請求標頭的值都必須是字串。"
+    "headers_invalid_value": "每個自訂請求標頭的值都必須是字串。",
+    "reserve": {
+      "label": "為外部服務預留配額",
+      "hint": "為在代理之外使用此帳號的工具保留每個訂閱視窗的一部分。",
+      "percent_label": "預留比例（%）",
+      "percent_invalid": "請輸入 1 到 99 之間的整數。",
+      "mode_label": "達到預留時",
+      "mode_soft": "軟：僅作為最後選擇",
+      "mode_hard": "硬：停止新工作階段",
+      "mode_soft_hint": "低於預留時，僅在沒有其他可用帳號時，代理才會在此帳號上開啟新工作階段。進行中的工作階段不受影響。",
+      "mode_hard_hint": "低於預留時，代理在視窗重置前不會在此帳號上開啟新工作階段。進行中的工作階段不受影響。"
+    },
+    "pagination_prev": "上一頁",
+    "quota_refresh_success": "已重新整理「{{name}}」的配額",
+    "pagination_info": "第 {{current}} / {{total}} 頁 · 共 {{count}} 個檔案",
+    "pagination_next": "下一頁",
+    "quota_refresh_failed": "重新整理「{{name}}」的配額失敗：{{message}}"
   },
   "antigravity_quota": {
     "title": "Antigravity 配額",
@@ -2297,7 +2314,9 @@
     "duration_minute": "{{minutes}} 分鐘",
     "duration_less_than_minute": "小於 1 分鐘",
     "refresh_button": "重新整理配額",
-    "fetch_all": "取得全部"
+    "fetch_all": "取得全部",
+    "missing_project_id": "Antigravity 憑證缺少 project_id。請重新登入或重新整理憑證以探索專案。",
+    "plan_label": "方案"
   },
   "antigravity_subscription": {
     "subscription_label": "訂閱",
@@ -2307,7 +2326,12 @@
     "error_badge": "方案不可用",
     "load_failed": "訂閱取得失敗：{{message}}",
     "missing_auth_index": "驗證檔案缺少 auth_index",
-    "empty_data": "暫無訂閱資料"
+    "empty_data": "暫無訂閱資料",
+    "plan_ultra": "Ultra",
+    "plan_ultra_lite": "Ultra Lite",
+    "plan_pro": "Pro",
+    "plan_unknown": "未知",
+    "plan_free": "Free"
   },
   "claude_quota": {
     "title": "Claude 配額",
@@ -2329,7 +2353,17 @@
     "iguana_necktie": "Iguana Necktie",
     "weekly_scoped_model": "{{model}} 週限額",
     "limit_index": "限額 #{{index}}",
-    "extra_usage_label": "額外用量"
+    "extra_usage_label": "額外用量",
+    "seven_day_fable": "7 天 Fable 5",
+    "cloud_session_credits": "雲端工作階段額度",
+    "plan_label": "方案",
+    "plan_unknown": "未知",
+    "plan_free": "Free",
+    "plan_pro": "Pro",
+    "plan_max": "Max",
+    "plan_max5": "Max 5x",
+    "plan_max20": "Max 20x",
+    "plan_team": "Team"
   },
   "codex_quota": {
     "title": "Codex 額度",
@@ -2413,7 +2447,28 @@
     "additional_generic_window": "{{name}} {{duration}} 限額",
     "window_usage": "已用 {{used}} / {{total}} 小時",
     "window_usage_duration": "已用 {{used}} / {{total}}",
-    "observed_window": "最近用量 Header"
+    "observed_window": "最近用量 Header",
+    "team_secondary_window": "月度限額",
+    "code_review_team_secondary_window": "程式碼審查月度限額",
+    "additional_team_secondary_window": "{{name}} 月度限額",
+    "plan_label": "方案",
+    "expires_label": "續期時間",
+    "credit_balance_label": "Credit 餘額",
+    "credit_unlimited": "無限額",
+    "reset_credit_number": "第 {{index}} 次",
+    "reset_credits_expiry_failed": "主動重置過期時間取得失敗：{{message}}",
+    "reset_confirm_button": "確認重置",
+    "reset_not_confirmed": "尚未確認額度重置成功，請重新整理額度後再決定是否重試。",
+    "reset_cooldown_failed": "額度已重置，但代理冷卻清除失敗。請在原連線的認證檔案頁面使用「清除冷卻」，不要再次消耗重置卡。",
+    "plan_plus": "Plus",
+    "plan_team": "Team",
+    "plan_free": "Free",
+    "plan_pro": "Pro 200",
+    "plan_prolite": "Pro 100",
+    "plan_business_premium": "Business Premium",
+    "personal_reset_credits_label": "主動重置次數",
+    "personal_reset_credits_expiry_label": "主動重置過期時間（{{timezone}}）",
+    "personal_reset_confirm_message": "將消耗 1 次主動重置次數來重置「{{name}}」的 Codex 配額。是否繼續？"
   },
   "kimi_quota": {
     "title": "Kimi 配額",
@@ -2432,7 +2487,10 @@
     "scoped_limit_window": "{{scope}} · {{duration}} 限額",
     "limit_index": "限額 #{{index}}",
     "scoped_limit_index": "{{scope}} · 限額 #{{index}}",
-    "reset_hint": "{{hint}} 後重置"
+    "reset_hint": "{{hint}} 後重置",
+    "domain_unavailable": "無法讀取 Kimi 憑證的網域，需要可下載且有效的驗證檔案。",
+    "stale_request": "連線或憑證已變更，請重試。",
+    "monthly_limit": "月限額"
   },
   "xai_quota": {
     "title": "xAI 配額",
@@ -2481,7 +2539,17 @@
     "pay_as_you_go_disabled": "未啟用",
     "on_demand_cap": "按需上限",
     "usage_amount": "剩餘 {{remaining}} / {{limit}}",
-    "reset_unknown": "重置時間未知"
+    "reset_unknown": "重置時間未知",
+    "usage_unavailable": "xAI 用量暫不可用",
+    "usage_breakdown": "用量明細（共用配額）",
+    "plan_label": "方案",
+    "resets_label": "重置",
+    "prepaid": "預付",
+    "plan_supergrok": "SuperGrok",
+    "plan_supergrok_heavy": "SuperGrok Heavy",
+    "plan_paid": "付費",
+    "paid_health": "付費 API 對話可用。xAI 暫不為此 OAuth 憑證提供配額總量資料。",
+    "pay_as_you_go_enabled": "已啟用，封頂 {{cap}}"
   },
   "devin_quota": {
     "title": "Devin 配額",
@@ -2501,7 +2569,10 @@
     "weekly": "每週限額",
     "plan_label": "方案",
     "plan_start": "方案生效時間",
-    "plan_end": "方案到期時間"
+    "plan_end": "方案到期時間",
+    "observed_at": "額度觀測時間：{{time}}",
+    "observed_unknown": "暫無額度觀測時間",
+    "stale_request": "連線或憑證已變更，請重試。"
   },
   "meta_quota": {
     "title": "Meta 配額",
@@ -2518,7 +2589,17 @@
     "invalid_response": "Meta 配額介面回傳無效回應",
     "idle": "點擊此處重新整理配額",
     "loading": "正在載入配額...",
-    "refresh_button": "重新整理配額"
+    "refresh_button": "重新整理配額",
+    "empty_title": "暫無 Muse 憑證",
+    "empty_desc": "使用 Muse OAuth 登入或上傳 Meta 驗證檔案以查詢額度。",
+    "load_failed": "額度查詢失敗：{{message}}",
+    "empty_data": "額度未知，可能尚未發起過模型請求。",
+    "plan": "方案",
+    "active": "訂閱有效",
+    "inactive": "訂閱未啟用",
+    "window_duration": "{{minutes}} 分鐘週期",
+    "unknown": "未知",
+    "remaining": "剩餘 {{percent}}%"
   },
   "vertex_import": {
     "title": "Vertex JSON 登入",
@@ -4271,7 +4352,10 @@
           "disable_claude_cloak_mode_desc": "全域原樣傳遞 Claude system 提示詞，不再偽裝成 Claude Code；個別憑證仍可覆寫",
           "session_affinity": "會話黏性路由",
           "ws_auth": "WebSocket 驗證",
-          "ws_auth_desc": "啟用 WebSocket 連線驗證（/v1/ws）"
+          "ws_auth_desc": "啟用 WebSocket 連線驗證（/v1/ws）",
+          "proxy_url_sponsor_hint": "沒有合適的代理？",
+          "max_retry_interval_hint": "設為 0 或負整數表示重試輪次之間不等待憑證冷卻。",
+          "strategy_earliest_reset": "優先使用最早重置的帳戶"
         },
         "quota": {
           "title": "配額回退",
@@ -5194,7 +5278,13 @@
     "claude_api_key": "Claude API 金鑰",
     "commercial_mode_restart_required": "商業模式開關已變更，請重啟服務後生效",
     "copy_failed": "複製失敗",
-    "link_copied": "已複製"
+    "link_copied": "已複製",
+    "trusted_proxies_restart_required": "可信任代理設定已儲存，重新啟動後端後生效。",
+    "region_label": "通知",
+    "type_success": "成功",
+    "type_info": "提示",
+    "type_warning": "警告",
+    "type_error": "錯誤"
   },
   "language": {
     "switch": "語言",
@@ -5359,5 +5449,200 @@
       "ultra": "Ultra",
       "ultra_lite": "Ultra Lite"
     }
+  },
+  "quota_management": {
+    "reserve_editor": {
+      "title": "額度預留",
+      "remove": "移除預留"
+    },
+    "compact": {
+      "enabled": "已啟用",
+      "disabled": "已停用",
+      "set_reserve": "設定預留…",
+      "resets_title": "重置到期",
+      "resets_title_tz": "重置到期（{{timezone}}）"
+    },
+    "totals": {
+      "title": "額度匯總",
+      "of_capacity": "共 {{capacity}}%",
+      "resets_title": "持有的重置",
+      "resets_split": "{{claude}} Claude · {{codex}} Codex",
+      "resets_next": "最早到期 {{when}}"
+    },
+    "toolbar": {
+      "switching": "切換",
+      "last": "最近 {{name}} · {{time}}"
+    },
+    "reserve": {
+      "badge": "預留 {{percent}}% · {{mode}}",
+      "badge_held": "保留至 {{date}} · {{mode}}",
+      "badge_held_open": "已保留 · {{mode}}",
+      "mode_soft": "軟",
+      "mode_hard": "硬",
+      "idle_soft": "為代理以外的服務保留每個視窗的 {{percent}}%。低於此值時，僅在沒有其他可用帳號時代理才會在此帳號上開啟新工作階段；現有工作階段繼續",
+      "idle_hard": "為代理以外的服務保留每個視窗的 {{percent}}%。低於此值時，代理不會在此帳號上開啟新工作階段；現有工作階段繼續",
+      "held_soft": "在 {{date}} 之前，僅在沒有其他可用帳號時代理才會在此帳號上開啟新工作階段；現有工作階段繼續",
+      "held_soft_open": "在額度視窗恢復之前，僅在沒有其他可用帳號時代理才會在此帳號上開啟新工作階段；現有工作階段繼續",
+      "held_hard": "在 {{date}} 之前代理不會在此帳號上開啟新工作階段；現有工作階段繼續",
+      "held_hard_open": "在額度視窗恢復之前代理不會在此帳號上開啟新工作階段；現有工作階段繼續"
+    },
+    "resets": {
+      "cooldown_failed": "重設已使用，但代理冷卻未清除——請在驗證檔案中手動清除",
+      "chip_one": "1 次重設 · {{date}} 到期",
+      "chip_many": "{{count}} 次重設 · 最近 {{date}} 到期",
+      "chip_one_open": "1 次重設 · 無到期時間",
+      "chip_many_open": "{{count}} 次重設 · 無到期時間",
+      "chip_unresolved": "重設結果未知",
+      "title": "重設",
+      "hint": "未使用的重設到期後將失效",
+      "soonest": "最早到期",
+      "expires_line": "{{date}} 到期 · {{relative}}",
+      "no_expiry": "無到期時間",
+      "unnamed": "重設 {{index}}",
+      "claude_left": "剩餘 {{left}} / {{total}} · 清除 {{windows}}",
+      "claude_left_only": "剩餘 {{left}} / {{total}}",
+      "windows": {
+        "five_hour": "5 小時",
+        "seven_day": "7 天",
+        "seven_day_overage_included": "7 天（含超額）"
+      },
+      "codex_choice_note": "由 OpenAI 決定兌換哪一次重設",
+      "use": "使用重設…",
+      "confirm_codex": "OpenAI 將兌換你 {{count}} 次重置中的一次；Codex 速率限制將被清除，該帳號的代理冷卻也將被清除",
+      "confirm_codex_last": "OpenAI 將兌換你的最後一次重置；Codex 速率限制將被清除，該帳號的代理冷卻也將被清除",
+      "confirm_claude": "從 {{label}} 中使用 1 次重置（{{date}} 到期）；清除 {{windows}} 限制",
+      "confirm_claude_open": "從 {{label}} 中使用 1 次重置；清除 {{windows}} 限制",
+      "windows_eligible": "符合條件的用量",
+      "windows_and": "{{first}}和{{last}}",
+      "cant_undo_one": "此操作無法復原 · 將剩餘 1 次重置",
+      "cant_undo_many": "此操作無法復原 · 將剩餘 {{count}} 次重置",
+      "cant_undo_none": "此操作無法復原 · 將不再剩餘重置",
+      "confirm_button": "使用 1 次重置",
+      "cancel": "取消",
+      "using": "正在使用重置…",
+      "load_error": "無法載入重設",
+      "loading": "載入中…",
+      "empty": "沒有剩餘的重設"
+    },
+    "ledger": {
+      "view_ledger": "額度帳本",
+      "view_cards": "卡片",
+      "view_timeline": "時間軸",
+      "view_label": "額度檢視",
+      "show_emails": "顯示信箱",
+      "hide_emails": "隱藏信箱",
+      "remaining": "剩餘額度",
+      "capacity": "總計 {{value}}%",
+      "reset_unknown": "重置時間未知",
+      "observed": "已取得 {{count}} / {{total}} 個額度",
+      "load_hint": "重新整理以載入額度",
+      "more": "再顯示 {{count}} 個限制",
+      "less": "收合限制",
+      "refresh_credential": "重新整理 {{name}} 的額度",
+      "note": "百分比表示剩餘額度。彙總同類限制，每個帳戶貢獻 100%。各帳戶的實際權杖額度可能不同。未知額度不會被視為耗盡。"
+    },
+    "routing": {
+      "title": "訂閱切換",
+      "description": "選擇自動切換順序。「最早重置優先」會先使用重置日期最近的可用額度；請重新整理帳戶額度以取得最新資料。",
+      "automatic": "自動選擇",
+      "disabled_account": "已停用",
+      "missing_account": "訂閱無法使用或已移除",
+      "preferred_account": "{{provider}}：新對話使用的訂閱",
+      "last_selected": "上次選擇",
+      "activity_unavailable": "活動資料無法取得",
+      "activity_loading": "載入中…",
+      "no_activity": "伺服器啟動後尚未收到請求",
+      "manual_hint": "手動選擇適用於新對話。啟用工作階段親和性後，現有對話會保留其帳戶和快取。如果所選訂閱無法使用，將自動選擇其他帳戶。",
+      "activity_hint": "顯示伺服器最近一次選擇，而非所有目前的請求。並行對話可能使用不同訂閱。每 10 秒更新一次。",
+      "ttl_hint": "閒置綁定的保留時間，例如 1h 或 24h。",
+      "affinity_hint": "工作階段親和性將對話保留在同一帳戶以重用上下文快取。現有綁定優先於重置順序。帳戶無法使用時可以切換。TTL 為閒置綁定的保留時間，例如 1h 或 24h。",
+      "saved": "路由設定已儲存。",
+      "invalid_ttl": "請輸入正數時長，例如 1h、30m 或 1h30m。"
+    },
+    "codex_fast": {
+      "title": "Codex 快速模式",
+      "on": "已開啟",
+      "off": "已關閉",
+      "description": "為支援的模型上的 Codex 訂閱請求申請優先服務層級（priority），與 Codex CLI 的 Fast 模式相同。回應更快，但訂閱額度消耗也更快。對新請求立即生效；用戶端指定的層級與 payload 規則優先。不影響 API 金鑰。"
+    },
+    "search_label": "搜尋帳號",
+    "search_placeholder": "依檔案名稱或電子郵件搜尋",
+    "search_empty_title": "沒有符合的帳號",
+    "search_empty_desc": "請嘗試其他檔案名稱或電子郵件，或清除搜尋。",
+    "search_clear": "清除搜尋",
+    "title": "配額管理",
+    "description": "集中查看 OAuth 配額與剩餘情況",
+    "refresh_all_credentials": "重新整理全部憑證",
+    "last_refresh": "上次檢查：{{time}}",
+    "last_refresh_just_now": "上次檢查：剛剛",
+    "sort_label": "排序",
+    "sort_default": "預設",
+    "sort_soonest": "最快恢復優先",
+    "meta_credentials": "{{count}} 個憑證",
+    "meta_loaded": "{{count}} 個已載入",
+    "meta_attention": "{{count}} 個需關注",
+    "empty_title": "暫無可查配額的憑證",
+    "empty_desc": "接入 Antigravity、Claude、Codex、xAI 或 Kimi 憑證後即可在此查看配額。",
+    "windows_title": "配額視窗",
+    "windows_span_weekly": "兩週",
+    "windows_span_session": "三天",
+    "windows_current": "目前",
+    "windows_today": "今天",
+    "windows_prev": "上一頁",
+    "windows_next": "下一頁",
+    "windows_mode_weekly": "按週",
+    "windows_mode_session": "5 小時",
+    "windows_credential": "憑證",
+    "windows_idle": "沒有正在計時的視窗",
+    "windows_empty_session": "目前頁面沒有憑證提供 5 小時配額視窗。",
+    "windows_legend_current": "目前視窗",
+    "windows_legend_upcoming": "即將開始",
+    "windows_legend_elapsed": "已結束",
+    "windows_legend_reset_credit": "主動重設過期",
+    "soonest_row_hint": "該憑證中最先恢復",
+    "windows_reset_credit": "主動重設",
+    "windows_credit_granted": "取得時間",
+    "windows_credit_expires": "過期時間",
+    "windows_note_weekly": "每條表示一個完整的配額視窗，從開啟到重設。同時結束的視窗會競用相同的日期。",
+    "windows_note_session": "每條表示一個 5 小時視窗。僅顯示有正在計時視窗的憑證，其餘保持為空。",
+    "weekday_sun": "日",
+    "weekday_mon": "一",
+    "weekday_tue": "二",
+    "weekday_wed": "三",
+    "weekday_thu": "四",
+    "weekday_fri": "五",
+    "weekday_sat": "六",
+    "v8_required_title": "需要 CPA v8",
+    "v8_required": "此配額工作台需要自訂 CLIProxyAPI v8 後端。請在設定中檢查 CPA 連線，或開啟「帳號」使用標準 CPAMP 功能。",
+    "open_accounts": "開啟帳號"
+  },
+  "claude_reset": {
+    "expiry_title": "主動重置過期時間（{{timezone}}）",
+    "grant_number": "第 {{index}} 批",
+    "expiry_unknown": "到期時間未知",
+    "retry_confirm": "使用原請求 ID 重試「{{name}}」結果未知的重置？可能已消耗一次重置。請在 10 分鐘內重試；請勿重新載入頁面或在其他分頁發起新請求。",
+    "remaining": "剩餘重置次數",
+    "title": "儲備重置次數",
+    "scope": "使用有限的重置權益清除符合條件的 Claude 用量視窗。僅在確定要消耗一次重置時確認。復原僅限目前分頁和工作階段；結果未知時，請勿重新載入頁面或使用其他分頁。",
+    "loading": "載入中…",
+    "read_error": "無法讀取重置權益，未提交重置。",
+    "blocked": "未提交重置：無法驗證資格、帳戶身分或工作階段。請重新整理後檢查。",
+    "unknown": "結果未知，可能已消耗一次重置。請在 10 分鐘內使用相同請求 ID 重試，不要在其他位置發起新的重置。",
+    "expired": "重試視窗已過期，目前工作階段已阻止進一步重置。請先檢查 Claude 帳戶狀態。",
+    "retry": "重試同一請求",
+    "empty": "沒有儲備重置權益。",
+    "count": "剩餘 {{left}} / {{total}} 次重置",
+    "ends": "到期：{{date}}",
+    "use": "重置額度",
+    "confirm": "確認重置",
+    "confirm_text": "確定消耗一次重置，清除「{{name}}」符合條件的用量限制？重置次數有限。",
+    "reset": "已重置用量限制。",
+    "already_used": "該權益已使用。",
+    "not_limited": "未重置：帳戶目前未達到限制。",
+    "cooldown": "未重置：仍在冷卻期。",
+    "ineligible": "此帳戶不符合資格。",
+    "unavailable": "重置暫不可用。",
+    "rate_limited": "請求過於頻繁。",
+    "auth_error": "授權遭拒。"
   }
 }

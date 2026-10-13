@@ -1,0 +1,12 @@
+// Mirrors .providerBadge in AuthFileCard.module.scss.
+.pill {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+}

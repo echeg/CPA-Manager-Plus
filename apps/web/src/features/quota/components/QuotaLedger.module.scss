@@ -1,0 +1,231 @@
+.ledger {
+  min-width: 0;
+}
+.summaries {
+  display: flex;
+  overflow-x: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: var(--bg-secondary);
+  margin-bottom: 28px;
+}
+.summary {
+  flex: 1 0 230px;
+  min-width: 0;
+  padding: 20px;
+  border-right: 1px solid var(--border-color);
+  &:last-child {
+    border-right: 0;
+  }
+}
+.summaryHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  strong {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    color: var(--text-primary);
+    font-size: 15px;
+  }
+  img {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+  }
+}
+.summaryLabel {
+  margin-top: 20px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.total {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 6px 0 12px;
+  font-variant-numeric: tabular-nums;
+  strong {
+    font-size: 30px;
+    letter-spacing: -0.04em;
+    line-height: 1.1;
+  }
+  span {
+    color: var(--text-tertiary);
+    font-size: 13px;
+  }
+}
+.segments {
+  display: flex;
+  gap: 4px;
+  // Meters come from QuotaReserveVisuals; stretch each one regardless of its class.
+  > * {
+    flex: 1;
+  }
+}
+.reset {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-top: 9px;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+}
+.coverage {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 8px;
+}
+.summaryWindow + .summaryWindow {
+  border-top: 1px solid var(--border-color);
+  padding-top: 20px;
+  margin-top: 20px;
+  .summaryLabel {
+    margin-top: 0;
+  }
+}
+.group {
+  margin-top: 28px;
+  h2 {
+    margin: 0 0 8px;
+    font-size: 15px;
+    font-weight: 650;
+    span {
+      color: var(--text-tertiary);
+      font-family: $font-mono;
+      font-size: 12px;
+      margin-left: 8px;
+      font-weight: 400;
+    }
+  }
+}
+.row {
+  display: grid;
+  grid-template-columns: minmax(170px, 1.2fr) minmax(0, 2.7fr) 30px;
+  align-items: center;
+  column-gap: 24px;
+  padding: 21px 0;
+  border-bottom: 1px solid var(--border-color);
+  min-width: 0;
+}
+.identity {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.name {
+  font-family: $font-mono;
+  font-weight: 600;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.plan {
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  &:empty {
+    display: none;
+  }
+}
+.windows {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  align-items: start;
+  min-width: 0;
+}
+.window {
+  min-width: 0;
+}
+.windowHeading {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 9px;
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  strong {
+    color: var(--text-primary);
+    font-size: 15px;
+    font-variant-numeric: tabular-nums;
+  }
+}
+.state {
+  grid-column: 1 / -1;
+  font-size: 13px;
+  color: var(--text-tertiary);
+  overflow-wrap: anywhere;
+}
+.more {
+  grid-column: 1 / -1;
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  &:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 3px;
+  }
+}
+.note {
+  margin: 20px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-tertiary);
+}
+@media (max-width: 1100px) {
+  .row {
+    column-gap: 16px;
+    grid-template-columns: minmax(150px, 1fr) minmax(0, 2fr) 30px;
+  }
+  .windows {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 700px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr) 30px;
+    row-gap: 18px;
+  }
+  .identity {
+    grid-column: 1;
+  }
+  .windows {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .row > button {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .summary {
+    flex-basis: 240px;
+  }
+}
+@media (max-width: 420px) {
+  .windows {
+    grid-template-columns: 1fr;
+  }
+}

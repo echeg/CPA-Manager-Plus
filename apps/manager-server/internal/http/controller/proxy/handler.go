@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/app"
+	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/http/middleware"
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/http/response"
 	proxysvc "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/service/proxy"
 )
@@ -32,6 +33,15 @@ func (h *Handler) Management(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.App.ProxyService.ProxyPluginManagementWithCallerAuth(w, r, response.Error)
+}
+
+// ManagementV8 requires the Manager admin key before using the saved CPA key.
+// Unlike legacy plugin routes, v8 never falls back to caller authentication.
+func (h *Handler) ManagementV8(w http.ResponseWriter, r *http.Request) {
+	if !middleware.AuthorizeAdmin(w, r, h.App.AdminAuthService) {
+		return
+	}
+	h.App.ProxyService.ProxyManagement(w, r, response.Error)
 }
 
 func (h *Handler) ModelList(w http.ResponseWriter, r *http.Request) {

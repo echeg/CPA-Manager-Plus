@@ -83,6 +83,10 @@ func rootHandler(
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
+		if proxysvc.IsCPAV8ManagementPath(r.URL.Path) {
+			middleware.WithCORS(appCtx.Config, proxyHandler.ManagementV8)(w, r)
+			return
+		}
 		if strings.HasPrefix(r.URL.Path, "/v0/management/model-prices") {
 			middleware.WithCORS(appCtx.Config, modelPriceHandler.Handle)(w, r)
 			return

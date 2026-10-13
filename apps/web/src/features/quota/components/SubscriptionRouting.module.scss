@@ -1,0 +1,118 @@
+.panel {
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-secondary);
+  min-width: 0;
+  .heading {
+    padding: 13px 16px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    h2 {
+      display: inline;
+      font-size: 14px;
+      color: var(--text-primary);
+      margin-right: 14px;
+      font-weight: 600;
+    }
+    span {
+      font-size: 12px;
+    }
+  }
+}
+.content {
+  padding: 0 16px 16px;
+  p {
+    font-size: 12px;
+    line-height: 1.65;
+    color: var(--text-tertiary);
+    margin: 0 0 14px;
+  }
+}
+.fields {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.2fr) minmax(170px, 1fr) minmax(110px, 0.65fr);
+  gap: 16px;
+  align-items: end;
+  :global(.form-group) {
+    margin-bottom: 0;
+  }
+}
+.accounts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 18px 0 14px;
+}
+.account {
+  min-width: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 12px;
+  background: var(--bg-primary);
+  > label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+}
+.activity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 5px 10px;
+  margin-top: 12px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+  strong {
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+  time {
+    color: var(--text-tertiary);
+  }
+}
+.actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.strategy {
+  min-width: 0;
+  label {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--text-secondary);
+    font-size: 12px;
+  }
+}
+.affinity {
+  padding-bottom: 10px;
+}
+.error {
+  color: var(--danger-color);
+  font-size: 12px;
+  margin-top: 12px;
+  overflow-wrap: anywhere;
+}
+.saved {
+  color: var(--viz-success);
+  font-size: 12px;
+  margin-top: 12px;
+}
+@media (max-width: 900px) {
+  .fields,
+  .accounts {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+@media (max-width: 500px) {
+  .fields,
+  .accounts {
+    grid-template-columns: 1fr;
+  }
+  .panel .heading span {
+    display: block;
+    margin: 6px 0 0 16px;
+  }
+}

@@ -256,7 +256,8 @@
     "system_info": "System Info",
     "system_info_short": "System",
     "usage_maintenance": "Usage Maintenance",
-    "usage_maintenance_short": "Maintenance"
+    "usage_maintenance_short": "Maintenance",
+    "quota_management": "Quota Management"
   },
   "usage_maintenance": {
     "archive_management": "Archive management",
@@ -2272,7 +2273,23 @@
     "headers_hint": "Enter extra request headers as JSON, for example {\"X-My-Header\": \"value\"}",
     "headers_invalid_json": "Custom headers must be valid JSON.",
     "headers_invalid_object": "Custom headers must be a JSON object.",
-    "headers_invalid_value": "Each custom header value must be a string."
+    "headers_invalid_value": "Each custom header value must be a string.",
+    "reserve": {
+      "label": "Reserve quota for external services",
+      "hint": "Keeps part of every subscription window for tools that use this account outside the proxy.",
+      "percent_label": "Reserved share (%)",
+      "percent_invalid": "Enter a whole number from 1 to 99.",
+      "mode_label": "When the reserve is reached",
+      "mode_soft": "Soft: last resort only",
+      "mode_hard": "Hard: stop new sessions",
+      "mode_soft_hint": "Below the reserve, the proxy starts new sessions on this account only when no other account is available. Running sessions continue.",
+      "mode_hard_hint": "Below the reserve, the proxy won't start new sessions on this account until the window resets. Running sessions continue."
+    },
+    "pagination_prev": "Previous",
+    "quota_refresh_success": "Quota refreshed for \"{{name}}\"",
+    "pagination_info": "Page {{current}} / {{total}} · {{count}} files",
+    "pagination_next": "Next",
+    "quota_refresh_failed": "Failed to refresh quota for \"{{name}}\": {{message}}"
   },
   "antigravity_quota": {
     "title": "Antigravity Quota",
@@ -2299,7 +2316,9 @@
     "duration_minute": "{{minutes}}m",
     "duration_less_than_minute": "<1m",
     "refresh_button": "Refresh Quota",
-    "fetch_all": "Fetch All"
+    "fetch_all": "Fetch All",
+    "missing_project_id": "Antigravity credential missing project_id. Re-login or refresh the credential to discover the project.",
+    "plan_label": "Plan"
   },
   "antigravity_subscription": {
     "subscription_label": "Subscription",
@@ -2309,7 +2328,12 @@
     "error_badge": "Plan unavailable",
     "load_failed": "Subscription failed: {{message}}",
     "missing_auth_index": "Auth file missing auth_index",
-    "empty_data": "No subscription data"
+    "empty_data": "No subscription data",
+    "plan_ultra": "Ultra",
+    "plan_ultra_lite": "Ultra Lite",
+    "plan_pro": "Pro",
+    "plan_unknown": "Unknown",
+    "plan_free": "Free"
   },
   "claude_quota": {
     "title": "Claude Quota",
@@ -2331,7 +2355,17 @@
     "iguana_necktie": "Iguana Necktie",
     "weekly_scoped_model": "Weekly {{model}}",
     "limit_index": "Limit #{{index}}",
-    "extra_usage_label": "Extra Usage"
+    "extra_usage_label": "Extra Usage",
+    "seven_day_fable": "7-day Fable 5",
+    "cloud_session_credits": "Cloud session credits",
+    "plan_label": "Plan",
+    "plan_unknown": "Unknown",
+    "plan_free": "Free",
+    "plan_pro": "Pro",
+    "plan_max": "Max",
+    "plan_max5": "Max 5x",
+    "plan_max20": "Max 20x",
+    "plan_team": "Team"
   },
   "codex_quota": {
     "title": "Codex Quota",
@@ -2418,7 +2452,28 @@
     "additional_monthly_window": "{{name}} monthly limit",
     "additional_generic_window": "{{name}} {{duration}} limit",
     "window_usage": "{{used}} / {{total}} hours used",
-    "window_usage_duration": "{{used}} / {{total}} used"
+    "window_usage_duration": "{{used}} / {{total}} used",
+    "team_secondary_window": "Monthly limit",
+    "code_review_team_secondary_window": "Code review monthly limit",
+    "additional_team_secondary_window": "{{name}} monthly limit",
+    "plan_label": "Plan",
+    "expires_label": "Renewal time",
+    "credit_balance_label": "Credit balance",
+    "credit_unlimited": "Unlimited",
+    "reset_credit_number": "Reset {{index}}",
+    "reset_credits_expiry_failed": "Failed to load manual reset expiry: {{message}}",
+    "reset_confirm_button": "Reset quota",
+    "reset_not_confirmed": "Quota reset was not confirmed. Refresh the quota before trying again.",
+    "reset_cooldown_failed": "Quota was reset, but the gateway cooldown could not be cleared. On the original connection, use Clear cooldown on the credential page; do not redeem another reset.",
+    "plan_plus": "Plus",
+    "plan_team": "Team",
+    "plan_free": "Free",
+    "plan_pro": "Pro 200",
+    "plan_prolite": "Pro 100",
+    "plan_business_premium": "Business Premium",
+    "personal_reset_credits_label": "Manual resets",
+    "personal_reset_credits_expiry_label": "Manual reset expiry ({{timezone}})",
+    "personal_reset_confirm_message": "This will consume 1 manual reset to reset the Codex quota for \"{{name}}\". Continue?"
   },
   "kimi_quota": {
     "title": "Kimi Quota",
@@ -2437,7 +2492,10 @@
     "scoped_limit_window": "{{scope}} · {{duration}} limit",
     "limit_index": "Limit #{{index}}",
     "scoped_limit_index": "{{scope}} · Limit #{{index}}",
-    "reset_hint": "resets in {{hint}}"
+    "reset_hint": "resets in {{hint}}",
+    "domain_unavailable": "Could not read the Kimi credential's domain. A downloadable, valid authentication file is required.",
+    "stale_request": "The connection or credential changed. Please retry.",
+    "monthly_limit": "Monthly limit"
   },
   "xai_quota": {
     "title": "xAI Quota",
@@ -2486,7 +2544,17 @@
     "pay_as_you_go_disabled": "Disabled",
     "on_demand_cap": "On-demand cap",
     "usage_amount": "{{remaining}} / {{limit}} remaining",
-    "reset_unknown": "reset unknown"
+    "reset_unknown": "reset unknown",
+    "usage_unavailable": "Usage unavailable from xAI",
+    "usage_breakdown": "Usage breakdown (shared quota)",
+    "plan_label": "Plan",
+    "resets_label": "Resets",
+    "prepaid": "Prepaid",
+    "plan_supergrok": "SuperGrok",
+    "plan_supergrok_heavy": "SuperGrok Heavy",
+    "plan_paid": "Paid",
+    "paid_health": "Paid API chat is available. xAI does not expose quota totals for this OAuth credential.",
+    "pay_as_you_go_enabled": "Enabled, cap {{cap}}"
   },
   "devin_quota": {
     "title": "Devin Quota",
@@ -2506,7 +2574,10 @@
     "weekly": "Weekly limit",
     "plan_label": "Plan",
     "plan_start": "Plan start",
-    "plan_end": "Plan end"
+    "plan_end": "Plan end",
+    "observed_at": "Quota observed: {{time}}",
+    "observed_unknown": "Quota observation time unavailable",
+    "stale_request": "The connection or credential changed. Please retry."
   },
   "meta_quota": {
     "title": "Meta Quota",
@@ -2523,7 +2594,17 @@
     "invalid_response": "Invalid response from Meta quota API",
     "idle": "Click here to refresh quota",
     "loading": "Loading quota...",
-    "refresh_button": "Refresh Quota"
+    "refresh_button": "Refresh Quota",
+    "empty_title": "No Muse credentials",
+    "empty_desc": "Sign in with Muse OAuth or upload a Meta credential file to query quota.",
+    "load_failed": "Failed to query quota: {{message}}",
+    "empty_data": "Quota unknown. You may not have made a model request yet.",
+    "plan": "Plan",
+    "active": "Subscription active",
+    "inactive": "Subscription inactive",
+    "window_duration": "{{minutes}}-minute window",
+    "unknown": "Unknown",
+    "remaining": "{{percent}}% remaining"
   },
   "vertex_import": {
     "title": "Vertex JSON Login",
@@ -4276,7 +4357,10 @@
           "disable_claude_cloak_mode_desc": "Globally pass Claude system prompts through without the Claude Code disguise unless a credential overrides it",
           "session_affinity": "Session Affinity Routing",
           "ws_auth": "WebSocket Authentication",
-          "ws_auth_desc": "Enable WebSocket authentication (/v1/ws)"
+          "ws_auth_desc": "Enable WebSocket authentication (/v1/ws)",
+          "proxy_url_sponsor_hint": "No suitable proxy?",
+          "max_retry_interval_hint": "Set to 0 or a negative integer to skip cooldown waits between retry rounds.",
+          "strategy_earliest_reset": "Earliest reset first"
         },
         "quota": {
           "title": "Quota Fallback",
@@ -5199,7 +5283,13 @@
     "claude_api_key": "Claude API key",
     "commercial_mode_restart_required": "Commercial mode setting changed. Please restart the service for it to take effect",
     "copy_failed": "Copy failed",
-    "link_copied": "Link copied to clipboard"
+    "link_copied": "Link copied to clipboard",
+    "trusted_proxies_restart_required": "Trusted proxy settings saved. Restart the backend to apply them.",
+    "region_label": "Notifications",
+    "type_success": "Success",
+    "type_info": "Information",
+    "type_warning": "Warning",
+    "type_error": "Error"
   },
   "language": {
     "switch": "Language",
@@ -5364,5 +5454,200 @@
       "ultra": "Ultra",
       "ultra_lite": "Ultra Lite"
     }
+  },
+  "quota_management": {
+    "reserve_editor": {
+      "title": "Quota reserve",
+      "remove": "Remove reserve"
+    },
+    "compact": {
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "set_reserve": "Set reserve…",
+      "resets_title": "Resets expire",
+      "resets_title_tz": "Resets expire ({{timezone}})"
+    },
+    "totals": {
+      "title": "Quota totals",
+      "of_capacity": "of {{capacity}}%",
+      "resets_title": "Resets held",
+      "resets_split": "{{claude}} Claude · {{codex}} Codex",
+      "resets_next": "next expires {{when}}"
+    },
+    "toolbar": {
+      "switching": "Switching",
+      "last": "last {{name}} · {{time}}"
+    },
+    "reserve": {
+      "badge": "Reserve {{percent}}% · {{mode}}",
+      "badge_held": "Held until {{date}} · {{mode}}",
+      "badge_held_open": "Held · {{mode}}",
+      "mode_soft": "soft",
+      "mode_hard": "hard",
+      "idle_soft": "Keeps {{percent}}% of every window for services outside the proxy. Below it, the proxy starts new sessions on this account only when no other account is available; existing sessions continue",
+      "idle_hard": "Keeps {{percent}}% of every window for services outside the proxy. Below it, the proxy won't start new sessions on this account; existing sessions continue",
+      "held_soft": "Proxy starts new sessions on this account until {{date}} only when no other account is available; existing sessions continue",
+      "held_soft_open": "Proxy starts new sessions on this account only when no other account is available, until its quota window recovers; existing sessions continue",
+      "held_hard": "Proxy won't start new sessions on this account until {{date}}; existing sessions continue",
+      "held_hard_open": "Proxy won't start new sessions on this account until its quota window recovers; existing sessions continue"
+    },
+    "resets": {
+      "cooldown_failed": "Reset used, but the proxy cooldown was not cleared — clear it manually in Auth Files",
+      "chip_one": "1 reset · expires {{date}}",
+      "chip_many": "{{count}} resets · next expires {{date}}",
+      "chip_one_open": "1 reset · no expiry",
+      "chip_many_open": "{{count}} resets · no expiry",
+      "chip_unresolved": "Reset outcome unknown",
+      "title": "Resets",
+      "hint": "Unused resets are lost when they expire",
+      "soonest": "soonest",
+      "expires_line": "expires {{date}} · {{relative}}",
+      "no_expiry": "No expiry",
+      "unnamed": "Reset {{index}}",
+      "claude_left": "{{left}} of {{total}} left · clears {{windows}}",
+      "claude_left_only": "{{left}} of {{total}} left",
+      "windows": {
+        "five_hour": "5-hour",
+        "seven_day": "7-day",
+        "seven_day_overage_included": "7-day incl. overage"
+      },
+      "codex_choice_note": "OpenAI chooses which reset is redeemed",
+      "use": "Use a reset…",
+      "confirm_codex": "OpenAI redeems one of your {{count}} resets; your Codex rate limits are cleared and the proxy cooldown for this account is cleared",
+      "confirm_codex_last": "OpenAI redeems your last reset; your Codex rate limits are cleared and the proxy cooldown for this account is cleared",
+      "confirm_claude": "Spends 1 reset from {{label}} (expires {{date}}); clears {{windows}} limits",
+      "confirm_claude_open": "Spends 1 reset from {{label}}; clears {{windows}} limits",
+      "windows_eligible": "eligible usage",
+      "windows_and": "{{first}} and {{last}}",
+      "cant_undo_one": "This can't be undone · 1 reset will remain",
+      "cant_undo_many": "This can't be undone · {{count}} resets will remain",
+      "cant_undo_none": "This can't be undone · no resets will remain",
+      "confirm_button": "Use 1 reset",
+      "cancel": "Cancel",
+      "using": "Using reset…",
+      "load_error": "Couldn't load resets",
+      "loading": "Loading…",
+      "empty": "No resets left"
+    },
+    "ledger": {
+      "view_ledger": "Ledger",
+      "view_cards": "Cards",
+      "view_timeline": "Timeline",
+      "view_label": "Quota view",
+      "show_emails": "Show emails",
+      "hide_emails": "Hide emails",
+      "remaining": "Remaining quota",
+      "capacity": "of {{value}}%",
+      "reset_unknown": "Reset time unavailable",
+      "observed": "{{count}} of {{total}} quotas available",
+      "load_hint": "Refresh to load quota",
+      "more": "Show {{count}} more limits",
+      "less": "Show fewer limits",
+      "refresh_credential": "Refresh quota for {{name}}",
+      "note": "Percentages show remaining quota. Totals add the same limit across credentials; each account contributes 100%. Accounts can have different token allowances. Unknown quotas are not counted as empty."
+    },
+    "routing": {
+      "title": "Subscription switching",
+      "description": "Choose the automatic switching order. Earliest reset first uses available quota with the nearest reset date; refresh account quotas to provide current observations.",
+      "automatic": "Automatic",
+      "disabled_account": "disabled",
+      "missing_account": "Subscription unavailable or removed",
+      "preferred_account": "{{provider}}: subscription for new threads",
+      "last_selected": "Last selected",
+      "activity_unavailable": "Activity data unavailable",
+      "activity_loading": "Loading…",
+      "no_activity": "No requests since the server started",
+      "manual_hint": "Manual selection applies to new threads. With session affinity enabled, existing threads retain their account and cache. If the selected subscription is unavailable, automatic selection takes over.",
+      "activity_hint": "Shows the server's latest selection, not every active request. Parallel threads may use different subscriptions. Updates every 10 seconds.",
+      "ttl_hint": "How long an inactive binding is retained, for example 1h or 24h.",
+      "affinity_hint": "Session affinity keeps a thread on its account to reuse the context cache. Existing bindings take precedence over reset order. An unavailable account can trigger failover. TTL is the idle binding lifetime, for example 1h or 24h.",
+      "saved": "Routing settings saved.",
+      "invalid_ttl": "Enter a positive duration, for example 1h, 30m, or 1h30m."
+    },
+    "codex_fast": {
+      "title": "Codex Fast mode",
+      "on": "On",
+      "off": "Off",
+      "description": "Requests the priority service tier for Codex subscription requests on models that support it, like Fast in the Codex CLI. Responses are faster, but subscription limits are consumed faster. Applies to new requests immediately; a tier chosen by the client and payload rules take precedence. API keys are not affected."
+    },
+    "search_label": "Search accounts",
+    "search_placeholder": "Search by filename or email",
+    "search_empty_title": "No matching accounts",
+    "search_empty_desc": "Try another filename or email, or clear the search.",
+    "search_clear": "Clear search",
+    "title": "Quota Management",
+    "description": "Monitor OAuth quota status for Antigravity, Codex, Claude, Kimi, and xAI credentials.",
+    "refresh_all_credentials": "Refresh all credentials",
+    "last_refresh": "Last checked: {{time}}",
+    "last_refresh_just_now": "Last checked: just now",
+    "sort_label": "Sort",
+    "sort_default": "Default",
+    "sort_soonest": "Soonest recovery",
+    "meta_credentials": "{{count}} credentials",
+    "meta_loaded": "{{count}} loaded",
+    "meta_attention": "{{count}} need attention",
+    "empty_title": "No quota-capable credentials",
+    "empty_desc": "Connect an Antigravity, Claude, Codex, xAI, or Kimi credential to track its quota here.",
+    "windows_title": "Quota windows",
+    "windows_span_weekly": "two weeks",
+    "windows_span_session": "three days",
+    "windows_current": "current",
+    "windows_today": "Today",
+    "windows_prev": "Previous",
+    "windows_next": "Next",
+    "windows_mode_weekly": "Weekly",
+    "windows_mode_session": "5-hour",
+    "windows_credential": "Credential",
+    "windows_idle": "no window counting down",
+    "windows_empty_session": "No credentials on this page report a 5-hour quota window.",
+    "windows_legend_current": "current window",
+    "windows_legend_upcoming": "upcoming",
+    "windows_legend_elapsed": "elapsed",
+    "windows_legend_reset_credit": "manual reset expiry",
+    "soonest_row_hint": "Recovers first on this credential",
+    "windows_reset_credit": "Manual reset",
+    "windows_credit_granted": "Granted",
+    "windows_credit_expires": "Expires",
+    "windows_note_weekly": "Each bar is one full quota window, drawn from when it opened to when it resets. Lanes ending together compete for the same days.",
+    "windows_note_session": "Each bar is one 5-hour window. Only credentials with a window counting down can be projected; the rest stay empty rather than invented.",
+    "weekday_sun": "Sun",
+    "weekday_mon": "Mon",
+    "weekday_tue": "Tue",
+    "weekday_wed": "Wed",
+    "weekday_thu": "Thu",
+    "weekday_fri": "Fri",
+    "weekday_sat": "Sat",
+    "v8_required_title": "CPA v8 required",
+    "v8_required": "This quota workbench requires the custom CLIProxyAPI v8 backend. Check the CPA connection in Settings, or use Accounts for the standard CPAMP controls.",
+    "open_accounts": "Open Accounts"
+  },
+  "claude_reset": {
+    "expiry_title": "Manual reset expiry ({{timezone}})",
+    "grant_number": "Grant {{index}}",
+    "expiry_unknown": "Expiry unknown",
+    "retry_confirm": "Retry the unknown reset for “{{name}}” with its original request ID? A reset may already have been spent. Retry within 10 minutes; do not reload or start another claim in another tab.",
+    "remaining": "Resets remaining",
+    "title": "Banked resets",
+    "scope": "Uses a limited reset grant to clear eligible Claude usage windows. Only confirm when you want to spend a reset. Recovery is limited to this tab/session; do not reload or use another tab while an outcome is unknown.",
+    "loading": "Loading…",
+    "read_error": "Reset grants could not be read. Nothing was submitted.",
+    "blocked": "Reset not submitted: eligibility, account identity, or session could not be verified. Refresh and check again.",
+    "unknown": "The outcome is unknown. A reset may have been spent. Retry within 10 minutes using the same request ID; do not start another claim elsewhere.",
+    "expired": "The retry window has expired. Further claims are blocked in this session. Check your Claude account before taking any further action.",
+    "retry": "Retry the same claim",
+    "empty": "No banked reset grants.",
+    "count": "{{left}} / {{total}} resets remaining",
+    "ends": "Expires: {{date}}",
+    "use": "Reset limits",
+    "confirm": "Confirm reset",
+    "confirm_text": "Spend one reset to clear eligible usage limits for “{{name}}”? This uses a limited reset grant.",
+    "reset": "Usage limits reset.",
+    "already_used": "This grant was already used.",
+    "not_limited": "No reset: the account is not currently limited.",
+    "cooldown": "No reset: cooldown is active.",
+    "ineligible": "This account is not eligible.",
+    "unavailable": "Resets are currently unavailable.",
+    "rate_limited": "Request rate limited.",
+    "auth_error": "Authorization was refused."
   }
 }

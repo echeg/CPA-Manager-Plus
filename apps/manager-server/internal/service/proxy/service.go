@@ -70,8 +70,9 @@ type authFileDeleteMutation struct {
 }
 
 type authFileFieldsMutation struct {
-	selector string
-	identity cpaauthfiles.Identity
+	selector        string
+	identity        cpaauthfiles.Identity
+	changesDisabled bool
 }
 
 type authFileWriteMutation struct {
@@ -175,7 +176,7 @@ func (s *Service) ProxyPluginResourceWithCallerAuth(w http.ResponseWriter, r *ht
 
 func (s *Service) proxyWithSavedManagementKey(w http.ResponseWriter, r *http.Request, writeError func(http.ResponseWriter, int, error)) {
 	if !isManagementPath(r.URL.Path) {
-		writeError(w, http.StatusNotFound, errors.New("proxy path must be under /v0/management/"))
+		writeError(w, http.StatusNotFound, errors.New("proxy path must be under /v0/management/ or /v8/management/"))
 		return
 	}
 	s.proxyToSavedSetup(w, r, writeError, true, false)
@@ -450,7 +451,7 @@ func (s *Service) prepareAuthFileStatusMutation(
 		return authFileOwnershipMutation{}, err
 	}
 	forwardSelector := target.Selector
-	if strings.TrimRight(r.URL.Path, "/") == "/v0/management/auth-files" {
+	if authFileMutationPath(r.URL.Path) == "/v0/management/auth-files" {
 		forwardSelector = mutation.statusMutation.selector
 	}
 	if err := rewriteAuthFileStatusMutationRequest(r, target, forwardSelector); err != nil {
@@ -487,7 +488,17 @@ func (s *Service) prepareAuthFileDeleteMutation(
 		return mutation, nil
 	}
 	if len(deleteMutation.identities) == 0 {
-		return authFileOwnershipMutation{}, fmt.Errorf("%w: delete identity is required", cpaauthfiles.ErrAuthFileNotFound)
+		if !IsCPAV8ManagementPath(r.URL.Path) {
+			return authFileOwnershipMutation{}, fmt.Errorf("%w: delete identity is required", cpaauthfiles.ErrAuthFileNotFound)
+		}
+		// A v8 caller may only know the runtime selector. Resolve its physical
+		// file under the global mutation lock before revoking recovery ownership.
+		target, err := cpaauthfiles.New(nil).ResolveStatusMutationTarget(ctx, setup.CPAUpstreamURL, setup.ManagementKey, deleteMutation.selector, "")
+		if err != nil {
+			return authFileOwnershipMutation{}, err
+		}
+		mutation.fileNames = []string{target.File.Name}
+		return mutation, nil
 	}
 
 	requestedSelector := strings.TrimSpace(deleteMutation.selector)
@@ -553,12 +564,14 @@ func (s *Service) prepareAuthFileFieldsMutation(
 		return mutation, nil
 	}
 
-	target, err := cpaauthfiles.New(nil).ResolveVerifiedStatusMutationTarget(
-		ctx,
-		setup.CPAUpstreamURL,
-		setup.ManagementKey,
-		fieldsMutation.identity,
-	)
+	client := cpaauthfiles.New(nil)
+	var target cpaauthfiles.StatusMutationTarget
+	var err error
+	if fieldsMutation.identity.AuthFileName == "" {
+		target, err = client.ResolveStatusMutationTarget(ctx, setup.CPAUpstreamURL, setup.ManagementKey, fieldsMutation.selector, "")
+	} else {
+		target, err = client.ResolveVerifiedStatusMutationTarget(ctx, setup.CPAUpstreamURL, setup.ManagementKey, fieldsMutation.identity)
+	}
 	if err != nil {
 		return authFileOwnershipMutation{}, err
 	}
@@ -571,7 +584,7 @@ func (s *Service) prepareAuthFileFieldsMutation(
 	}
 
 	requestedSelector := strings.TrimSpace(fieldsMutation.selector)
-	physicalName := strings.TrimSpace(fieldsMutation.identity.AuthFileName)
+	physicalName := strings.TrimSpace(target.File.Name)
 	if requestedSelector != strings.TrimSpace(target.Selector) && requestedSelector != physicalName {
 		return authFileOwnershipMutation{}, fmt.Errorf(
 			"%w: fields selector mismatch (expected %q or %q, got %q)",
@@ -583,6 +596,15 @@ func (s *Service) prepareAuthFileFieldsMutation(
 	}
 	if err := rewriteAuthFileFieldsMutationRequest(r, target.Selector); err != nil {
 		return authFileOwnershipMutation{}, err
+	}
+	if fieldsMutation.changesDisabled {
+		mutation.ownershipTargets = []model.CodexInspectionDisableOwnershipTarget{{
+			FileName:        target.File.Name,
+			Provider:        &target.File.Provider,
+			AuthIndex:       &target.File.AuthIndex,
+			AccountID:       &target.File.AccountID,
+			AccountSnapshot: &target.File.AccountSnapshot,
+		}}
 	}
 	return mutation, nil
 }
@@ -667,7 +689,7 @@ func inspectAuthFileOwnershipMutation(r *http.Request) (authFileOwnershipMutatio
 	if r == nil {
 		return authFileOwnershipMutation{}, nil
 	}
-	path := strings.TrimRight(r.URL.Path, "/")
+	path := authFileMutationPath(r.URL.Path)
 	if path != "/v0/management/auth-files" &&
 		path != "/v0/management/auth-files/status" &&
 		path != "/v0/management/auth-files/fields" {
@@ -677,14 +699,19 @@ func inspectAuthFileOwnershipMutation(r *http.Request) (authFileOwnershipMutatio
 		if r.Method != http.MethodPatch {
 			return authFileOwnershipMutation{}, nil
 		}
-		return readAuthFileFieldsMutation(r)
+		mutation, err := readAuthFileFieldsMutation(r)
+		if err != nil || !IsCPAV8ManagementPath(r.URL.Path) {
+			return mutation, err
+		}
+		return inspectV8DisabledFieldMutation(r, mutation)
 	}
 
 	switch r.Method {
 	case http.MethodPatch:
 		return readJSONAuthFileOwnershipMutation(r, path == "/v0/management/auth-files/status")
 	case http.MethodDelete:
-		if strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("all")), "true") {
+		all := strings.TrimSpace(r.URL.Query().Get("all"))
+		if strings.EqualFold(all, "true") || (IsCPAV8ManagementPath(r.URL.Path) && (all == "1" || all == "*")) {
 			return authFileOwnershipMutation{clearAll: true}, nil
 		}
 		identities, err := readAuthFileDeleteIdentities(r)
@@ -701,7 +728,7 @@ func inspectAuthFileOwnershipMutation(r *http.Request) (authFileOwnershipMutatio
 				fileNames: fileNames,
 				lockAll:   !physicalNameProvided && len(identities) == 0,
 			}
-			if len(identities) > 0 {
+			if len(identities) > 0 || (IsCPAV8ManagementPath(r.URL.Path) && !physicalNameProvided) {
 				mutation.deleteMutation = &authFileDeleteMutation{
 					selector:     strings.TrimSpace(r.URL.Query().Get("name")),
 					physicalName: fileNames[0],
@@ -715,6 +742,10 @@ func inspectAuthFileOwnershipMutation(r *http.Request) (authFileOwnershipMutatio
 		fileNames, err := readMultipartAuthFileNames(r)
 		if err != nil {
 			return authFileOwnershipMutation{}, err
+		}
+		if len(fileNames) == 0 && IsCPAV8ManagementPath(r.URL.Path) {
+			// CPA also accepts a raw JSON upload selected by the name query.
+			fileNames = normalizeFileNames([]string{r.URL.Query().Get("name")})
 		}
 		mutation := authFileOwnershipMutation{fileNames: fileNames}
 		identities, identityErr := readAuthFileIdentitiesHeader(
@@ -818,6 +849,40 @@ func readAuthFileIdentitiesHeader(
 		return nil, fmt.Errorf("auth file %s identities are required", operation)
 	}
 	return identities, nil
+}
+
+// CPA v8 permits disabled in its generic metadata patch as well as the status
+// endpoint. Such edits must revoke recovery ownership without discarding the
+// other fields in the request. Ordinary reserve/priority edits keep ownership.
+func inspectV8DisabledFieldMutation(r *http.Request, mutation authFileOwnershipMutation) (authFileOwnershipMutation, error) {
+	raw, err := readAndRestoreRequestBody(r, maxAuthFileMutationRequestBytes)
+	if err != nil {
+		return authFileOwnershipMutation{}, err
+	}
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return authFileOwnershipMutation{}, fmt.Errorf("decode credential fields mutation: %w", err)
+	}
+	changesDisabled := false
+	for key := range payload {
+		root, _, _ := strings.Cut(strings.TrimSpace(key), ".")
+		if strings.TrimSpace(root) == "disabled" {
+			changesDisabled = true
+			break
+		}
+	}
+	if !changesDisabled {
+		return mutation, nil
+	}
+	if mutation.fieldsMutation == nil {
+		var name string
+		if err := json.Unmarshal(payload["name"], &name); err != nil || strings.TrimSpace(name) == "" {
+			return authFileOwnershipMutation{}, errors.New("credential fields selector is required")
+		}
+		mutation.fieldsMutation = &authFileFieldsMutation{selector: strings.TrimSpace(name)}
+	}
+	mutation.fieldsMutation.changesDisabled = true
+	return mutation, nil
 }
 
 func readAuthFileFieldsMutation(r *http.Request) (authFileOwnershipMutation, error) {
@@ -1413,7 +1478,28 @@ func isManagementPath(path string) bool {
 }
 
 func isStrictManagementPath(path string) bool {
-	return path == "/v0/management" || strings.HasPrefix(path, "/v0/management/")
+	return path == "/v0/management" || strings.HasPrefix(path, "/v0/management/") || IsCPAV8ManagementPath(path)
+}
+
+// IsCPAV8ManagementPath excludes lookalike prefixes and model traffic routes.
+func IsCPAV8ManagementPath(path string) bool {
+	return path == "/v8/management" || strings.HasPrefix(path, "/v8/management/")
+}
+
+// authFileMutationPath shares the existing mutation safeguards across CPA APIs
+// without changing the path sent upstream or interpreting other v8 endpoints.
+func authFileMutationPath(path string) string {
+	cleaned := strings.TrimRight(path, "/")
+	switch cleaned {
+	case "/v8/management/credentials":
+		return "/v0/management/auth-files"
+	case "/v8/management/credentials/status":
+		return "/v0/management/auth-files/status"
+	case "/v8/management/credentials/fields":
+		return "/v0/management/auth-files/fields"
+	default:
+		return cleaned
+	}
 }
 
 func IsCPAPluginManagementPath(path string) bool {

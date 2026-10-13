@@ -12,18 +12,18 @@ import zhTW from '@/i18n/locales/zh-TW.json';
 const legacyPagesRoot = ['@', 'pages'].join('/');
 
 describe('accounts workspace wiring', () => {
-  it('uses Accounts as the single credential-management sidebar entry', () => {
+  it('keeps Accounts alongside the personal quota workbench', () => {
     expect(layoutSource).toContain("path: '/accounts'");
     expect(layoutSource).toContain("label: t('nav.accounts'");
     expect(layoutSource).not.toContain("path: '/auth-files',\n        label: t('nav.auth_files')");
-    expect(layoutSource).not.toContain("path: '/quota',\n        label: t('nav.quota_management')");
+    expect(layoutSource).toContain("path: '/quota',\n        label: t('nav.quota_management')");
     expect(layoutSource).not.toContain("path: '/codex-inspection'");
     expect(layoutSource).not.toContain("label: t('nav.codex_inspection')");
   });
 
-  it('removes legacy credential and quota routes while retaining inspection compatibility', () => {
+  it('keeps the personal quota route and legacy inspection redirects', () => {
     expect(routesSource).not.toContain("path: '/auth-files'");
-    expect(routesSource).not.toContain("path: '/quota'");
+    expect(routesSource).toContain("{ path: '/quota', element: <QuotaPage /> }");
     expect(routesSource).toContain("{ path: '/oauth', element: <OAuthPage /> }");
     expect(routesSource).toContain('<LegacyAccountsRedirect healthMode="local" />');
     expect(routesSource).toContain('<LegacyAccountsRedirect healthMode="server" />');
@@ -87,7 +87,8 @@ describe('accounts workspace wiring', () => {
     expect(locale.nav).not.toHaveProperty('codex_inspection');
     expect(locale.nav).not.toHaveProperty('codex_inspection_short');
     expect(locale.nav).not.toHaveProperty('server_codex_inspection');
-    expect(locale).not.toHaveProperty('quota_management');
+    expect(locale.quota_management.title).toBeTypeOf('string');
+    expect(locale.nav.quota_management).toBeTypeOf('string');
   });
 
   it.each([

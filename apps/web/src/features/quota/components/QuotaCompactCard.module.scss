@@ -1,0 +1,221 @@
+// Visual language of AuthFileCard.module.scss + AuthFileQuota.module.scss, without their class contract.
+$meta-size: 11.5px;
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: var(--bg-primary);
+
+  &[aria-busy='true'] {
+    opacity: 0.85;
+  }
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 650;
+  font-size: 14px;
+  @include text-ellipsis;
+}
+
+.dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-quaternary);
+
+  &[data-enabled='true'] {
+    background: var(--viz-success);
+  }
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 3px 9px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  font-size: $meta-size;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+
+  b {
+    font-family: $font-mono;
+    font-weight: 650;
+    color: var(--text-primary);
+  }
+}
+
+.chipDetail {
+  color: var(--text-tertiary);
+}
+
+.setReserve {
+  padding: 3px 9px;
+  border: 1px dashed var(--border-color);
+  border-radius: 999px;
+  background: transparent;
+  font: inherit;
+  font-size: $meta-size;
+  color: var(--text-tertiary);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--text-secondary);
+    border-color: var(--border-hover);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+  }
+}
+
+.quota {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 10px 11px;
+  border: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-secondary) 55%, transparent);
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.rowHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: $meta-size;
+}
+
+.rowName {
+  min-width: 0;
+  font-weight: 600;
+  color: var(--text-secondary);
+  @include text-ellipsis;
+}
+
+.meta {
+  flex-shrink: 0;
+  font-family: $font-mono;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-quaternary);
+  white-space: nowrap;
+
+  b {
+    margin-right: 5px;
+    font-weight: 650;
+    color: var(--text-primary);
+
+    &[data-tone='medium'] {
+      color: var(--quota-medium-color);
+    }
+
+    &[data-tone='low'] {
+      color: var(--viz-failure);
+    }
+  }
+}
+
+.rel {
+  color: var(--text-tertiary);
+}
+
+.resets {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 7px 9px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: $meta-size;
+}
+
+.resetsTitle {
+  margin-bottom: 2px;
+  font-family: $font-mono;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+}
+
+.resetRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-family: $font-mono;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+
+  &[data-soonest] {
+    .resetName {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    .resetWhen {
+      color: var(--amber-text);
+    }
+  }
+}
+
+.resetName {
+  min-width: 0;
+  color: var(--text-secondary);
+  @include text-ellipsis;
+}
+
+.resetWhen {
+  flex-shrink: 0;
+}
+
+.state {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.error {
+  font-size: 12px;
+  color: var(--danger-color);
+  overflow-wrap: anywhere;
+}
+
+.foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+}
+
+.action {
+  flex: 1;
+  min-width: 0;
+}

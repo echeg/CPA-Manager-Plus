@@ -57,7 +57,7 @@ import { isSupportedLanguage } from '@/utils/language';
 import type { Theme, VisualEffectsMode } from '@/types';
 
 const SIDEBAR_ICON_SIZE = 20;
-const GITHUB_REPOSITORY_URL = 'https://github.com/seakee/CPA-Manager-Plus';
+const GITHUB_REPOSITORY_URL = 'https://github.com/echeg/CPA-Manager-Plus';
 
 const sidebarIcons: Record<string, ReactNode> = {
   dashboard: <IconSidebarDashboard size={SIDEBAR_ICON_SIZE} />,
@@ -72,7 +72,7 @@ const sidebarIcons: Record<string, ReactNode> = {
   system: <IconSidebarSystem size={SIDEBAR_ICON_SIZE} />,
 };
 
-// Header action icons - smaller size for header buttons
+// Header action icons use a smaller size for header buttons
 const headerIconProps: SVGProps<SVGSVGElement> = {
   width: 16,
   height: 16,
@@ -281,7 +281,7 @@ function MainLayoutContent({ routeBase = '', demoMode = false }: MainLayoutProps
     pluginsEnabled: configPluginsEnabled,
   });
 
-  // 将顶部悬浮控制区高度写入 CSS 变量，供移动端粘性元素和浮层避让。
+  // Expose the floating header height so mobile sticky elements avoid it.
   useLayoutEffect(() => {
     const updateHeaderHeight = () => {
       const height = headerRef.current?.offsetHeight;
@@ -310,7 +310,7 @@ function MainLayoutContent({ routeBase = '', demoMode = false }: MainLayoutProps
     };
   }, []);
 
-  // 将主内容区的中心点写入 CSS 变量，供底部浮层（配置面板操作栏、提供商导航）对齐到内容区
+  // Expose the content center so floating action bars align with the main area.
   useLayoutEffect(() => {
     const updateContentCenter = () => {
       const el = contentRef.current;
@@ -467,7 +467,7 @@ function MainLayoutContent({ routeBase = '', demoMode = false }: MainLayoutProps
 
   useEffect(() => {
     fetchConfig().catch(() => {
-      // ignore initial failure; login flow会提示
+      // The login flow reports the initial connection failure.
     });
   }, [fetchConfig]);
 
@@ -602,6 +602,12 @@ function MainLayoutContent({ routeBase = '', demoMode = false }: MainLayoutProps
           t('nav.accounts', { defaultValue: t('accounts.title') })
         ),
         icon: sidebarIcons.authFiles,
+      },
+      {
+        path: '/quota',
+        label: t('nav.quota_management'),
+        shortLabel: navShortLabel('nav.quota_management', t('nav.quota_management')),
+        icon: sidebarIcons.usageAnalytics,
       },
       {
         path: '/oauth',
