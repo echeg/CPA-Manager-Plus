@@ -826,6 +826,7 @@ export const buildUsageAnalyticsInclude = (
     case 'models':
       Object.assign(include, {
         timeline: true,
+        timeline_percentiles: false,
         model_stats: true,
         api_key_stats: true,
       });

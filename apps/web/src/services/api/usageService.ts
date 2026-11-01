@@ -1038,6 +1038,8 @@ export interface MonitoringAnalyticsInclude {
   summary_percentiles?: boolean;
   summary_comparison?: boolean;
   timeline?: boolean;
+  /** Defaults to true for timelines; anomaly_points always requires percentiles. */
+  timeline_percentiles?: boolean;
   hourly_distribution?: boolean;
   model_share?: boolean;
   channel_share?: boolean;

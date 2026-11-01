@@ -171,6 +171,9 @@ type Include struct {
 	EventsPage         *EventsPage       `json:"events_page"`
 	DrilldownPreview   *DrilldownPreview `json:"drilldown_preview"`
 	Granularity        string            `json:"granularity"`
+
+	// Nil preserves legacy timeline percentiles; anomaly detection always needs them.
+	TimelinePercentiles *bool `json:"timeline_percentiles"`
 }
 
 type EventsPage struct {
@@ -1077,7 +1080,9 @@ func (s *Service) analytics(ctx context.Context, req Request) (Response, error) 
 	defer queries.Close()
 
 	var latencyPercentiles []store.LatencyPercentiles
-	if req.Include.Timeline || req.Include.AnomalyPoints {
+	needsTimelinePercentiles := req.Include.Timeline &&
+		(req.Include.TimelinePercentiles == nil || *req.Include.TimelinePercentiles)
+	if needsTimelinePercentiles || req.Include.AnomalyPoints {
 		queries.Go(func(queryCtx context.Context) error {
 			var queryErr error
 			latencyPercentiles, queryErr = s.store.LatencyPercentilesWithFilter(queryCtx, filter, granularity, location)

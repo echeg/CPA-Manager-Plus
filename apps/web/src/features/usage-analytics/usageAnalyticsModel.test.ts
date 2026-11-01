@@ -201,6 +201,7 @@ describe('usage analytics request model', () => {
       summary: true,
       summary_profile: 'compact',
       timeline: true,
+      timeline_percentiles: false,
       model_stats: true,
       api_key_stats: true,
       granularity: 'day',
