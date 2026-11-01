@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import type { AuthFileItem } from '@/features/personal-quota-support/types';
+import type { AuthFileQuotaReserve } from '@/features/personal-quota-support/types/authFile';
 import { formatInstantShort } from '@/features/quota/utils/quota';
 import { reserveCoversWindow } from '../ledgerModel';
 import type { QuotaProviderType } from '../providers/types';
@@ -7,8 +8,8 @@ import { formatMonthDay } from '../resetActions';
 import styles from './QuotaReserveVisuals.module.scss';
 
 /**
- * Remaining-quota bar with an optional reserve tick. With provider and window
- * id, the tick appears only on windows the backend's reserve verdict reads.
+ * Remaining-quota bar with a tick for each configured reserve threshold. With provider
+ * and window id, ticks appear only on windows the backend's reserve verdict reads.
  */
 export function ReserveMeter({
   remaining,
@@ -17,7 +18,7 @@ export function ReserveMeter({
   windowId,
 }: {
   remaining: number | null;
-  reserve?: number;
+  reserve?: AuthFileQuotaReserve;
   provider?: QuotaProviderType;
   windowId?: string;
 }) {
@@ -38,16 +39,20 @@ export function ReserveMeter({
     reserve !== undefined &&
     (provider === undefined || windowId === undefined || reserveCoversWindow(provider, windowId));
   if (!covered) return track;
-  // On a window the verdict reads, the fill ends left of the tick when it is below the reserve.
+  const thresholds = [reserve.percent, ...(reserve.mode === 'soft' ? (reserve.steps ?? []) : [])];
+  // On a covered window, the fill ends left of each threshold it has fallen below.
   return (
     <div className={styles.meter}>
       {track}
-      <i
-        className={styles.reserveTick}
-        data-reserve-tick=""
-        style={{ left: `${reserve}%` }}
-        aria-hidden="true"
-      />
+      {thresholds.map((percent) => (
+        <i
+          key={percent}
+          className={styles.reserveTick}
+          data-reserve-tick=""
+          style={{ left: `${percent}%` }}
+          aria-hidden="true"
+        />
+      ))}
     </div>
   );
 }

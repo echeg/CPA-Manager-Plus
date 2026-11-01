@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { IconRefreshCw } from '@/components/ui/icons';
 import { useNow } from '@/features/quota/hooks/useNow';
 import type { ResolvedTheme } from '@/features/personal-quota-support/types';
+import type { AuthFileQuotaReserve } from '@/features/personal-quota-support/types/authFile';
 import {
   buildResetDisplay,
   normalizeAuthIndex,
@@ -77,7 +78,7 @@ function WindowCell({
   now,
 }: {
   window: LedgerWindow;
-  reserve?: number;
+  reserve?: AuthFileQuotaReserve;
   now: number;
 }) {
   return (
@@ -211,9 +212,7 @@ function LedgerRow({
               key={window.id}
               window={window}
               reserve={
-                reserveCoversWindow(entry.type, window.id)
-                  ? entry.file.quotaReserve?.percent
-                  : undefined
+                reserveCoversWindow(entry.type, window.id) ? entry.file.quotaReserve : undefined
               }
               now={now}
             />

@@ -54,7 +54,14 @@ export function QuotaCompactCard({
   reservePreview,
 }: Props) {
   const { t, i18n } = useTranslation();
-  const reserve = reservePreview ?? entry.file.quotaReserve?.percent;
+  const reserve =
+    reservePreview === undefined
+      ? entry.file.quotaReserve
+      : {
+          ...entry.file.quotaReserve,
+          mode: entry.file.quotaReserve?.mode ?? 'soft',
+          percent: reservePreview,
+        };
   const resets = model.resets;
   const loading = model.state === 'loading';
 
