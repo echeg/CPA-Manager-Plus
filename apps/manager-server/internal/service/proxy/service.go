@@ -83,11 +83,6 @@ type authFileWriteMutation struct {
 
 const cpaPluginResourcePrefix = "/v0/resource/plugins"
 const cpaManagementPrefix = "/v0/management"
-
-// cpaV8APIKeysConfigPath is the only CPA v8 management subtree Manager Server
-// forwards. Other v8 routes stay unreachable because the auth-file and config
-// mutation guards in this package only recognize their v0 paths.
-const cpaV8APIKeysConfigPath = "/v8/management/config/api-keys"
 const codexInviteOriginHeader = "X-Codex-Invite-Origin"
 const managementOriginJSONField = "management_origin"
 const authFilePhysicalNameHeader = "X-CPAMP-Auth-File-Physical-Name"
@@ -187,15 +182,12 @@ func (s *Service) proxyWithSavedManagementKey(w http.ResponseWriter, r *http.Req
 	s.proxyToSavedSetup(w, r, writeError, true, false)
 }
 
-// ProxyV8APIKeysConfig forwards read-only CPA v8 provider API-key group views,
-// which carry group names that the flattened v0 key lists drop.
-func (s *Service) ProxyV8APIKeysConfig(w http.ResponseWriter, r *http.Request, writeError func(http.ResponseWriter, int, error), methodNotAllowed func(http.ResponseWriter)) {
-	if !IsCPAV8APIKeysConfigPath(r.URL.Path) || !isCanonicalRequestPath(r.URL) {
-		writeError(w, http.StatusNotFound, errors.New("proxy path must be under "+cpaV8APIKeysConfigPath))
-		return
-	}
-	if r.Method != http.MethodGet {
-		methodNotAllowed(w)
+// ProxyV8Management forwards the whole CPA v8 management API with the saved
+// key. Mutation guards match on path, so a dot segment that CPA resolves to a
+// different route (for example a v0 auth-file write) must never be forwarded.
+func (s *Service) ProxyV8Management(w http.ResponseWriter, r *http.Request, writeError func(http.ResponseWriter, int, error)) {
+	if !IsCPAV8ManagementPath(r.URL.Path) || !isCanonicalRequestPath(r.URL) {
+		writeError(w, http.StatusNotFound, errors.New("proxy path must be a canonical path under /v8/management/"))
 		return
 	}
 	s.proxyToSavedSetup(w, r, writeError, true, false)
@@ -1540,15 +1532,9 @@ func IsCPAPluginResourcePath(path string) bool {
 	return cleaned == cpaPluginResourcePrefix || strings.HasPrefix(cleaned, cpaPluginResourcePrefix+"/")
 }
 
-// IsCPAV8APIKeysConfigPath matches the v8 API-key config subtree on a path
-// segment boundary, so siblings such as /config/api-keys-x are excluded.
-func IsCPAV8APIKeysConfigPath(path string) bool {
-	return path == cpaV8APIKeysConfigPath || strings.HasPrefix(path, cpaV8APIKeysConfigPath+"/")
-}
-
 // isCanonicalRequestPath rejects percent-encoded or dot-segment paths. The
-// ServeMux does not clean escaped dot segments, so a prefix check alone would
-// let /api-keys/%2e%2e/... resolve to another route upstream.
+// root handler does not clean escaped dot segments, so a prefix check alone
+// would let /v8/management/%2e%2e/... resolve to another route upstream.
 func isCanonicalRequestPath(u *url.URL) bool {
 	if u.RawPath != "" {
 		return false

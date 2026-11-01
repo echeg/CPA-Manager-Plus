@@ -41,26 +41,11 @@ func (h *Handler) ManagementV8(w http.ResponseWriter, r *http.Request) {
 	if !middleware.AuthorizeAdmin(w, r, h.App.AdminAuthService) {
 		return
 	}
-	h.App.ProxyService.ProxyManagement(w, r, response.Error)
+	h.App.ProxyService.ProxyV8Management(w, r, response.Error)
 }
 
 func (h *Handler) ModelList(w http.ResponseWriter, r *http.Request) {
 	h.App.ProxyService.ProxyModelList(w, r, response.Error, response.MethodNotAllowed)
-}
-
-// V8APIKeysConfig forwards CPA v8 API-key group reads for verified admins only.
-// Callers' own credentials are never passed through to the v8 management API.
-func (h *Handler) V8APIKeysConfig(w http.ResponseWriter, r *http.Request) {
-	ok, err := h.App.AdminAuthService.VerifyHeader(r.Context(), r.Header.Get("Authorization"))
-	if err != nil {
-		response.Error(w, http.StatusInternalServerError, err)
-		return
-	}
-	if !ok {
-		response.Error(w, http.StatusUnauthorized, errors.New("invalid admin key"))
-		return
-	}
-	h.App.ProxyService.ProxyV8APIKeysConfig(w, r, response.Error, response.MethodNotAllowed)
 }
 
 func (h *Handler) CPAResource(w http.ResponseWriter, r *http.Request) {

@@ -29,7 +29,7 @@ For most deployments, use separate domains or subdomains for CPAMP and CPA. Read
 | `/usage-service/*`                           | CPAMP `:18317`      | Manager Server mode detection and config APIs.                                                                                                                                                         |
 | `/v0/management/*`                           | CPAMP `:18317`      | CPAMP handles usage, model-prices, aliases, dashboard, monitoring, and codex-inspection first; other management APIs are then proxied by CPAMP to CPA.                                                 |
 | `/v0/resource/plugins/*`                     | CPAMP `:18317`      | Plugin page resources used by the CPAMP panel. CPAMP proxies them to CPA when needed.                                                                                                                  |
-| `/v8/management/config/api-keys[/*]`         | CPAMP `:18317`      | Plugin pages read CPA v8 provider key groups, including group names and `auth_index`. CPAMP forwards `GET` only and accepts the admin key only; CPAMP does not forward other `/v8/management/*` paths. |
+| `/v8/management/*`                           | CPAMP `:18317`      | CPA v8 management API used by the personal quota workbench and plugin pages (for example provider key groups). CPAMP accepts the admin key only and forwards with the saved CPA management key. |
 | `/models`                                    | CPAMP `:18317`      | Compatibility proxy to CPA after setup.                                                                                                                                                                |
 | `/v1/*`, `/v1beta/*`, `/backend-api/codex/*` | CPA `:8317`         | Actual model API, Codex API, and provider requests.                                                                                                                                                    |
 | OAuth callback                               | CPA `:8317`         | For example `/anthropic/callback` and `/codex/callback`.                                                                                                                                               |
@@ -47,7 +47,7 @@ Browser
       -> /usage-service/*       -> CPA Manager Plus :18317
       -> /v0/management/*       -> CPA Manager Plus :18317
       -> /v0/resource/plugins/* -> CPA Manager Plus :18317
-      -> /v8/management/config/api-keys[/*] -> CPA Manager Plus :18317
+      -> /v8/management/*       -> CPA Manager Plus :18317
       -> /v1/*, /backend-api/*  -> CPA :8317
       -> fallback               -> CPA :8317
 ```
@@ -206,10 +206,9 @@ server {
     # CPAMP plugin page resources. Without this rule, plugin pages may be blank or return 404 for assets.
     location ^~ /v0/resource/plugins/ { proxy_pass http://cpamp; }
 
-    # Read-only CPA v8 provider key groups used by plugin pages. CPAMP forwards GET only and accepts the admin key only.
-    # Other /v8/management/* paths keep using the CPA fallback.
-    location = /v8/management/config/api-keys   { proxy_pass http://cpamp; }
-    location ^~ /v8/management/config/api-keys/ { proxy_pass http://cpamp; }
+    # CPA v8 management API (personal quota workbench, plugin key-group views).
+    # CPAMP accepts the admin key only and substitutes the saved CPA management key.
+    location ^~ /v8/management/ { proxy_pass http://cpamp; }
 
     # /models is provided through CPAMP's compatibility proxy
     # If CPAMP has not completed setup yet, this path may return 412

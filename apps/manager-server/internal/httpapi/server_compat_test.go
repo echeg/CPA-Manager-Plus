@@ -1459,27 +1459,32 @@ func TestServerCompatProxyRoutes(t *testing.T) {
 	}
 }
 
+// This fork forwards the whole v8 management API (see server_v8_proxy_test.go),
+// so upstream's read-only api-keys route is subsumed. Keep its forwarding,
+// authentication, and path-canonicalization guarantees for that subtree.
 func TestServerCompatV8APIKeysConfigProxy(t *testing.T) {
 	cpa := testutil.NewCPAMock(t)
 	setup := &store.Setup{CPAUpstreamURL: cpa.URL(), ManagementKey: "management-key", Queue: "usage", PopSide: "right"}
 	handler, _ := newCompatHandler(t, testutil.NewConfig(t), setup)
 
 	for _, tc := range []struct {
+		method string
 		target string
 		path   string
 		query  string
 	}{
-		{target: "/v8/management/config/api-keys?format=json", path: "/v8/management/config/api-keys", query: "format=json"},
-		{target: "/v8/management/config/api-keys/claude", path: "/v8/management/config/api-keys/claude"},
+		{method: http.MethodGet, target: "/v8/management/config/api-keys?format=json", path: "/v8/management/config/api-keys", query: "format=json"},
+		{method: http.MethodGet, target: "/v8/management/config/api-keys/claude", path: "/v8/management/config/api-keys/claude"},
+		{method: http.MethodPatch, target: "/v8/management/config/api-keys/claude", path: "/v8/management/config/api-keys/claude"},
 	} {
-		rr := testutil.Request(t, handler, http.MethodGet, tc.target, "", testutil.AdminKey)
+		rr := testutil.Request(t, handler, tc.method, tc.target, "", testutil.AdminKey)
 		testutil.RequireStatus(t, rr, http.StatusOK)
 		got, ok := cpa.LastRequest(tc.path)
 		if !ok {
 			t.Fatalf("CPA mock did not receive %s", tc.path)
 		}
-		if got.Method != http.MethodGet || got.Authorization != "Bearer management-key" || got.Query != tc.query {
-			t.Fatalf("%s proxy request = %#v", tc.target, got)
+		if got.Method != tc.method || got.Authorization != "Bearer management-key" || got.Query != tc.query {
+			t.Fatalf("%s %s proxy request = %#v", tc.method, tc.target, got)
 		}
 	}
 
@@ -1493,17 +1498,13 @@ func TestServerCompatV8APIKeysConfigProxy(t *testing.T) {
 		{name: "missing admin key", method: http.MethodGet, target: "/v8/management/config/api-keys", want: http.StatusUnauthorized},
 		{name: "wrong admin key", method: http.MethodGet, target: "/v8/management/config/api-keys", key: "wrong-key", want: http.StatusUnauthorized},
 		{name: "CPA management key", method: http.MethodGet, target: "/v8/management/config/api-keys", key: "management-key", want: http.StatusUnauthorized},
-		{name: "put", method: http.MethodPut, target: "/v8/management/config/api-keys", key: testutil.AdminKey, want: http.StatusMethodNotAllowed},
-		{name: "patch", method: http.MethodPatch, target: "/v8/management/config/api-keys/claude", key: testutil.AdminKey, want: http.StatusMethodNotAllowed},
-		{name: "delete", method: http.MethodDelete, target: "/v8/management/config/api-keys", key: testutil.AdminKey, want: http.StatusMethodNotAllowed},
-		{name: "head", method: http.MethodHead, target: "/v8/management/config/api-keys", key: testutil.AdminKey, want: http.StatusMethodNotAllowed},
-		{name: "config root", method: http.MethodGet, target: "/v8/management/config", key: testutil.AdminKey, want: http.StatusNotFound},
-		{name: "config yaml", method: http.MethodGet, target: "/v8/management/config.yaml", key: testutil.AdminKey, want: http.StatusNotFound},
-		{name: "sibling config key", method: http.MethodGet, target: "/v8/management/config/api-keys-x", key: testutil.AdminKey, want: http.StatusNotFound},
-		{name: "other v8 route", method: http.MethodGet, target: "/v8/management/credentials/download?name=a.json", key: testutil.AdminKey, want: http.StatusNotFound},
 		{name: "dot segments", method: http.MethodGet, target: "/v8/management/config/api-keys/../../credentials/download", key: testutil.AdminKey},
-		{name: "encoded dot segments", method: http.MethodGet, target: "/v8/management/config/api-keys/%2e%2e/%2e%2e/credentials/download", key: testutil.AdminKey},
-		{name: "encoded slash dot segments", method: http.MethodGet, target: "/v8/management/config/api-keys%2F..%2F..%2Fcredentials/download", key: testutil.AdminKey},
+		{name: "encoded dot segments", method: http.MethodGet, target: "/v8/management/config/api-keys/%2e%2e/%2e%2e/credentials/download", key: testutil.AdminKey, want: http.StatusNotFound},
+		{name: "encoded slash dot segments", method: http.MethodGet, target: "/v8/management/config/api-keys%2F..%2F..%2Fcredentials/download", key: testutil.AdminKey, want: http.StatusNotFound},
+		// Path-keyed v0 auth-file mutation guards must not be bypassed via v8.
+		{name: "encoded escape to v0 auth-file delete", method: http.MethodDelete, target: "/v8/management/%2e%2e/%2e%2e/v0/management/auth-files?name=a.json", key: testutil.AdminKey, want: http.StatusNotFound},
+		{name: "dot escape to v0 auth-file status", method: http.MethodPatch, target: "/v8/management/../../v0/management/auth-files/status", key: testutil.AdminKey},
+		{name: "unauthenticated traversal", method: http.MethodDelete, target: "/v8/management/%2e%2e/%2e%2e/v0/management/auth-files?name=a.json", want: http.StatusUnauthorized},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			before := len(cpa.Requests())
