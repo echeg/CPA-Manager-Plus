@@ -212,14 +212,15 @@
 - ➕ note: the `profiles` parameter also carries `selectionOptions`, and its `supported` means the backend serves `/routing/profiles` (Task 8 passes `!unsupportedBackend`). The hook keeps the last loaded shared selection while the profiles reload and replaces the slot draft only when the stored selection changes, so a key-profile reload keeps an unsaved toolbar edit. The picker check moved to `routingModel.ts` as `isPickerSlot` (used by `normalizeProfile`), with `withPickerRule` and `selectionSlotOptions`. `readSubscriptionRouting` did not gain `selection`, so `config.test.ts` needed no change; the patch tests are in `quotaSettingsHooks.test.ts`
 
 ### Task 7: KeyProfileEditor
-- [ ] create `KeyProfileEditor.tsx` with props `{profile: RoutingProfile | null; shared; files; showEmails; selectionOptions; models; saving; readOnly; onSave(profile | null); onCancel}`:
+- [x] create `KeyProfileEditor.tsx` with props `{profile: RoutingProfile | null; shared; files; showEmails; selectionOptions; models; saving; readOnly; onSave(profile | null); onCancel}`:
   - the segmented "Общие настройки / Свой профиль" switch; switching to "Свой профиль" seeds a draft with `copyOfShared`;
   - the four stages: a sticky toggle with the global TTL as text, Claude and Codex selects from `preferredAccountOptions`, primary and tiebreak selects with the picker rule, and `FallbackSettingsEditor`;
   - a footer with the draft's `chainSummary`, Cancel, and Save; Save is disabled when `profileDirty` is false or the fallback settings are invalid; choosing "Общие настройки" and saving calls `onSave(null)`;
   - `readOnly` disables every control and shows the explanation
-- [ ] add the editor's `quota_management.key_profiles.*` keys to all four locale files
-- [ ] write `KeyProfileEditor.test.tsx` with a `react-test-renderer` harness and props: seeding from `copyOfShared`, the picker rule, the missing-account label, Save disabled when clean or invalid, `onSave` with the full draft, `onSave(null)` for "Общие настройки", and the read-only state
-- [ ] run the focused tests, `npm run type-check`, and `npm run lint` - must pass before task 8
+- [x] add the editor's `quota_management.key_profiles.*` keys to all four locale files
+- [x] write `KeyProfileEditor.test.tsx` with a `react-test-renderer` harness and props: seeding from `copyOfShared`, the picker rule, the missing-account label, Save disabled when clean or invalid, `onSave` with the full draft, `onSave(null)` for "Общие настройки", and the read-only state
+- [x] run the focused tests, `npm run type-check`, and `npm run lint` - must pass before task 8
+- ➕ note: the editor takes an optional `sessionAffinityTTL` prop for the global TTL text (Task 8 passes the toolbar's value), and has its own `KeyProfileEditor.module.scss`. Creating a profile counts as dirty even when the copy equals the shared settings, because the key stops following the toolbar. The draft and the dirty baseline both pass the fallback block through `withSuggestions`, so an empty mapping list fills the same way as in the toolbar modal without marking the form dirty. Switching to "Общие настройки" and back keeps the unsaved draft. Locale keys are under `quota_management.key_profiles.editor.*`
 
 ### Task 8: KeyProfilesModal and QuotaSettingsBar wiring
 - [ ] create `KeyProfilesModal.tsx`: a read-only shared-profile summary at the top; one row per key with its label, masked key, badge, chain summary, and an Edit or Collapse button; one expanded `KeyProfileEditor` at a time; loading, error, and read-only (`supported: false`) states

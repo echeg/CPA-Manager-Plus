@@ -5691,7 +5691,19 @@
         "unknown_key": "This key was removed on the Config page. The key list was reloaded."
       },
       "button": "Keys {{count}}/{{total}}",
-      "button_hint": "Routing profiles per client API key: {{count}} of {{total}} keys have their own profile."
+      "button_hint": "Routing profiles per client API key: {{count}} of {{total}} keys have their own profile.",
+      "editor": {
+        "mode": "Routing for this key",
+        "mode_shared": "Shared settings",
+        "mode_own": "Own profile",
+        "shared_hint": "This key follows the shared settings from the toolbar. Choose “Own profile” to start from a copy of them.",
+        "sticky": "Sticky session",
+        "ttl": "TTL {{ttl}} is global and set in the toolbar.",
+        "accounts": "Preferred subscription",
+        "selection": "Pool selection",
+        "summary": "Chain:",
+        "read_only": "Per-key profiles need native CPA routing. Home mode and scheduler plugins manage their own routing, so this profile is read-only."
+      }
     }
   },
   "claude_reset": {
