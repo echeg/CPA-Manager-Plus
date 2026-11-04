@@ -70,6 +70,55 @@ the whole reserve. A v8 client cannot silently replace a staged policy with a
 legacy payload that omits its steps. This feature is maintained in CPAMP; the old
 standalone management panel has no staged-reserve editor.
 
+## Claude to Codex fallback
+
+The Quota toolbar includes **Claude → Codex fallback** beside Codex Fast mode.
+The switch applies immediately and preserves the mappings and selected mode when
+turned off. The settings button opens the model mapping editor. Initial suggestions
+are `claude-opus-* → gpt-6-astra`, `claude-sonnet-* → gpt-6-sol`, and
+`claude-fable-* → gpt-6-astra`; they are editable and are saved only on user action.
+
+- **Automatic** tries the available Claude credentials first. After an unsuccessful
+  credential round, respecting CPA's `max-retry-credentials` limit, CPA tries the
+  configured Codex model instead of waiting for a Claude cooldown. Quota exhaustion,
+  unavailable credentials, upstream 401/403/408/429/5xx errors, and transient transport
+  failures qualify. Subsequent requests try Claude again; normal cooldowns still apply.
+- **Force Codex now** sends matching requests directly to Codex, even when Claude
+  is available. Unmapped requests keep their existing routing.
+
+Source rules accept exact model IDs or a trailing `*`. Exact matches take precedence,
+then the longest matching prefix. A target can include a reasoning suffix such as
+`gpt-6-astra(high)`; an explicit target suffix overrides the source suffix. Account
+suggestions are loaded from CPA, and fallback selects only Codex subscription credentials.
+Conversation history, tools, session identity, and the client's protocol are preserved
+by the existing CPA translators. Request monitoring retains the original requested model
+and records the actual provider and model used for each upstream attempt.
+
+Fallback is applied before a response starts. It never replays a partial response,
+changes an explicitly pinned credential request, retries a malformed request, or ignores
+client cancellation. It adds no response/idle timeout: a connection that stays open
+without returning an error still depends on existing transport or client timeouts.
+Home and scheduler plugins retain ownership of their routing.
+
+This requires updating both this panel and the custom CPA backend. Older backends
+leave the control disabled. Capability and model suggestions come from
+`GET /v8/management/routing/claude-fallback`; settings are saved only under
+`routing.claude-fallback` through the v8 configuration API. The default is disabled.
+
+```yaml
+routing:
+  claude-fallback:
+    enabled: false
+    mode: auto # auto or always; retained while disabled
+    mappings:
+      - from: claude-opus-*
+        to: gpt-6-astra
+      - from: claude-sonnet-*
+        to: gpt-6-sol
+      - from: claude-fable-*
+        to: gpt-6-astra
+```
+
 ## Build and verify
 
 ```sh

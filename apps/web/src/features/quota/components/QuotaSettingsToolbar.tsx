@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/features/quota/components/Select';
@@ -15,6 +15,7 @@ import {
 import { maskQuotaName, maskQuotaText } from '../ledgerModel';
 import { activityStatusKey, latestSubscriptionActivity, type ActivityState } from '../routingModel';
 import { ProviderPill } from './ProviderPill';
+import { ClaudeFallbackControl } from './ClaudeFallbackControl';
 import styles from './QuotaSettingsToolbar.module.scss';
 
 const PROVIDERS = ['codex', 'claude'] as const;
@@ -35,6 +36,7 @@ type RoutingProps = Pick<
 >;
 
 interface ToolbarProps {
+  fallbackControl?: ReactNode;
   routing: RoutingProps;
   fastMode: CodexFastModeState;
   activity: SubscriptionActivity[];
@@ -56,6 +58,7 @@ export function QuotaSettingsToolbar({
   showEmails,
   disabled,
   resolvedTheme,
+  fallbackControl,
 }: ToolbarProps) {
   const { t, i18n } = useTranslation();
   const id = useId();
@@ -206,6 +209,8 @@ export function QuotaSettingsToolbar({
         </span>
       </div>
 
+      {fallbackControl}
+
       <div className={styles.actions}>
         {routing.saved && (
           <span className={styles.saved} role="status">
@@ -266,6 +271,7 @@ export function QuotaSettingsBar({
       showEmails={showEmails}
       disabled={disabled}
       resolvedTheme={resolvedTheme}
+      fallbackControl={<ClaudeFallbackControl disabled={disabled} showEmails={showEmails} />}
     />
   );
 }

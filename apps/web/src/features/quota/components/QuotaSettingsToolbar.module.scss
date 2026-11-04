@@ -119,6 +119,31 @@
   overflow-wrap: anywhere;
 }
 
+.fallbackEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+
+  p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
+}
+
+.fallbackRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+
+  input {
+    min-width: 0;
+    font-family: $font-mono;
+    font-size: 12px;
+  }
+}
+
 @media (max-width: 1400px) {
   .separator {
     display: none;

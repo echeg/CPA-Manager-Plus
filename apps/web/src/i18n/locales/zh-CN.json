@@ -5641,7 +5641,24 @@
     "weekday_sat": "六",
     "v8_required_title": "需要 CPA v8",
     "v8_required": "此配额工作台需要自定义 CLIProxyAPI v8 后端。请在设置中检查 CPA 连接，或打开“账号”使用标准 CPAMP 功能。",
-    "open_accounts": "打开账号"
+    "open_accounts": "打开账号",
+    "fallback": {
+      "title": "Claude → Codex 回退",
+      "configure": "配置 Claude 回退",
+      "mode": "回退模式",
+      "auto": "自动",
+      "always": "强制使用 Codex",
+      "description": "Claude 不可用时使用 Codex 订阅，或强制将映射模型路由至 Codex。更改对后续请求生效。",
+      "unsupported": "需要支持此功能的新版 CPA 和原生路由。Home 和调度插件自行管理路由。",
+      "auto_hint": "优先尝试 Claude 账号。可用账号均失败或处于冷却状态时使用 Codex。后续请求再次尝试 Claude。已经开始的响应不会重放。",
+      "always_hint": "即使 Claude 可用，也直接将匹配请求发送至 Codex。未映射的模型继续使用 Claude。",
+      "mapping_hint": "输入准确的模型 ID 或以 * 结尾的模型系列。准确匹配优先。建议来自已连接账号；Codex 目标使用订阅凭据。",
+      "source": "Claude 模型，第 {{index}} 行",
+      "target": "Codex 模型，第 {{index}} 行",
+      "remove": "删除映射 {{index}}",
+      "add": "添加模型映射",
+      "invalid": "请填写两个模型 ID，并使用唯一的源规则。仅 Claude 模型末尾允许 *。启用回退至少需要一条映射。"
+    }
   },
   "claude_reset": {
     "expiry_title": "主动重置过期时间（{{timezone}}）",

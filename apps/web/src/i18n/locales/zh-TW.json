@@ -5641,7 +5641,24 @@
     "weekday_sat": "六",
     "v8_required_title": "需要 CPA v8",
     "v8_required": "此配額工作台需要自訂 CLIProxyAPI v8 後端。請在設定中檢查 CPA 連線，或開啟「帳號」使用標準 CPAMP 功能。",
-    "open_accounts": "開啟帳號"
+    "open_accounts": "開啟帳號",
+    "fallback": {
+      "title": "Claude → Codex 備援",
+      "configure": "設定 Claude 備援",
+      "mode": "備援模式",
+      "auto": "自動",
+      "always": "強制使用 Codex",
+      "description": "Claude 無法使用時使用 Codex 訂閱，或強制將對應模型路由至 Codex。變更對後續請求生效。",
+      "unsupported": "需要支援此功能的新版 CPA 和原生路由。Home 和排程外掛自行管理路由。",
+      "auto_hint": "優先嘗試 Claude 帳號。可用帳號均失敗或處於冷卻狀態時使用 Codex。後續請求再次嘗試 Claude。已經開始的回應不會重播。",
+      "always_hint": "即使 Claude 可用，也直接將符合的請求傳送至 Codex。未對應的模型繼續使用 Claude。",
+      "mapping_hint": "輸入完整的模型 ID 或以 * 結尾的模型系列。完全相符優先。建議來自已連線帳號；Codex 目標使用訂閱憑證。",
+      "source": "Claude 模型，第 {{index}} 列",
+      "target": "Codex 模型，第 {{index}} 列",
+      "remove": "刪除對應 {{index}}",
+      "add": "新增模型對應",
+      "invalid": "請填寫兩個模型 ID，並使用不重複的來源規則。僅 Claude 模型結尾允許 *。啟用備援至少需要一條對應。"
+    }
   },
   "claude_reset": {
     "expiry_title": "主動重置過期時間（{{timezone}}）",

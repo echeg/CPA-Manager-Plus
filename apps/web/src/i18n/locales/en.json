@@ -5646,7 +5646,24 @@
     "weekday_sat": "Sat",
     "v8_required_title": "CPA v8 required",
     "v8_required": "This quota workbench requires the custom CLIProxyAPI v8 backend. Check the CPA connection in Settings, or use Accounts for the standard CPAMP controls.",
-    "open_accounts": "Open Accounts"
+    "open_accounts": "Open Accounts",
+    "fallback": {
+      "title": "Claude → Codex fallback",
+      "configure": "Configure Claude fallback",
+      "mode": "Fallback mode",
+      "auto": "Automatic",
+      "always": "Force Codex now",
+      "description": "Use Codex subscriptions when Claude is unavailable, or force Codex for mapped models. Changes apply to subsequent requests.",
+      "unsupported": "Requires an updated CPA backend with native routing. Home and scheduler plugins manage their own routing.",
+      "auto_hint": "Try Claude accounts first. When the available accounts fail or are cooling down, use Codex. Later requests try Claude again. Responses that have already started are never replayed.",
+      "always_hint": "Send matching requests directly to Codex, even when Claude is available. Unmapped models continue to use Claude.",
+      "mapping_hint": "Enter an exact model ID or a family ending in *. Exact matches take precedence. Suggestions come from connected accounts; Codex targets use subscription credentials.",
+      "source": "Claude model, row {{index}}",
+      "target": "Codex model, row {{index}}",
+      "remove": "Remove mapping {{index}}",
+      "add": "Add model mapping",
+      "invalid": "Fill in both model IDs and use unique source rules. Only a trailing * is allowed in the Claude model. Enabling fallback requires at least one mapping."
+    }
   },
   "claude_reset": {
     "expiry_title": "Manual reset expiry ({{timezone}})",
