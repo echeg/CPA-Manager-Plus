@@ -336,6 +336,29 @@ describe('personal quota settings session lifecycle', () => {
       expect(state.dirty).toBe(true);
     });
 
+    test('a failed profiles load locks the legacy strategy but not the other settings', async () => {
+      const patch = vi.spyOn(apiClient, 'patch').mockResolvedValue(undefined);
+      useConfigStore.setState({ fetchConfig: vi.fn(async () => config), clearCache: vi.fn() });
+      await mountWith({ supported: false, failed: true, loading: false, reload: vi.fn() });
+      expect(state.slots).toBeNull();
+      expect(state.strategyLocked).toBe(true);
+      await act(async () => {
+        state.change({ strategy: 'round-robin', sessionAffinity: true });
+      });
+      expect(state.values?.strategy).toBe('fill-first');
+      await act(async () => {
+        await state.save();
+      });
+      expect(patch).toHaveBeenCalledExactlyOnceWith('/config', {
+        routing: { 'session-affinity': true },
+      });
+
+      // Once the profiles load, the slots replace the strategy and the lock lifts.
+      await rerender(source());
+      expect(state.slots).not.toBeNull();
+      expect(state.strategyLocked).toBe(false);
+    });
+
     test.each([
       ['no profiles source', undefined],
       ['an older backend', { supported: false, loading: false, reload: () => {} }],

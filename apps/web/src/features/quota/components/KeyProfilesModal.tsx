@@ -170,7 +170,9 @@ export function KeyProfilesModal({
                           showEmails={showEmails}
                           selectionOptions={state.selectionOptions}
                           models={models}
-                          saving={saving}
+                          // A reload keeps the rows on screen; the editor waits for it
+                          // because the hook refuses a save while the profiles load.
+                          saving={saving || loading}
                           readOnly={readOnly}
                           sessionAffinityTTL={sessionAffinityTTL}
                           onSave={(profile) => void save(row.key, profile)}

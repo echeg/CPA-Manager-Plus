@@ -8,6 +8,7 @@ import type {
   RoutingProfile,
   RoutingSelectionOptions,
 } from '@/features/personal-quota-support/services/api/routingProfiles';
+import { suggestedFallbackMappings } from '@/features/personal-quota-support/services/api/claudeFallback';
 import type { AuthFileItem } from '@/features/personal-quota-support/types';
 import { copyOfShared } from '../keyProfilesModel';
 import { FallbackSettingsEditor } from './FallbackSettingsEditor';
@@ -133,6 +134,20 @@ describe('KeyProfileEditor', () => {
     click(saveButton());
     expect(onSave).toHaveBeenCalledWith(copyOfShared(shared));
     expect(onSave.mock.calls[0][0]).not.toBe(shared);
+  });
+
+  test('a stored profile without mappings opens clean and saves the suggested ones', async () => {
+    const stored = {
+      ...copyOfShared(shared),
+      claudeFallback: { enabled: false, mode: 'auto' as const, mappings: [] },
+    };
+    const { onSave } = await mount({ profile: stored });
+    // The fallback editor shows suggestions for an empty list; that alone is no edit.
+    expect(saveButton().props.disabled).toBe(true);
+    act(() => sticky().props.onChange(false));
+    click(saveButton());
+    expect(onSave.mock.calls[0][0].sessionAffinity).toBe(false);
+    expect(onSave.mock.calls[0][0].claudeFallback.mappings).toEqual(suggestedFallbackMappings());
   });
 
   test('edits never touch the shared profile', async () => {

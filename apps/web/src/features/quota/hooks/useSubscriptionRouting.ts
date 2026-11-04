@@ -26,6 +26,11 @@ export interface RoutingProfilesSource {
   selection?: SelectionSlots;
   selectionOptions?: RoutingSelectionOptions;
   loading: boolean;
+  /**
+   * The profiles failed to load for a reason other than a 404, so it is unknown
+   * whether the backend routes by `routing.selection` or by the legacy strategy.
+   */
+  failed?: boolean;
   reload: () => void;
 }
 
@@ -117,9 +122,14 @@ export function useSubscriptionRouting(disabled: boolean, profiles?: RoutingProf
     configBaseline &&
     (shared ? { ...configBaseline, selection: shared.selection } : configBaseline);
 
+  // A backend with an explicit routing.selection ignores routing.strategy, so the
+  // legacy select stays locked until the profiles confirm it is in use.
+  const strategyLocked = !shared && !!profiles?.failed;
+
   const change = (patch: Partial<SubscriptionRoutingSettings>) => {
     const { selection: nextSelection, ...rest } = patch;
     if (nextSelection && shared) setSelectionDraft(withPickerRule(nextSelection, shared.options));
+    if (strategyLocked) delete rest.strategy;
     if (Object.keys(rest).length)
       setConfigValues((current) => (current ? { ...current, ...rest } : current));
     setSaved(false);
@@ -167,6 +177,7 @@ export function useSubscriptionRouting(disabled: boolean, profiles?: RoutingProf
     options,
     /** Slot choices when the shared selection replaces the legacy strategy, otherwise null. */
     slots: shared ? selectionSlotOptions(t, shared.options, selection) : null,
+    strategyLocked,
     strategyLabel: values ? options.find((option) => option.value === values.strategy)?.label : '',
     change,
     save,

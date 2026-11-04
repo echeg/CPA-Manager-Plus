@@ -50,10 +50,16 @@ export function useKeyProfiles(disabled: boolean) {
     };
   }, []);
 
+  // A new connection drops the old one's profiles. On the same connection a reload,
+  // or a pause while disabled, keeps the last loaded state, so the toolbar slots,
+  // the Keys button and an open editor stay in place, also after a failed reload.
   useEffect(() => {
-    let active = true;
     setState(null);
     setApiKeys([]);
+  }, [revision]);
+
+  useEffect(() => {
+    let active = true;
     setLoadError('');
     setLoading(true);
     if (disabled) return;
@@ -104,7 +110,7 @@ export function useKeyProfiles(disabled: boolean) {
         } else {
           setSaveError(errorText(err, t));
           // A 422 leaves the file unchanged. Any other failure may follow a write
-          // that landed, so show the stored state instead of the draft's outcome.
+          // that landed, so reload the stored state for the row summaries.
           if (!(err instanceof InvalidRoutingConfigError)) refetch();
         }
       }

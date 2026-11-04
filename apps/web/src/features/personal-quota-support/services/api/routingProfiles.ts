@@ -1,4 +1,4 @@
-import { normalizeProfile } from '@/features/quota/keyProfilesModel';
+import { normalizeProfile, profileDirty } from '@/features/quota/keyProfilesModel';
 import { apiClient } from './client';
 import {
   readFallbackSettings,
@@ -47,8 +47,6 @@ export interface KeyProfileRow {
 
 /** 400 `unknown_api_key`: the key is no longer in `access.api-keys`. */
 export class UnknownApiKeyError extends Error {
-  readonly status = 400;
-  readonly apiCode = 'unknown_api_key';
   constructor() {
     super('The client key is no longer in the configuration');
     this.name = 'UnknownApiKeyError';
@@ -57,8 +55,6 @@ export class UnknownApiKeyError extends Error {
 
 /** 422 `invalid_config`: the backend message names the profile by a hash prefix only. */
 export class InvalidRoutingConfigError extends Error {
-  readonly status = 422;
-  readonly apiCode = 'invalid_config';
   constructor(message: string) {
     super(message || 'Invalid routing configuration');
     this.name = 'InvalidRoutingConfigError';
@@ -73,15 +69,10 @@ const stringList = (value: unknown): string[] => {
   return value.filter((item): item is string => typeof item === 'string' && item !== '');
 };
 
-export const defaultSelection = (): SelectionSlots => ({
-  primary: 'reserves',
-  tiebreak: 'round-robin',
-});
-
 const emptyProfile = (): RoutingProfile => ({
   sessionAffinity: false,
   preferredAccounts: {},
-  selection: defaultSelection(),
+  selection: { primary: 'reserves', tiebreak: 'round-robin' },
   claudeFallback: { enabled: false, mode: 'auto', mappings: [] },
 });
 
@@ -211,10 +202,7 @@ const sameProfile = (
   a: RoutingProfile | null,
   b: RoutingProfile | null,
   options: RoutingSelectionOptions
-) =>
-  a === null || b === null
-    ? a === b
-    : JSON.stringify(normalizeProfile(a, options)) === JSON.stringify(normalizeProfile(b, options));
+) => (a === null || b === null ? a === b : !profileDirty(a, b, options));
 
 function translateWriteError(error: unknown, key: string): unknown {
   if (!isRecord(error)) return error;

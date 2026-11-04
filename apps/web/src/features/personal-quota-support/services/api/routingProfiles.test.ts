@@ -102,6 +102,27 @@ describe('reading routing profiles', () => {
     expect(state.keys[0].profile.selection).toEqual({ primary: 'fill-first' });
   });
 
+  it('accepts a null tiebreak', () => {
+    const profile = { ...rawKeyProfile(), selection: { primary: 'reserves', tiebreak: null } };
+    const state = readRoutingProfiles(response([{ key: RAW_KEY, profile }]));
+    expect(state.keys[0].profile.selection).toEqual({ primary: 'reserves' });
+  });
+
+  it('reads an empty fallback mode as auto, as CPA sends it for a config without one', () => {
+    // GET /routing/profiles serializes the stored block as is: a config without
+    // routing.claude-fallback, or a key profile without one, has mode "".
+    const emptyFallback = { enabled: false, mode: '', mappings: [] };
+    const state = readRoutingProfiles({
+      ...response([
+        { key: RAW_KEY, profile: { ...rawKeyProfile(), 'claude-fallback': emptyFallback } },
+      ]),
+      shared: { ...rawShared(), 'claude-fallback': emptyFallback },
+    });
+    const expected = { enabled: false, mode: 'auto', mappings: [] };
+    expect(state.shared.claudeFallback).toEqual(expected);
+    expect(state.keys[0].profile.claudeFallback).toEqual(expected);
+  });
+
   it.each([
     ['not an object', null],
     ['no supported flag', { ...response(), supported: 'yes' }],
@@ -118,7 +139,10 @@ describe('reading routing profiles', () => {
     ],
     [
       'a non-string tiebreak',
-      { ...response(), shared: { ...rawShared(), selection: { primary: 'reserves', tiebreak: 1 } } },
+      {
+        ...response(),
+        shared: { ...rawShared(), selection: { primary: 'reserves', tiebreak: 1 } },
+      },
     ],
     [
       'non-list selection options',

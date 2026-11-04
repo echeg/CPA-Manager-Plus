@@ -12,7 +12,7 @@ import type { ApiKeyAlias } from '@/services/api/usageService';
 import { sha256Hex } from '@/utils/apiKeyHash';
 import { maskApiKey } from '@/utils/format';
 import { maskQuotaName } from './ledgerModel';
-import { isPickerSlot, preferredAccountOptions } from './routingModel';
+import { preferredAccountOptions, withPickerRule } from './routingModel';
 
 /**
  * Canonical form of a profile: the shape the backend keeps. A picker as primary
@@ -28,16 +28,15 @@ export function normalizeProfile(
     const value = profile.preferredAccounts[provider]?.trim();
     if (value) preferredAccounts[provider] = value;
   }
-  const primary = profile.selection.primary.trim();
-  const tiebreak = profile.selection.tiebreak?.trim();
+  const selection = withPickerRule(
+    { primary: profile.selection.primary.trim(), tiebreak: profile.selection.tiebreak?.trim() },
+    selectionOptions
+  );
   const fallback = normalizeFallbackSettings(profile.claudeFallback);
   return {
     sessionAffinity: profile.sessionAffinity,
     preferredAccounts,
-    selection:
-      primary && tiebreak && !isPickerSlot(primary, selectionOptions)
-        ? { primary, tiebreak }
-        : { primary },
+    selection,
     claudeFallback: { enabled: fallback.enabled, mode: fallback.mode, mappings: fallback.mappings },
   };
 }

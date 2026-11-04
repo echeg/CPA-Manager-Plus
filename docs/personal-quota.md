@@ -9,9 +9,10 @@ at `4f9ee96`. The ported MIT components retain their attribution in `LICENSE`.
 The **Quota** navigation item (`#/quota`) includes compact cards, Ledger and timeline
 views; provider totals; subscription account preferences; shared pool selection
 (primary and tie-break slots, or the legacy routing strategy on older backends) and
-sticky-session TTL; routing profiles per client API key; Codex Fast Mode; per-account soft/hard quota reserves; Codex
-reset credits and Claude reset grants with expiry dates; inline reset confirmation;
-CPA cooldown clearing after a confirmed reset; refresh on entry; and privacy masking.
+sticky-session TTL; routing profiles per client API key; Codex Fast Mode;
+per-account soft/hard quota reserves; Codex reset credits and Claude reset grants
+with expiry dates; inline reset confirmation; CPA cooldown clearing after a
+confirmed reset; refresh on entry; and privacy masking.
 Reserve editing is available directly on the quota cards.
 
 The existing Accounts, Analytics, Monitoring, Usage Maintenance, OAuth, configuration,
@@ -27,9 +28,11 @@ server-side. The browser never needs that upstream key.
 
 The quota workbench requires the custom v8 API implemented by
 [echeg/CLIProxyAPI](https://github.com/echeg/CLIProxyAPI), including nested config,
-credential fields, subscription routing, quota API calls and cooldown clearing.
-Stock CPA installations without these endpoints cannot provide the custom workbench.
-CPAMP's existing v0 client and screens remain unchanged.
+credential fields, subscription routing, per-key routing profiles and selection
+slots, quota API calls and cooldown clearing. A backend without routing profiles
+keeps the legacy strategy select and hides the Keys button. Stock CPA installations
+without these endpoints cannot provide the custom workbench. CPAMP's existing v0
+client and screens remain unchanged.
 
 Credential mutations through v8 reuse CPAMP's mutation locks and manual-action
 ownership handling. A quota reserve, a CPA runtime cooldown, and an account disabled
@@ -52,10 +55,13 @@ Soft levels rank the pool through the `reserves` selection slot, which is the
 default primary slot: it keeps the eligible accounts at the lowest available level,
 and the next slot chooses among them. A usable preferred subscription is taken
 before the pool, even at soft levels 1-3; manual credential priority applies only
-when `priority` is one of the slots. The level reflects the most constrained usable subscription window. Window expiry or
-new observations recalculate it; soft3 remains an available fallback. Existing
-session bindings retain their account and cache. Disabled accounts and actual
-provider cooldowns still take precedence.
+when `priority` is one of the slots. On an older backend without selection slots,
+CPA picks the lowest available level first, then applies the manual preference,
+credential priority and the legacy routing strategy. The level reflects the most
+constrained usable subscription window. Window expiry or new observations
+recalculate it; soft3 remains an available fallback. Existing session bindings
+retain their account and cache. Disabled accounts and actual provider cooldowns
+still take precedence.
 
 Configure these thresholds in the inline reserve editor on the Quota page. The
 backend advertises `quota_reserve_max_levels: 3` in its v8 credential response;
@@ -180,12 +186,17 @@ its log. Account names in the summaries follow the email privacy toggle.
 reports `supported: false`: the modal still lists the keys and their summaries,
 but the editor is read-only and explains why. A backend without
 `GET /v8/management/routing/profiles` (404) hides the Keys button and keeps the
-legacy strategy select and the fallback control exactly as before.
+legacy strategy select and the fallback control exactly as before. If the
+profiles fail to load for another reason, the legacy strategy select stays locked,
+because a backend with `routing.selection` ignores `routing.strategy`; the Keys
+button stays visible so the modal can show the error and retry. A reload that fails
+keeps the last loaded slots and key list.
 
 This requires the custom CPA backend with per-key routing profiles
 ([echeg/CLIProxyAPI](https://github.com/echeg/CLIProxyAPI) `main` at `ced98b16`
-or later). The Manager Server forwards the new endpoint unchanged. Profiles are stored under `routing.key-profiles`, keyed by the exact
-client key:
+or later). The Manager Server forwards the new endpoint unchanged. Profiles are
+stored under `routing.key-profiles`, keyed by the exact client key. A
+`claude-fallback` block without `mode` means `auto`:
 
 ```yaml
 routing:

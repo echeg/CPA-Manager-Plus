@@ -229,6 +229,7 @@ describe('key profiles modal wiring', () => {
       selection: shared().selection,
       selectionOptions: profilesState().selectionOptions,
       loading: false,
+      failed: false,
       reload: keyProfiles.reload,
     });
     expect(text(keysButton()!)).toBe('Keys 1/2');
@@ -256,11 +257,21 @@ describe('key profiles modal wiring', () => {
     );
   });
 
-  test('keeps the last counts while the profiles reload', async () => {
+  test('keeps the button while the profiles reload', async () => {
     await mount();
-    keyProfiles = makeKeyProfiles(null, { loading: true });
+    // useKeyProfiles keeps the last loaded state while it reloads.
+    keyProfiles = makeKeyProfiles(profilesState(), { loading: true });
     await rerender();
     expect(text(keysButton()!)).toBe('Keys 1/2');
+  });
+
+  test('a failed first load locks the legacy strategy select', async () => {
+    keyProfiles = makeKeyProfiles(null, { error: 'offline' });
+    await mount();
+    expect(useSubscriptionRouting).toHaveBeenLastCalledWith(
+      false,
+      expect.objectContaining({ supported: false, failed: true })
+    );
   });
 
   test('editing and saving sends the draft for that key and collapses the editor', async () => {
@@ -367,7 +378,8 @@ describe('key profiles modal states and errors', () => {
 
   test('a disconnected panel disables the button and keeps the last counts', async () => {
     await mount();
-    keyProfiles = makeKeyProfiles(null, { loading: true });
+    // useKeyProfiles keeps the state while disabled on the same connection.
+    keyProfiles = makeKeyProfiles(profilesState(), { loading: true });
     await rerender(false, true);
     expect(useKeyProfiles).toHaveBeenLastCalledWith(true);
     expect(useSubscriptionRouting).toHaveBeenLastCalledWith(

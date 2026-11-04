@@ -239,6 +239,33 @@ describe('useKeyProfiles errors', () => {
     expect(hook.error).toBe('offline');
   });
 
+  test('a reload keeps the last loaded state while it runs and after it fails', async () => {
+    await mount();
+    const loaded = hook.state;
+    const pending = deferred<RoutingProfilesState>();
+    vi.mocked(routingProfilesApi.get).mockReturnValueOnce(pending.promise);
+    await act(async () => hook.reload());
+    expect(hook.loading).toBe(true);
+    expect(hook.state).toBe(loaded);
+    expect([hook.count, hook.total]).toEqual([1, 2]);
+    await act(async () => pending.reject(new Error('offline')));
+    expect(hook.loading).toBe(false);
+    expect(hook.error).toBe('offline');
+    expect(hook.state).toBe(loaded);
+    expect([hook.count, hook.total]).toEqual([1, 2]);
+  });
+
+  test('a connection change drops the previous connection state', async () => {
+    await mount();
+    expect(hook.state).not.toBeNull();
+    vi.mocked(routingProfilesApi.get).mockRejectedValue(new Error('offline'));
+    revision += 1;
+    await act(async () => hook.reload());
+    expect(hook.state).toBeNull();
+    expect([hook.count, hook.total]).toEqual([0, 0]);
+    expect(hook.error).toBe('offline');
+  });
+
   test('a 400 for a removed key reloads the list and keeps its message', async () => {
     vi.spyOn(routingProfilesApi, 'saveKeyProfile').mockRejectedValue(new UnknownApiKeyError());
     const fetchConfig = vi

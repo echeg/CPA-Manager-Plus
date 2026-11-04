@@ -30,12 +30,17 @@ export const withSuggestions = (value: ClaudeFallbackSettings): ClaudeFallbackSe
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 
-/** Validate one `claude-fallback` block; also used by the routing profiles reader. */
+/**
+ * Validate one `claude-fallback` block; also used by the routing profiles reader.
+ * CPA stores no mode when the YAML omits it and `/routing/profiles` sends it as
+ * `""`, which CPA treats as `auto`.
+ */
 export function readFallbackSettings(raw: unknown): ClaudeFallbackSettings {
+  const mode = isRecord(raw) && raw.mode !== undefined && raw.mode !== '' ? raw.mode : 'auto';
   if (
     !isRecord(raw) ||
     typeof raw.enabled !== 'boolean' ||
-    !['auto', 'always'].includes(String(raw.mode)) ||
+    !['auto', 'always'].includes(String(mode)) ||
     !Array.isArray(raw.mappings) ||
     !raw.mappings.every(
       (item: unknown) =>
@@ -45,7 +50,7 @@ export function readFallbackSettings(raw: unknown): ClaudeFallbackSettings {
     throw new Error('Invalid Claude fallback settings');
   return {
     enabled: raw.enabled,
-    mode: raw.mode as ClaudeFallbackSettings['mode'],
+    mode: mode as ClaudeFallbackSettings['mode'],
     mappings: raw.mappings.map((item) => ({ from: item.from, to: item.to })),
   };
 }

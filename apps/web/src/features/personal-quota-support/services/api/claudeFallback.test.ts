@@ -48,6 +48,12 @@ describe('Claude fallback configuration', () => {
       expect(validFallbackSettings({ ...settings, mappings })).toBe(false);
     }
     expect(validFallbackSettings({ ...settings, enabled: false, mappings: [] })).toBe(true);
+    for (const mode of ['', undefined]) {
+      expect(
+        readClaudeFallback({ ...response(), settings: { enabled: false, mode, mappings: [] } })
+          .settings.mode
+      ).toBe('auto');
+    }
     expect(() =>
       readClaudeFallback({
         ...response(),

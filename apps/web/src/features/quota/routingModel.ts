@@ -95,8 +95,6 @@ export function selectionSlotOptions(
   };
 }
 
-export type SelectionSlotOptions = ReturnType<typeof selectionSlotOptions>;
-
 export type RoutingProvider = 'claude' | 'codex';
 
 /** Accounts of one provider that can be preferred (they have an auth index). */

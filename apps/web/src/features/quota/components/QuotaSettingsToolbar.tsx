@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/features/quota/components/Select';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
-import type { RoutingProfilesState } from '@/features/personal-quota-support/services/api/routingProfiles';
 import type { SubscriptionActivity } from '@/features/personal-quota-support/services/api/subscriptionRouting';
 import type { AuthFileItem, ResolvedTheme } from '@/features/personal-quota-support/types';
 import { getQuotaDisplayName } from '@/features/quota/utils/quota/identity';
@@ -41,6 +40,7 @@ type RoutingProps = Pick<
   | 'blocked'
   | 'options'
   | 'slots'
+  | 'strategyLocked'
   | 'change'
   | 'save'
   | 'reload'
@@ -150,7 +150,7 @@ export function QuotaSettingsToolbar({
             value={values?.strategy ?? 'round-robin'}
             options={routing.options}
             ariaLabelledBy={`${id}-strategy`}
-            disabled={blocked}
+            disabled={blocked || !!routing.strategyLocked}
             onChange={(strategy) => routing.change({ strategy })}
           />
         </div>
@@ -319,13 +319,6 @@ export function QuotaSettingsToolbar({
   );
 }
 
-/** The toolbar button state, kept across profile reloads so the button does not flicker. */
-interface KeyProfilesButtonSnapshot {
-  state: RoutingProfilesState;
-  count: number;
-  total: number;
-}
-
 /** Wires the toolbar to live routing, fast mode, activity, fallback and key profile state. */
 export function QuotaSettingsBar({
   disabled,
@@ -345,6 +338,7 @@ export function QuotaSettingsBar({
     selection: profilesState?.shared.selection,
     selectionOptions: profilesState?.selectionOptions,
     loading: keyProfiles.loading,
+    failed: !profilesState && !keyProfiles.loading && !!keyProfiles.error,
     reload: keyProfiles.reload,
   });
   // A fallback change rewrites the shared profile, so the key summaries reload.
@@ -352,14 +346,6 @@ export function QuotaSettingsBar({
   const fastMode = useCodexFastMode(disabled);
   const { activity, activityState } = useSubscriptionActivity(disabled);
   const [modalOpen, setModalOpen] = useState(false);
-
-  // The profiles reset to null while they reload; keep the last loaded button state.
-  const [snapshot, setSnapshot] = useState<KeyProfilesButtonSnapshot | null>(null);
-  if (profilesState && snapshot?.state !== profilesState) {
-    setSnapshot({ state: profilesState, count: keyProfiles.count, total: keyProfiles.total });
-  }
-  const known = profilesState ? { count: keyProfiles.count, total: keyProfiles.total } : snapshot;
-  const knownState = profilesState ?? snapshot?.state;
 
   const openModal = () => {
     setModalOpen(true);
@@ -381,11 +367,11 @@ export function QuotaSettingsBar({
           <ClaudeFallbackControl disabled={disabled} showEmails={showEmails} fallback={fallback} />
         }
         keyProfiles={{
-          count: known?.count ?? 0,
-          total: known?.total ?? 0,
+          count: keyProfiles.count,
+          total: keyProfiles.total,
           // Hidden on an older backend and until the first load; a failed first load
           // still shows the button so the modal can report the error and retry.
-          hidden: knownState ? knownState.unsupportedBackend : !keyProfiles.error,
+          hidden: profilesState ? profilesState.unsupportedBackend : !keyProfiles.error,
           disabled,
           onOpen: openModal,
         }}

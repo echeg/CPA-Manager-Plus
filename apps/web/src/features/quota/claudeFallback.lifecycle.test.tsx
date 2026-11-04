@@ -12,6 +12,7 @@ import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { ClaudeFallbackControl } from './components/ClaudeFallbackControl';
+import { useClaudeFallback } from './hooks/useClaudeFallback';
 import { Select } from './components/Select';
 
 vi.mock('@/components/ui/Modal', () => ({
@@ -46,9 +47,14 @@ afterEach(async () => {
   renderer = undefined;
   vi.restoreAllMocks();
 });
+/** The toolbar owns the fallback state and passes it to the control. */
+function Harness() {
+  const fallback = useClaudeFallback(false);
+  return createElement(ClaudeFallbackControl, { disabled: false, showEmails: false, fallback });
+}
 async function mount() {
   await act(async () => {
-    renderer = create(createElement(ClaudeFallbackControl, { disabled: false, showEmails: false }));
+    renderer = create(createElement(Harness));
   });
 }
 const toggle = () => renderer!.root.findAllByType(ToggleSwitch)[0];
@@ -126,9 +132,7 @@ describe('Claude fallback controls', () => {
     });
     revision++;
     await act(async () => {
-      renderer!.update(
-        createElement(ClaudeFallbackControl, { disabled: false, showEmails: false })
-      );
+      renderer!.update(createElement(Harness));
     });
     await act(async () =>
       resolve({ ...state(), settings: { ...state().settings, enabled: true } })
