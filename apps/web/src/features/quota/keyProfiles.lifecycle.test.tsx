@@ -175,9 +175,9 @@ afterEach(async () => {
   vi.mocked(useSubscriptionRouting).mockReset();
 });
 
-const bar = (showEmails = false) =>
+const bar = (showEmails = false, disabled = false) =>
   createElement(QuotaSettingsBar, {
-    disabled: false,
+    disabled,
     files,
     showEmails,
     resolvedTheme: 'light',
@@ -189,9 +189,9 @@ async function mount(showEmails = false) {
   });
 }
 
-async function rerender(showEmails = false) {
+async function rerender(showEmails = false, disabled = false) {
   await act(async () => {
-    renderer!.update(bar(showEmails));
+    renderer!.update(bar(showEmails, disabled));
   });
 }
 
@@ -363,6 +363,19 @@ describe('key profiles modal states and errors', () => {
     await openModal();
     const alert = root().find((node) => node.type === 'div' && node.props.role === 'alert');
     expect(text(alert)).toContain('offline');
+  });
+
+  test('a disconnected panel disables the button and keeps the last counts', async () => {
+    await mount();
+    keyProfiles = makeKeyProfiles(null, { loading: true });
+    await rerender(false, true);
+    expect(useKeyProfiles).toHaveBeenLastCalledWith(true);
+    expect(useSubscriptionRouting).toHaveBeenLastCalledWith(
+      true,
+      expect.objectContaining({ loading: true })
+    );
+    expect(keysButton()!.props.disabled).toBe(true);
+    expect(text(keysButton()!)).toBe('Keys 1/2');
   });
 
   test('is read-only when the backend reports supported: false', async () => {

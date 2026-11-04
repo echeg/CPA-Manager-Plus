@@ -117,6 +117,14 @@ describe('reading routing profiles', () => {
       { ...response(), shared: { ...rawShared(), 'claude-fallback': { enabled: 'on' } } },
     ],
     [
+      'a non-string tiebreak',
+      { ...response(), shared: { ...rawShared(), selection: { primary: 'reserves', tiebreak: 1 } } },
+    ],
+    [
+      'non-list selection options',
+      { ...response(), selection_options: { narrowing: 'priority', pickers: [] } },
+    ],
+    [
       'non-list preferences',
       response([{ key: RAW_KEY, profile: { ...rawKeyProfile(), 'preferred-accounts': 'x' } }]),
     ],
@@ -338,6 +346,20 @@ describe('write errors', () => {
     const error = await routingProfilesApi.saveKeyProfile(RAW_KEY, keyProfile()).catch((e) => e);
     expect(error).toBeInstanceOf(InvalidRoutingConfigError);
     expect(error.message).not.toContain(RAW_KEY);
+  });
+
+  it('keeps a readable message for a 422 without one', async () => {
+    mocks.patch.mockRejectedValue({ status: 422, apiCode: 'invalid_config' });
+    const error = await routingProfilesApi.saveKeyProfile(RAW_KEY, keyProfile()).catch((e) => e);
+    expect(error).toBeInstanceOf(InvalidRoutingConfigError);
+    expect(error.message).toBe('Invalid routing configuration');
+  });
+
+  it('passes through a write error that is not an object', async () => {
+    mocks.patch.mockRejectedValue('network down');
+    await expect(routingProfilesApi.saveKeyProfile(RAW_KEY, keyProfile())).rejects.toBe(
+      'network down'
+    );
   });
 
   it('does not map a 404 on PATCH to an unsupported backend', async () => {

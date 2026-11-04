@@ -233,10 +233,11 @@
 - ➕ note: `useClaudeFallback(disabled, onSaved?)` calls `onSaved` after a retained save, and `ClaudeFallbackControl` takes an optional `fallback` prop (without it, it still loads its own state, so `claudeFallback.lifecycle.test.tsx` is unchanged). `QuotaSettingsBar` keeps the last loaded button state while the profiles reload, so the button keeps its N/M counts; it is hidden until the first load and on a 404 backend, and is shown after a failed first load so the modal can show the error and retry. The modal has its own `KeyProfilesModal.module.scss`, and its new locale keys are `quota_management.key_profiles.{title, shared_title, shared_hint, badge_shared, badge_own, edit, collapse, edit_label, collapse_label, loading, empty, unsupported}`
 
 ### Task 9: Verify acceptance criteria
-- [ ] verify every Overview requirement: the two toolbar slots, the "Ключи N/M" button and modal, creating, editing, and resetting with read-back, the unchanged behavior on a 404 backend, and that no raw key appears in rendered output or request URLs
-- [ ] verify edge cases: no client keys, a v8 config with only the legacy top-level `api-keys`, a key without an alias, a missing preferred account, the backend reporting `supported: false`, a disconnected panel, and a connection change during a save
-- [ ] run from `apps/web`: `npm test`, `npm run type-check`, `npm run lint`, and `VERSION=0.0.0-plan npm run build` - all must pass
-- [ ] confirm that `routingProfiles.ts`, `keyProfilesModel.ts`, `useApiKeyAliases.ts`, and `useKeyProfiles.ts` have tests covering their branches
+- [x] verify every Overview requirement: the two toolbar slots, the "Ключи N/M" button and modal, creating, editing, and resetting with read-back, the unchanged behavior on a 404 backend, and that no raw key appears in rendered output or request URLs
+- [x] verify edge cases: no client keys, a v8 config with only the legacy top-level `api-keys`, a key without an alias, a missing preferred account, the backend reporting `supported: false`, a disconnected panel, and a connection change during a save
+- [x] run from `apps/web`: `npm test`, `npm run type-check`, `npm run lint`, and `VERSION=0.0.0-plan npm run build` - all must pass
+- [x] confirm that `routingProfiles.ts`, `keyProfilesModel.ts`, `useApiKeyAliases.ts`, and `useKeyProfiles.ts` have tests covering their branches
+- ➕ note: verified against the existing tests; added tests for the untested branches of `routingProfiles.ts` (a non-string tiebreak, non-list selection options, a 422 without a message, a non-object write error) and a disconnected-panel case in `keyProfiles.lifecycle.test.tsx` (the button is disabled and keeps the last counts). The 7 lint warnings are in files this branch does not touch; lint reports 0 errors
 
 ### Task 10: [Final] Update documentation
 - [ ] add a "Routing profiles per API key" section to `docs/personal-quota.md`, after "Claude to Codex fallback": the two toolbar slots, the "Ключи" modal, copy-of-shared creation, reset to shared, the read-only and older-backend behavior, how keys are shown, and the backend version requirement
