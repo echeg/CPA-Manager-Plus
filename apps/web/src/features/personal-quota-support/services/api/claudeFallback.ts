@@ -22,30 +22,36 @@ export const suggestedFallbackMappings = () => [
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 
-export function readClaudeFallback(raw: unknown): ClaudeFallbackState {
-  if (!isRecord(raw) || typeof raw.supported !== 'boolean' || !isRecord(raw.settings))
-    throw new Error('Invalid Claude fallback response');
-  const settings = raw.settings;
+/** Validate one `claude-fallback` block; also used by the routing profiles reader. */
+export function readFallbackSettings(raw: unknown): ClaudeFallbackSettings {
   if (
-    typeof settings.enabled !== 'boolean' ||
-    !['auto', 'always'].includes(String(settings.mode)) ||
-    !Array.isArray(settings.mappings) ||
-    !settings.mappings.every(
+    !isRecord(raw) ||
+    typeof raw.enabled !== 'boolean' ||
+    !['auto', 'always'].includes(String(raw.mode)) ||
+    !Array.isArray(raw.mappings) ||
+    !raw.mappings.every(
       (item: unknown) =>
         isRecord(item) && typeof item.from === 'string' && typeof item.to === 'string'
     )
   )
     throw new Error('Invalid Claude fallback settings');
+  return {
+    enabled: raw.enabled,
+    mode: raw.mode as ClaudeFallbackSettings['mode'],
+    mappings: raw.mappings.map((item) => ({ from: item.from, to: item.to })),
+  };
+}
+
+export function readClaudeFallback(raw: unknown): ClaudeFallbackState {
+  if (!isRecord(raw) || typeof raw.supported !== 'boolean' || !isRecord(raw.settings))
+    throw new Error('Invalid Claude fallback response');
+  const settings = readFallbackSettings(raw.settings);
   const models = isRecord(raw.models) ? raw.models : {};
   const modelList = (value: unknown) =>
     Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
   return {
     supported: raw.supported,
-    settings: {
-      enabled: settings.enabled,
-      mode: settings.mode as ClaudeFallbackSettings['mode'],
-      mappings: settings.mappings.map((item) => ({ from: item.from, to: item.to })),
-    },
+    settings,
     models: { claude: modelList(models.claude), codex: modelList(models.codex) },
   };
 }
