@@ -5584,7 +5584,21 @@
       "ttl_hint": "閒置綁定的保留時間，例如 1h 或 24h。",
       "affinity_hint": "工作階段親和性將對話保留在同一帳戶以重用上下文快取。現有綁定優先於重置順序。帳戶無法使用時可以切換。TTL 為閒置綁定的保留時間，例如 1h 或 24h。",
       "saved": "路由設定已儲存。",
-      "invalid_ttl": "請輸入正數時長，例如 1h、30m 或 1h30m。"
+      "invalid_ttl": "請輸入正數時長，例如 1h、30m 或 1h30m。",
+      "primary": "主要",
+      "tiebreak": "相同時",
+      "tiebreak_none": "無",
+      "tiebreak_inactive": "未使用：主要策略會直接選擇一個帳戶。",
+      "selection_hint": "沒有獨立設定的金鑰使用的共用池策略。先執行主要策略，相同時由第二個策略決定。主要策略為輪詢、加權輪詢或填充優先時，會直接選擇一個帳戶。",
+      "slots": {
+        "priority": "優先順序",
+        "reserves": "儲備",
+        "earliest_reset": "最早重置",
+        "most_remaining": "剩餘最多",
+        "round_robin": "輪詢（Round Robin）",
+        "weighted_round_robin": "加權輪詢（Weighted Round Robin）",
+        "fill_first": "填充優先（Fill First）"
+      }
     },
     "codex_fast": {
       "title": "Codex 快速模式",
@@ -5670,7 +5684,9 @@
       },
       "errors": {
         "unknown_key": "此金鑰已在設定頁面中刪除，金鑰清單已重新載入。"
-      }
+      },
+      "button": "金鑰 {{count}}/{{total}}",
+      "button_hint": "依用戶端 API 金鑰的路由設定：{{total}} 個金鑰中有 {{count}} 個使用獨立設定。"
     }
   },
   "claude_reset": {

@@ -1,6 +1,10 @@
 import type { TFunction } from 'i18next';
 import { goDurationSeconds } from '@/features/quota/utils/goDuration';
 import { configApi } from '@/features/personal-quota-support/services/api/config';
+import type {
+  RoutingSelectionOptions,
+  SelectionSlots,
+} from '@/features/personal-quota-support/services/api/routingProfiles';
 import {
   subscriptionRoutingPatch,
   type SubscriptionActivity,
@@ -47,6 +51,51 @@ export function routingStrategyOptions(t: TFunction, current: string | undefined
   }
   return options;
 }
+
+/** A picker chooses one credential, so a picker as primary leaves the tiebreak inactive. */
+export function isPickerSlot(slot: string, options: RoutingSelectionOptions) {
+  return options.pickers.includes(slot);
+}
+
+/** Applies the picker rule: a picker as primary drops the tiebreak. */
+export function withPickerRule(
+  selection: SelectionSlots,
+  options: RoutingSelectionOptions
+): SelectionSlots {
+  return isPickerSlot(selection.primary, options) || !selection.tiebreak
+    ? { primary: selection.primary }
+    : { primary: selection.primary, tiebreak: selection.tiebreak };
+}
+
+const slotLabel = (t: TFunction, slot: string) =>
+  t(`quota_management.routing.slots.${slot.replace(/-/g, '_')}`, { defaultValue: slot });
+
+/**
+ * Choices for the primary and tiebreak slots from the backend's `selection_options`,
+ * plus an unknown stored value so it stays selectable. The tiebreak may be empty.
+ */
+export function selectionSlotOptions(
+  t: TFunction,
+  options: RoutingSelectionOptions,
+  current: SelectionSlots | undefined
+) {
+  const known = [...options.narrowing, ...options.pickers];
+  const withCurrent = (value: string | undefined) => {
+    const slots = known.map((slot) => ({ value: slot, label: slotLabel(t, slot) }));
+    if (value && !known.includes(value)) slots.push({ value, label: value });
+    return slots;
+  };
+  return {
+    primary: withCurrent(current?.primary),
+    tiebreak: [
+      { value: '', label: t('quota_management.routing.tiebreak_none') },
+      ...withCurrent(current?.tiebreak),
+    ],
+    tiebreakDisabled: current ? isPickerSlot(current.primary, options) : false,
+  };
+}
+
+export type SelectionSlotOptions = ReturnType<typeof selectionSlotOptions>;
 
 export type RoutingProvider = 'claude' | 'codex';
 

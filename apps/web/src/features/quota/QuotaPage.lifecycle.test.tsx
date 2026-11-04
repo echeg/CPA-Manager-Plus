@@ -3,6 +3,10 @@ import { MemoryRouter } from 'react-router-dom';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { authFilesApi } from '@/features/personal-quota-support/services/api/authFiles';
+import {
+  routingProfilesApi,
+  unsupportedRoutingProfiles,
+} from '@/features/personal-quota-support/services/api/routingProfiles';
 import { subscriptionRoutingApi } from '@/features/personal-quota-support/services/api/subscriptionRouting';
 import {
   useAuthStore,
@@ -48,6 +52,8 @@ beforeEach(() => {
   useQuotaStore.getState().clearQuotaCache();
   useConfigStore.setState({ fetchConfig: vi.fn(async () => ({ codexFastMode: false })) });
   vi.spyOn(subscriptionRoutingApi, 'activity').mockResolvedValue([]);
+  // An older backend (404 on /routing/profiles): offline, and the legacy strategy select stays.
+  vi.spyOn(routingProfilesApi, 'get').mockResolvedValue(unsupportedRoutingProfiles());
   vi.spyOn(QUOTA_ADAPTERS.codex, 'fetchQuota').mockResolvedValue({ windows: [] });
 });
 

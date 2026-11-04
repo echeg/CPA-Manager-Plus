@@ -5584,7 +5584,21 @@
       "ttl_hint": "闲置绑定的保留时间，例如 1h 或 24h。",
       "affinity_hint": "会话亲和性将对话保留在同一账户以复用上下文缓存。现有绑定优先于重置顺序。账户不可用时可以切换。TTL 为闲置绑定的保留时间，例如 1h 或 24h。",
       "saved": "路由设置已保存。",
-      "invalid_ttl": "请输入正数时长，例如 1h、30m 或 1h30m。"
+      "invalid_ttl": "请输入正数时长，例如 1h、30m 或 1h30m。",
+      "primary": "主要",
+      "tiebreak": "相同时",
+      "tiebreak_none": "无",
+      "tiebreak_inactive": "未使用：主要策略会直接选择一个账户。",
+      "selection_hint": "没有独立配置的密钥使用的共享池策略。先执行主要策略，相同时由第二个策略决定。主要策略为轮询、加权轮询或填充优先时，会直接选择一个账户。",
+      "slots": {
+        "priority": "优先级",
+        "reserves": "储备",
+        "earliest_reset": "最早重置",
+        "most_remaining": "剩余最多",
+        "round_robin": "轮询 (Round Robin)",
+        "weighted_round_robin": "加权轮询 (Weighted Round Robin)",
+        "fill_first": "填充优先 (Fill First)"
+      }
     },
     "codex_fast": {
       "title": "Codex 快速模式",
@@ -5670,7 +5684,9 @@
       },
       "errors": {
         "unknown_key": "此密钥已在配置页面中删除，密钥列表已重新加载。"
-      }
+      },
+      "button": "密钥 {{count}}/{{total}}",
+      "button_hint": "按客户端 API 密钥的路由配置：{{total}} 个密钥中有 {{count}} 个使用独立配置。"
     }
   },
   "claude_reset": {

@@ -36,13 +36,27 @@ type RoutingProps = Pick<
   | 'invalidTTL'
   | 'blocked'
   | 'options'
+  | 'slots'
   | 'change'
   | 'save'
   | 'reload'
 >;
 
+/** The "Keys N/M" button that opens the per-key routing profiles. */
+export interface KeyProfilesButtonProps {
+  /** Keys with their own profile. */
+  count: number;
+  /** All client keys. */
+  total: number;
+  /** True on a backend without `/routing/profiles`. */
+  hidden: boolean;
+  disabled: boolean;
+  onOpen: () => void;
+}
+
 interface ToolbarProps {
   fallbackControl?: ReactNode;
+  keyProfiles?: KeyProfilesButtonProps;
   routing: RoutingProps;
   fastMode: CodexFastModeState;
   activity: SubscriptionActivity[];
@@ -65,10 +79,13 @@ export function QuotaSettingsToolbar({
   disabled,
   resolvedTheme,
   fallbackControl,
+  keyProfiles,
 }: ToolbarProps) {
   const { t, i18n } = useTranslation();
   const id = useId();
   const { values, blocked, invalidTTL } = routing;
+  const slots = routing.slots ?? null;
+  const selection = values?.selection;
   const displayName = (file: AuthFileItem) => {
     const name = getQuotaDisplayName(file);
     return showEmails ? name : maskQuotaName(name);
@@ -81,20 +98,59 @@ export function QuotaSettingsToolbar({
       data-quota-settings
       aria-label={t('quota_management.routing.title')}
     >
-      <div className={styles.group} title={t('quota_management.routing.description')}>
-        <span className={styles.caption} id={`${id}-strategy`}>
-          {t('quota_management.toolbar.switching')}
-        </span>
-        <Select
-          size="sm"
-          className={styles.strategy}
-          value={values?.strategy ?? 'round-robin'}
-          options={routing.options}
-          ariaLabelledBy={`${id}-strategy`}
-          disabled={blocked}
-          onChange={(strategy) => routing.change({ strategy })}
-        />
-      </div>
+      {slots ? (
+        <div className={styles.group} title={t('quota_management.routing.selection_hint')}>
+          <span className={styles.caption} id={`${id}-primary`}>
+            {t('quota_management.routing.primary')}
+          </span>
+          <Select
+            size="sm"
+            className={styles.slot}
+            value={selection?.primary ?? ''}
+            options={slots.primary}
+            ariaLabelledBy={`${id}-primary`}
+            disabled={blocked}
+            onChange={(primary) => routing.change({ selection: { ...selection, primary } })}
+          />
+          <span className={styles.caption} id={`${id}-tiebreak`}>
+            {t('quota_management.routing.tiebreak')}
+          </span>
+          <Select
+            size="sm"
+            className={styles.slot}
+            value={slots.tiebreakDisabled ? '' : (selection?.tiebreak ?? '')}
+            options={slots.tiebreak}
+            ariaLabelledBy={`${id}-tiebreak`}
+            ariaDescribedBy={slots.tiebreakDisabled ? `${id}-tiebreak-hint` : undefined}
+            disabled={blocked || slots.tiebreakDisabled}
+            onChange={(tiebreak) =>
+              routing.change({
+                selection: { primary: selection?.primary ?? '', tiebreak: tiebreak || undefined },
+              })
+            }
+          />
+          {slots.tiebreakDisabled && (
+            <span id={`${id}-tiebreak-hint`} className={styles.slotHint}>
+              {t('quota_management.routing.tiebreak_inactive')}
+            </span>
+          )}
+        </div>
+      ) : (
+        <div className={styles.group} title={t('quota_management.routing.description')}>
+          <span className={styles.caption} id={`${id}-strategy`}>
+            {t('quota_management.toolbar.switching')}
+          </span>
+          <Select
+            size="sm"
+            className={styles.strategy}
+            value={values?.strategy ?? 'round-robin'}
+            options={routing.options}
+            ariaLabelledBy={`${id}-strategy`}
+            disabled={blocked}
+            onChange={(strategy) => routing.change({ strategy })}
+          />
+        </div>
+      )}
 
       <div className={styles.group} title={t('quota_management.routing.ttl_hint')}>
         <span
@@ -203,6 +259,26 @@ export function QuotaSettingsToolbar({
       </div>
 
       {fallbackControl}
+
+      {keyProfiles && !keyProfiles.hidden && (
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          data-key-profiles
+          disabled={keyProfiles.disabled}
+          title={t('quota_management.key_profiles.button_hint', {
+            count: keyProfiles.count,
+            total: keyProfiles.total,
+          })}
+          onClick={keyProfiles.onOpen}
+        >
+          {t('quota_management.key_profiles.button', {
+            count: keyProfiles.count,
+            total: keyProfiles.total,
+          })}
+        </Button>
+      )}
 
       <div className={styles.actions}>
         {routing.saved && (

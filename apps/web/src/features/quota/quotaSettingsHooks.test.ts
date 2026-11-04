@@ -2,13 +2,19 @@ import { afterEach, beforeAll, describe, expect, vi, test } from 'vitest';
 import type { TFunction } from 'i18next';
 import i18n from '@/i18n';
 import { configApi } from '@/features/personal-quota-support/services/api/config';
-import { readSubscriptionRouting } from '@/features/personal-quota-support/services/api/subscriptionRouting';
+import {
+  readSubscriptionRouting,
+  subscriptionRoutingPatch,
+} from '@/features/personal-quota-support/services/api/subscriptionRouting';
 import {
   activityStatusKey,
   errorText,
+  isPickerSlot,
   routingFormState,
   routingStrategyOptions,
   saveCodexFastMode,
+  selectionSlotOptions,
+  withPickerRule,
 } from '@/features/quota/routingModel';
 
 const spies: Array<{ mockRestore(): void }> = [];
@@ -47,6 +53,97 @@ describe('routing form state', () => {
 
   test('is clean and valid before settings load', () => {
     expect(routingFormState(null, null)).toEqual({ dirty: false, invalidTTL: false });
+  });
+});
+
+describe('shared selection patch', () => {
+  const baseline = {
+    ...readSubscriptionRouting({ routingStrategy: 'fill-first', routingSessionAffinityTTL: '1h' }),
+    selection: { primary: 'reserves', tiebreak: 'earliest-reset' },
+  };
+
+  test('a selection change makes the form dirty and sends the whole selection', () => {
+    const edited = { ...baseline, selection: { primary: 'priority', tiebreak: 'earliest-reset' } };
+    expect(routingFormState(edited, baseline).dirty).toBe(true);
+    expect(subscriptionRoutingPatch(baseline, edited)).toEqual({
+      selection: { primary: 'priority', tiebreak: 'earliest-reset' },
+    });
+  });
+
+  test('sends an empty tiebreak as null and leaves the legacy strategy untouched', () => {
+    const edited = { ...baseline, strategy: 'round-robin', selection: { primary: 'fill-first' } };
+    expect(subscriptionRoutingPatch(baseline, edited)).toEqual({
+      selection: { primary: 'fill-first', tiebreak: null },
+    });
+  });
+
+  test('an unchanged selection is clean, and no selection keeps the legacy strategy', () => {
+    const same = { ...baseline, selection: { primary: ' reserves ', tiebreak: 'earliest-reset' } };
+    expect(routingFormState(same, baseline).dirty).toBe(false);
+    const legacy = readSubscriptionRouting({ routingStrategy: 'fill-first' });
+    expect(subscriptionRoutingPatch(legacy, { ...legacy, strategy: 'round-robin' })).toEqual({
+      strategy: 'round-robin',
+    });
+  });
+});
+
+describe('selection slots', () => {
+  const options = {
+    narrowing: ['priority', 'reserves', 'earliest-reset', 'most-remaining'],
+    pickers: ['round-robin', 'weighted-round-robin', 'fill-first'],
+  };
+
+  test('a picker primary drops the tiebreak and disables its slot', () => {
+    expect(isPickerSlot('fill-first', options)).toBe(true);
+    expect(isPickerSlot('reserves', options)).toBe(false);
+    expect(withPickerRule({ primary: 'round-robin', tiebreak: 'priority' }, options)).toEqual({
+      primary: 'round-robin',
+    });
+    expect(withPickerRule({ primary: 'priority', tiebreak: 'round-robin' }, options)).toEqual({
+      primary: 'priority',
+      tiebreak: 'round-robin',
+    });
+    expect(withPickerRule({ primary: 'priority', tiebreak: '' }, options)).toEqual({
+      primary: 'priority',
+    });
+    const slots = selectionSlotOptions(i18n.t.bind(i18n) as TFunction, options, {
+      primary: 'fill-first',
+    });
+    expect(slots.tiebreakDisabled).toBe(true);
+  });
+
+  test('lists every backend slot with English labels and an empty tiebreak', () => {
+    const slots = selectionSlotOptions(i18n.t.bind(i18n) as TFunction, options, {
+      primary: 'reserves',
+      tiebreak: 'earliest-reset',
+    });
+    expect(slots.tiebreakDisabled).toBe(false);
+    expect(slots.primary.map((option) => option.label)).toEqual([
+      'Priority',
+      'Reserves',
+      'Earliest reset',
+      'Most remaining',
+      'Round-robin',
+      'Weighted round-robin',
+      'Fill-first',
+    ]);
+    expect(slots.tiebreak[0]).toEqual({ value: '', label: 'None' });
+    expect(slots.tiebreak).toHaveLength(8);
+  });
+
+  test('keeps unknown stored slots selectable', () => {
+    const slots = selectionSlotOptions(i18n.t.bind(i18n) as TFunction, options, {
+      primary: 'plugin-slot',
+      tiebreak: 'other-slot',
+    });
+    expect(slots.primary[slots.primary.length - 1]).toEqual({
+      value: 'plugin-slot',
+      label: 'plugin-slot',
+    });
+    expect(slots.tiebreak[slots.tiebreak.length - 1]).toEqual({
+      value: 'other-slot',
+      label: 'other-slot',
+    });
   });
 });
 

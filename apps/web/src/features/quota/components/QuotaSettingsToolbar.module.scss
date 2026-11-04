@@ -64,6 +64,18 @@
   width: 170px;
 }
 
+.slot {
+  width: 140px;
+}
+
+.slotHint {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+}
+
 .account {
   width: 150px;
 }

@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import i18n from '@/i18n';
 import type { SubscriptionRoutingSettings } from '@/features/personal-quota-support/services/api/subscriptionRouting';
 import { QuotaSettingsToolbar } from '@/features/quota/components/QuotaSettingsToolbar';
-import { routingStrategyOptions } from '@/features/quota/routingModel';
+import { routingStrategyOptions, selectionSlotOptions } from '@/features/quota/routingModel';
 
 beforeAll(async () => {
   await i18n.changeLanguage('en');
@@ -144,5 +144,85 @@ describe('quota settings toolbar', () => {
     expect(
       render({ fastMode: { enabled: true, saving: false, error: '', toggle: async () => {} } })
     ).toContain('data-switch="fast-mode" data-state="on"');
+  });
+
+  describe('shared selection slots', () => {
+    const selectionOptions = {
+      narrowing: ['priority', 'reserves', 'earliest-reset', 'most-remaining'],
+      pickers: ['round-robin', 'weighted-round-robin', 'fill-first'],
+    };
+    const withSlots = (selection: { primary: string; tiebreak?: string }) =>
+      routing({
+        values: { ...values, selection },
+        slots: selectionSlotOptions(i18n.t.bind(i18n) as never, selectionOptions, selection),
+      });
+    const buttonFor = (markup: string, labelId: string) =>
+      markup.match(new RegExp(`<button[^>]*aria-labelledby="${labelId}"[^>]*>`))?.[0] ?? '';
+    const labelId = (markup: string, text: string) =>
+      markup.match(new RegExp(`id="([^"]+)"[^>]*>${text}</span>`))?.[1] ?? 'missing';
+
+    test('renders the primary and tiebreak slots instead of the strategy select', () => {
+      const markup = render({
+        routing: withSlots({ primary: 'reserves', tiebreak: 'earliest-reset' }),
+      });
+      expect(markup).toContain('Primary');
+      expect(markup).toContain('On a tie');
+      expect(markup).toContain('Reserves');
+      expect(markup).toContain('Earliest reset');
+      expect(markup).not.toContain(i18n.t('quota_management.toolbar.switching'));
+      expect(markup).not.toContain('Earliest reset first');
+      const tiebreak = buttonFor(markup, labelId(markup, 'On a tie'));
+      expect(tiebreak).not.toBe('');
+      expect(tiebreak).not.toContain('disabled');
+      expect(markup).not.toContain('Not used: the primary slot picks one account.');
+    });
+
+    test('disables the tiebreak with a hint when the primary is a picker', () => {
+      const markup = render({ routing: withSlots({ primary: 'fill-first' }) });
+      expect(markup).toContain('Fill-first');
+      const tiebreak = buttonFor(markup, labelId(markup, 'On a tie'));
+      expect(tiebreak).toContain('disabled');
+      expect(tiebreak).toContain('aria-describedby');
+      expect(markup).toContain('Not used: the primary slot picks one account.');
+      const primary = buttonFor(markup, labelId(markup, 'Primary'));
+      expect(primary).not.toContain('disabled');
+    });
+
+    test('keeps the legacy strategy select without slots (older backend)', () => {
+      const markup = render({ routing: routing({ slots: null }) });
+      expect(markup).toContain(i18n.t('quota_management.toolbar.switching'));
+      expect(markup).toContain('Earliest reset first');
+      expect(markup).not.toContain('On a tie');
+    });
+  });
+
+  describe('keys button', () => {
+    const keyButton = (markup: string) =>
+      markup.match(/<button[^>]*data-key-profiles[^>]*>.*?<\/button>/)?.[0] ?? '';
+    const keyProfiles = (patch: Record<string, unknown> = {}) => ({
+      count: 1,
+      total: 2,
+      hidden: false,
+      disabled: false,
+      onOpen: () => {},
+      ...patch,
+    });
+
+    test('shows N/M with an explanation', () => {
+      const button = keyButton(render({ keyProfiles: keyProfiles() }));
+      expect(button).toContain('Keys 1/2');
+      expect(button).toContain(
+        'title="Routing profiles per client API key: 1 of 2 keys have their own profile."'
+      );
+      expect(button).not.toMatch(/<button[^>]*disabled/);
+    });
+
+    test('is disabled on request and hidden on an older backend or without the prop', () => {
+      expect(keyButton(render({ keyProfiles: keyProfiles({ disabled: true }) }))).toMatch(
+        /<button[^>]*disabled/
+      );
+      expect(keyButton(render({ keyProfiles: keyProfiles({ hidden: true }) }))).toBe('');
+      expect(keyButton(render())).toBe('');
+    });
   });
 });

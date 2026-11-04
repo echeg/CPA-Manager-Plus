@@ -5589,7 +5589,21 @@
       "ttl_hint": "How long an inactive binding is retained, for example 1h or 24h.",
       "affinity_hint": "Session affinity keeps a thread on its account to reuse the context cache. Existing bindings take precedence over reset order. An unavailable account can trigger failover. TTL is the idle binding lifetime, for example 1h or 24h.",
       "saved": "Routing settings saved.",
-      "invalid_ttl": "Enter a positive duration, for example 1h, 30m, or 1h30m."
+      "invalid_ttl": "Enter a positive duration, for example 1h, 30m, or 1h30m.",
+      "primary": "Primary",
+      "tiebreak": "On a tie",
+      "tiebreak_none": "None",
+      "tiebreak_inactive": "Not used: the primary slot picks one account.",
+      "selection_hint": "Shared pool strategy for keys without their own profile. The primary slot runs first; on a tie, the second slot decides. A picker as primary (round-robin, weighted, fill-first) chooses one account by itself.",
+      "slots": {
+        "priority": "Priority",
+        "reserves": "Reserves",
+        "earliest_reset": "Earliest reset",
+        "most_remaining": "Most remaining",
+        "round_robin": "Round-robin",
+        "weighted_round_robin": "Weighted round-robin",
+        "fill_first": "Fill-first"
+      }
     },
     "codex_fast": {
       "title": "Codex Fast mode",
@@ -5675,7 +5689,9 @@
       },
       "errors": {
         "unknown_key": "This key was removed on the Config page. The key list was reloaded."
-      }
+      },
+      "button": "Keys {{count}}/{{total}}",
+      "button_hint": "Routing profiles per client API key: {{count}} of {{total}} keys have their own profile."
     }
   },
   "claude_reset": {
