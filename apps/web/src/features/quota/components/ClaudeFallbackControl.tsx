@@ -9,12 +9,38 @@ import {
   withSuggestions,
   type ClaudeFallbackSettings,
 } from '@/features/personal-quota-support/services/api/claudeFallback';
-import { useClaudeFallback } from '../hooks/useClaudeFallback';
+import { useClaudeFallback, type ClaudeFallbackHookState } from '../hooks/useClaudeFallback';
 import { maskQuotaText } from '../ledgerModel';
 import { FallbackSettingsEditor } from './FallbackSettingsEditor';
 import styles from './QuotaSettingsToolbar.module.scss';
 
+/**
+ * The toolbar fallback toggle and its settings modal. Pass `fallback` when the
+ * parent owns the fallback state (it shares the models with the key profiles);
+ * otherwise the control loads its own.
+ */
 export function ClaudeFallbackControl({
+  disabled,
+  showEmails,
+  fallback,
+}: {
+  disabled: boolean;
+  showEmails: boolean;
+  fallback?: ClaudeFallbackHookState;
+}) {
+  if (fallback)
+    return (
+      <ClaudeFallbackEditor
+        key={`${fallback.revision}-${disabled}`}
+        fallback={fallback}
+        disabled={disabled}
+        showEmails={showEmails}
+      />
+    );
+  return <OwnClaudeFallbackControl disabled={disabled} showEmails={showEmails} />;
+}
+
+function OwnClaudeFallbackControl({
   disabled,
   showEmails,
 }: {
@@ -37,7 +63,7 @@ function ClaudeFallbackEditor({
   disabled,
   showEmails,
 }: {
-  fallback: ReturnType<typeof useClaudeFallback>;
+  fallback: ClaudeFallbackHookState;
   disabled: boolean;
   showEmails: boolean;
 }) {

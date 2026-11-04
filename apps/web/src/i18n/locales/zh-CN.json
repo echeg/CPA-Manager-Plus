@@ -5698,7 +5698,19 @@
         "selection": "账号池选择",
         "summary": "路由链：",
         "read_only": "按密钥配置需要 CPA 原生路由。Home 模式和调度插件自行管理路由，因此此配置为只读。"
-      }
+      },
+      "title": "按 API 密钥的路由配置",
+      "shared_title": "共享设置",
+      "shared_hint": "在工具栏中编辑。所有没有独立配置的密钥都使用共享设置。",
+      "badge_shared": "共享设置",
+      "badge_own": "独立配置",
+      "edit": "编辑",
+      "collapse": "收起",
+      "edit_label": "编辑 {{label}} 的路由",
+      "collapse_label": "收起 {{label}} 的路由",
+      "loading": "正在加载路由配置…",
+      "empty": "配置中没有客户端 API 密钥。请在配置页面中添加。",
+      "unsupported": "此 CPA 版本不支持按密钥的路由配置。"
     }
   },
   "claude_reset": {

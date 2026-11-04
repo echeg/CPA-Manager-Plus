@@ -5703,7 +5703,19 @@
         "selection": "Pool selection",
         "summary": "Chain:",
         "read_only": "Per-key profiles need native CPA routing. Home mode and scheduler plugins manage their own routing, so this profile is read-only."
-      }
+      },
+      "title": "Routing profiles per API key",
+      "shared_title": "Shared settings",
+      "shared_hint": "Edited in the toolbar. Every key without its own profile uses them.",
+      "badge_shared": "Shared settings",
+      "badge_own": "Own profile",
+      "edit": "Edit",
+      "collapse": "Collapse",
+      "edit_label": "Edit routing for {{label}}",
+      "collapse_label": "Collapse routing for {{label}}",
+      "loading": "Loading routing profiles…",
+      "empty": "The configuration has no client API keys. Add them on the Config page.",
+      "unsupported": "This CPA version has no per-key routing profiles."
     }
   },
   "claude_reset": {

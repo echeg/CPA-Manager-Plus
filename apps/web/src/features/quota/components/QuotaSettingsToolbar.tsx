@@ -1,12 +1,15 @@
-import { useId, type ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/features/quota/components/Select';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
+import type { RoutingProfilesState } from '@/features/personal-quota-support/services/api/routingProfiles';
 import type { SubscriptionActivity } from '@/features/personal-quota-support/services/api/subscriptionRouting';
 import type { AuthFileItem, ResolvedTheme } from '@/features/personal-quota-support/types';
 import { getQuotaDisplayName } from '@/features/quota/utils/quota/identity';
+import { useClaudeFallback } from '../hooks/useClaudeFallback';
 import { useCodexFastMode, type CodexFastModeState } from '../hooks/useCodexFastMode';
+import { useKeyProfiles } from '../hooks/useKeyProfiles';
 import { useSubscriptionActivity } from '../hooks/useSubscriptionActivity';
 import {
   useSubscriptionRouting,
@@ -22,6 +25,7 @@ import {
 } from '../routingModel';
 import { ProviderPill } from './ProviderPill';
 import { ClaudeFallbackControl } from './ClaudeFallbackControl';
+import { KeyProfilesModal } from './KeyProfilesModal';
 import styles from './QuotaSettingsToolbar.module.scss';
 
 const PROVIDERS = ['codex', 'claude'] as const;
@@ -315,7 +319,14 @@ export function QuotaSettingsToolbar({
   );
 }
 
-/** Wires the toolbar to live routing, fast mode and activity state. */
+/** The toolbar button state, kept across profile reloads so the button does not flicker. */
+interface KeyProfilesButtonSnapshot {
+  state: RoutingProfilesState;
+  count: number;
+  total: number;
+}
+
+/** Wires the toolbar to live routing, fast mode, activity, fallback and key profile state. */
 export function QuotaSettingsBar({
   disabled,
   files,
@@ -327,20 +338,69 @@ export function QuotaSettingsBar({
   showEmails: boolean;
   resolvedTheme: ResolvedTheme;
 }) {
-  const routing = useSubscriptionRouting(disabled);
+  const keyProfiles = useKeyProfiles(disabled);
+  const profilesState = keyProfiles.state;
+  const routing = useSubscriptionRouting(disabled, {
+    supported: profilesState ? !profilesState.unsupportedBackend : false,
+    selection: profilesState?.shared.selection,
+    selectionOptions: profilesState?.selectionOptions,
+    loading: keyProfiles.loading,
+    reload: keyProfiles.reload,
+  });
+  // A fallback change rewrites the shared profile, so the key summaries reload.
+  const fallback = useClaudeFallback(disabled, keyProfiles.reload);
   const fastMode = useCodexFastMode(disabled);
   const { activity, activityState } = useSubscriptionActivity(disabled);
+  const [modalOpen, setModalOpen] = useState(false);
+
+  // The profiles reset to null while they reload; keep the last loaded button state.
+  const [snapshot, setSnapshot] = useState<KeyProfilesButtonSnapshot | null>(null);
+  if (profilesState && snapshot?.state !== profilesState) {
+    setSnapshot({ state: profilesState, count: keyProfiles.count, total: keyProfiles.total });
+  }
+  const known = profilesState ? { count: keyProfiles.count, total: keyProfiles.total } : snapshot;
+  const knownState = profilesState ?? snapshot?.state;
+
+  const openModal = () => {
+    setModalOpen(true);
+    keyProfiles.reload();
+  };
+
   return (
-    <QuotaSettingsToolbar
-      routing={routing}
-      fastMode={fastMode}
-      activity={activity}
-      activityState={activityState}
-      files={files}
-      showEmails={showEmails}
-      disabled={disabled}
-      resolvedTheme={resolvedTheme}
-      fallbackControl={<ClaudeFallbackControl disabled={disabled} showEmails={showEmails} />}
-    />
+    <>
+      <QuotaSettingsToolbar
+        routing={routing}
+        fastMode={fastMode}
+        activity={activity}
+        activityState={activityState}
+        files={files}
+        showEmails={showEmails}
+        disabled={disabled}
+        resolvedTheme={resolvedTheme}
+        fallbackControl={
+          <ClaudeFallbackControl disabled={disabled} showEmails={showEmails} fallback={fallback} />
+        }
+        keyProfiles={{
+          count: known?.count ?? 0,
+          total: known?.total ?? 0,
+          // Hidden on an older backend and until the first load; a failed first load
+          // still shows the button so the modal can report the error and retry.
+          hidden: knownState ? knownState.unsupportedBackend : !keyProfiles.error,
+          disabled,
+          onOpen: openModal,
+        }}
+      />
+      <KeyProfilesModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        keyProfiles={keyProfiles}
+        files={files}
+        showEmails={showEmails}
+        models={fallback.state?.models ?? EMPTY_MODELS}
+        sessionAffinityTTL={routing.values?.sessionAffinityTTL}
+      />
+    </>
   );
 }
+
+const EMPTY_MODELS = { claude: [], codex: [] };
