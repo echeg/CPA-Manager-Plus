@@ -8,6 +8,7 @@ import {
   readClaudeFallback,
   suggestedFallbackMappings,
   validFallbackSettings,
+  withSuggestions,
 } from './claudeFallback';
 const settings = { enabled: true, mode: 'always' as const, mappings: suggestedFallbackMappings() };
 const response = () => ({
@@ -21,6 +22,16 @@ beforeEach(() => {
 });
 
 describe('Claude fallback configuration', () => {
+  it('fills an empty mapping list with suggestions and copies existing rows', () => {
+    expect(withSuggestions({ ...settings, mappings: [] }).mappings).toEqual(
+      suggestedFallbackMappings()
+    );
+    const source = { ...settings, mappings: [{ from: 'claude-*', to: 'gpt' }] };
+    const copy = withSuggestions(source);
+    expect(copy).toEqual(source);
+    copy.mappings[0].to = 'changed';
+    expect(source.mappings[0].to).toBe('gpt');
+  });
   it('reads model mappings and validates family rules', () => {
     expect(readClaudeFallback(response())).toEqual(response());
     expect(validFallbackSettings(settings)).toBe(true);

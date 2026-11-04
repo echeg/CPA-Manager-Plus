@@ -177,12 +177,12 @@
 - ➕ note: `providerAccountFiles(provider, files)` was also extracted into `routingModel.ts` because the toolbar still needs the provider's files for the last-selected activity; `buildKeyRows` returns `{key, profile, label, masked, hasAlias}` and falls back to the mask when an alias repeats the raw key; `chainSummary` reuses the `quota_management.routing.automatic` and `missing_account` labels through `preferredAccountOptions` and shows slot ids (`reserves → round-robin`) as written in the config
 
 ### Task 3: Extract FallbackSettingsEditor
-- [ ] create `apps/web/src/features/quota/components/FallbackSettingsEditor.tsx` from the modal body of `ClaudeFallbackControl.tsx:131-224`: the enabled toggle, the mode select, the hints, the datalists, the mapping rows, the add button, and the invalid hint. Props: `{value: ClaudeFallbackSettings; models: {claude, codex}; disabled; onChange}`. The component calls its own `useId` so two open editors never share datalist ids
-- [ ] export `withSuggestions` (`ClaudeFallbackControl.tsx:48-53`) from `claudeFallback.ts` so both editors fill an empty mapping list the same way
-- [ ] make `ClaudeFallbackControl` render `FallbackSettingsEditor` inside its modal with no change in behavior, aria labels, or placeholders
-- [ ] keep `claudeFallback.lifecycle.test.tsx` passing unchanged as the regression check
-- [ ] write `FallbackSettingsEditor.test.tsx` limited to the `disabled` prop, the `onChange` contract, and distinct datalist ids for two instances, using `react-test-renderer` and `act`
-- [ ] run the focused tests, `npm run type-check`, and `npm run lint` - must pass before task 4
+- [x] create `apps/web/src/features/quota/components/FallbackSettingsEditor.tsx` from the modal body of `ClaudeFallbackControl.tsx:131-224`: the enabled toggle, the mode select, the hints, the datalists, the mapping rows, the add button, and the invalid hint. Props: `{value: ClaudeFallbackSettings; models: {claude, codex}; disabled; onChange}`. The component calls its own `useId` so two open editors never share datalist ids
+- [x] export `withSuggestions` (`ClaudeFallbackControl.tsx:48-53`) from `claudeFallback.ts` so both editors fill an empty mapping list the same way
+- [x] make `ClaudeFallbackControl` render `FallbackSettingsEditor` inside its modal with no change in behavior, aria labels, or placeholders
+- [x] keep `claudeFallback.lifecycle.test.tsx` passing unchanged as the regression check
+- [x] write `FallbackSettingsEditor.test.tsx` limited to the `disabled` prop, the `onChange` contract, and distinct datalist ids for two instances, using `react-test-renderer` and `act`
+- [x] run the focused tests, `npm run type-check`, and `npm run lint` - must pass before task 4
 
 ### Task 4: Shared useApiKeyAliases hook
 - [ ] create `apps/web/src/hooks/useApiKeyAliases.ts` from the alias loading in `components/config/ApiKeysCardEditor.tsx:96-156`: `usePanelFeatureAvailability`, `useAuthStore` `managementKey`, the `panelHostMode === 'manager_embedded'` check, and `usageServiceApi.getApiKeyAliases`. It returns `{aliases, available, loading, reload}`, lowercases `apiKeyHash`, and drops a result that arrives after the quota connection revision changed

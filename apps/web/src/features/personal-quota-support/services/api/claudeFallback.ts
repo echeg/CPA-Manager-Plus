@@ -19,6 +19,14 @@ export const suggestedFallbackMappings = () => [
   { from: 'claude-fable-*', to: 'gpt-6-astra' },
 ];
 
+/** Copy the settings for editing; an empty mapping list is filled with the suggested defaults. */
+export const withSuggestions = (value: ClaudeFallbackSettings): ClaudeFallbackSettings => ({
+  ...value,
+  mappings: value.mappings.length
+    ? value.mappings.map((row) => ({ ...row }))
+    : suggestedFallbackMappings(),
+});
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 
