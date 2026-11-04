@@ -185,11 +185,12 @@
 - [x] run the focused tests, `npm run type-check`, and `npm run lint` - must pass before task 4
 
 ### Task 4: Shared useApiKeyAliases hook
-- [ ] create `apps/web/src/hooks/useApiKeyAliases.ts` from the alias loading in `components/config/ApiKeysCardEditor.tsx:96-156`: `usePanelFeatureAvailability`, `useAuthStore` `managementKey`, the `panelHostMode === 'manager_embedded'` check, and `usageServiceApi.getApiKeyAliases`. It returns `{aliases, available, loading, reload}`, lowercases `apiKeyHash`, and drops a result that arrives after the quota connection revision changed
-- [ ] make `ApiKeysCardEditor` use the hook with unchanged behavior; its alias save path stays where it is
-- [ ] keep `components/config/ApiKeysCardEditor.test.tsx` passing unchanged as the regression check
-- [ ] write `useApiKeyAliases.test.tsx` mocking `@/hooks/usePanelFeatureAvailability` and `@/services/api/usageService` as in `ApiKeysCardEditor.test.tsx:45-60`: aliases load when hosted by the manager; a non-manager host does not call `getApiKeyAliases` and reports unavailable; a failure reports unavailable without throwing; a result after a connection change is ignored
-- [ ] run the focused tests, `npm run type-check`, and `npm run lint` - must pass before task 5
+- [x] create `apps/web/src/hooks/useApiKeyAliases.ts` from the alias loading in `components/config/ApiKeysCardEditor.tsx:96-156`: `usePanelFeatureAvailability`, `useAuthStore` `managementKey`, the `panelHostMode === 'manager_embedded'` check, and `usageServiceApi.getApiKeyAliases`. It returns `{aliases, available, loading, reload}`, lowercases `apiKeyHash`, and drops a result that arrives after the quota connection revision changed
+- [x] make `ApiKeysCardEditor` use the hook with unchanged behavior; its alias save path stays where it is
+- [x] keep `components/config/ApiKeysCardEditor.test.tsx` passing unchanged as the regression check
+- [x] write `useApiKeyAliases.test.tsx` mocking `@/hooks/usePanelFeatureAvailability` and `@/services/api/usageService` as in `ApiKeysCardEditor.test.tsx:45-60`: aliases load when hosted by the manager; a non-manager host does not call `getApiKeyAliases` and reports unavailable; a failure reports unavailable without throwing; a result after a connection change is ignored
+- [x] run the focused tests, `npm run type-check`, and `npm run lint` - must pass before task 5
+- ➕ note: the hook also returns `replaceAliases(items)` and `removeAlias(hash)` so the editor's save and delete paths keep updating the list locally as before; `resolveAliasServiceBase(availability)` is exported and shared by the hook and the editor's save path
 
 ### Task 5: useKeyProfiles hook
 - [ ] create `apps/web/src/features/quota/hooks/useKeyProfiles.ts`: load `routingProfilesApi.get()`, take the client keys from `clientApiKeys(config.raw)` of `useConfigStore.fetchConfig()`, and take aliases from `useApiKeyAliases`; build the rows with `mergeKeyRows` and `buildKeyRows`; when aliases are unavailable, keys are shown masked

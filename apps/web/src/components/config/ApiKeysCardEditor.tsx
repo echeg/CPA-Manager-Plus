@@ -1,10 +1,11 @@
-import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { memo, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { usageServiceApi, type ApiKeyAlias } from '@/services/api/usageService';
 import { useAuthStore, useNotificationStore } from '@/stores';
 import { usePanelFeatureAvailability } from '@/hooks/usePanelFeatureAvailability';
+import { resolveAliasServiceBase, useApiKeyAliases } from '@/hooks/useApiKeyAliases';
 import { copyToClipboard } from '@/utils/clipboard';
 import { maskApiKey } from '@/utils/format';
 import { sha256Hex } from '@/utils/apiKeyHash';
@@ -70,9 +71,13 @@ export const ApiKeysCardEditor = memo(function ApiKeysCardEditor({
   const [inputValue, setInputValue] = useState('');
   const [inputAliasValue, setInputAliasValue] = useState('');
   const [formError, setFormError] = useState('');
-  const [apiKeyAliases, setApiKeyAliases] = useState<ApiKeyAlias[]>([]);
-  const [aliasesLoading, setAliasesLoading] = useState(false);
-  const [aliasesAvailable, setAliasesAvailable] = useState(false);
+  const {
+    aliases: apiKeyAliases,
+    available: aliasesAvailable,
+    loading: aliasesLoading,
+    replaceAliases,
+    removeAlias,
+  } = useApiKeyAliases();
   const [aliasModalOpen, setAliasModalOpen] = useState(false);
   const [aliasEditingApiKey, setAliasEditingApiKey] = useState<string | null>(null);
   const [aliasInputValue, setAliasInputValue] = useState('');
@@ -96,22 +101,7 @@ export const ApiKeysCardEditor = memo(function ApiKeysCardEditor({
   const aliasCapabilityChecking = featureAvailability.checking;
   const panelHostUnconfirmed = !featureAvailability.panelHostConfirmed;
   const managerHostedPanel = featureAvailability.panelHostMode === 'manager_embedded';
-  const resolveAliasServiceBase = useCallback(
-    async (): Promise<string> =>
-      !aliasCapabilityChecking &&
-      featureAvailability.panelHostConfirmed &&
-      managerHostedPanel &&
-      featureAvailability.managerServiceAvailable
-        ? featureAvailability.managerServiceBase
-        : '',
-    [
-      aliasCapabilityChecking,
-      featureAvailability.managerServiceAvailable,
-      featureAvailability.managerServiceBase,
-      featureAvailability.panelHostConfirmed,
-      managerHostedPanel,
-    ]
-  );
+  const aliasServiceBase = resolveAliasServiceBase(featureAvailability);
   const aliasServiceAvailable = Boolean(
     !aliasCapabilityChecking &&
     featureAvailability.panelHostConfirmed &&
@@ -119,41 +109,6 @@ export const ApiKeysCardEditor = memo(function ApiKeysCardEditor({
     featureAvailability.managerServiceAvailable &&
     featureAvailability.managerServiceBase
   );
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadAliases = async () => {
-      setAliasesLoading(true);
-      try {
-        const serviceBase = await resolveAliasServiceBase();
-        if (cancelled) return;
-        if (!serviceBase) {
-          setAliasesAvailable(false);
-          setApiKeyAliases([]);
-          return;
-        }
-        const response = await usageServiceApi.getApiKeyAliases(serviceBase, managementKey);
-        if (cancelled) return;
-        setAliasesAvailable(true);
-        setApiKeyAliases(Array.isArray(response.items) ? response.items : []);
-      } catch {
-        if (cancelled) return;
-        setAliasesAvailable(false);
-        setApiKeyAliases([]);
-      } finally {
-        if (!cancelled) {
-          setAliasesLoading(false);
-        }
-      }
-    };
-
-    void loadAliases();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [managementKey, resolveAliasServiceBase]);
 
   function generateSecureApiKey(): string {
     const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -306,7 +261,7 @@ export const ApiKeysCardEditor = memo(function ApiKeysCardEditor({
       throw new Error(validationError);
     }
 
-    const serviceBase = await resolveAliasServiceBase();
+    const serviceBase = aliasServiceBase;
     if (!serviceBase) {
       throw createAliasUnavailableError('config_management.visual.api_keys.alias_unavailable');
     }
@@ -318,20 +273,17 @@ export const ApiKeysCardEditor = memo(function ApiKeysCardEditor({
       activeApiKeyHashes,
       allowOrphanAliasCleanup
     );
-    setAliasesAvailable(true);
-    setApiKeyAliases(Array.isArray(response.items) ? response.items : []);
+    replaceAliases(response.items);
   };
 
   const deleteAliasForHash = async (apiKeyHash: string) => {
-    const serviceBase = await resolveAliasServiceBase();
+    const serviceBase = aliasServiceBase;
     if (!serviceBase) {
       throw createAliasUnavailableError('config_management.visual.api_keys.alias_unavailable');
     }
 
     await usageServiceApi.deleteApiKeyAlias(serviceBase, apiKeyHash, managementKey);
-    setApiKeyAliases((previous) =>
-      previous.filter((item) => item.apiKeyHash.toLowerCase() !== apiKeyHash.toLowerCase())
-    );
+    removeAlias(apiKeyHash);
   };
 
   const getAliasErrorMessage = (error: unknown) => {
