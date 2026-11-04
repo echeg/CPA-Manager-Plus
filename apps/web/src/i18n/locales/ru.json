@@ -5662,6 +5662,16 @@
       "remove": "Удалить соответствие {{index}}",
       "add": "Добавить соответствие",
       "invalid": "Заполните обе модели и уберите повторяющиеся правила. * разрешена только в конце модели Claude. Для включения нужно хотя бы одно соответствие."
+    },
+    "key_profiles": {
+      "summary": {
+        "sticky_on": "Привязка к сессии",
+        "sticky_off": "Без привязки к сессии",
+        "account": "{{provider}}: {{account}}",
+        "fallback_off": "Fallback выкл.",
+        "fallback_auto": "Fallback: автоматически",
+        "fallback_always": "Fallback: всегда Codex"
+      }
     }
   },
   "claude_reset": {

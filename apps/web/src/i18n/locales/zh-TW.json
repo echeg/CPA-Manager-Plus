@@ -5658,6 +5658,16 @@
       "remove": "刪除對應 {{index}}",
       "add": "新增模型對應",
       "invalid": "請填寫兩個模型 ID，並使用不重複的來源規則。僅 Claude 模型結尾允許 *。啟用備援至少需要一條對應。"
+    },
+    "key_profiles": {
+      "summary": {
+        "sticky_on": "會話黏性",
+        "sticky_off": "無會話黏性",
+        "account": "{{provider}}：{{account}}",
+        "fallback_off": "備援已關閉",
+        "fallback_auto": "備援：自動",
+        "fallback_always": "備援：一律使用 Codex"
+      }
     }
   },
   "claude_reset": {

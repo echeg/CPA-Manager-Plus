@@ -5658,6 +5658,16 @@
       "remove": "删除映射 {{index}}",
       "add": "添加模型映射",
       "invalid": "请填写两个模型 ID，并使用唯一的源规则。仅 Claude 模型末尾允许 *。启用回退至少需要一条映射。"
+    },
+    "key_profiles": {
+      "summary": {
+        "sticky_on": "会话粘性",
+        "sticky_off": "无会话粘性",
+        "account": "{{provider}}：{{account}}",
+        "fallback_off": "回退已关闭",
+        "fallback_auto": "回退：自动",
+        "fallback_always": "回退：始终使用 Codex"
+      }
     }
   },
   "claude_reset": {

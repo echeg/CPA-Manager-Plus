@@ -13,7 +13,13 @@ import {
   type SubscriptionRoutingState,
 } from '../hooks/useSubscriptionRouting';
 import { maskQuotaName, maskQuotaText } from '../ledgerModel';
-import { activityStatusKey, latestSubscriptionActivity, type ActivityState } from '../routingModel';
+import {
+  activityStatusKey,
+  latestSubscriptionActivity,
+  preferredAccountOptions,
+  providerAccountFiles,
+  type ActivityState,
+} from '../routingModel';
 import { ProviderPill } from './ProviderPill';
 import { ClaudeFallbackControl } from './ClaudeFallbackControl';
 import styles from './QuotaSettingsToolbar.module.scss';
@@ -123,23 +129,10 @@ export function QuotaSettingsToolbar({
       <span className={styles.separator} aria-hidden="true" />
 
       {PROVIDERS.map((provider) => {
-        const providerFiles = files.filter(
-          (file) => (file.provider ?? file.type) === provider && String(file.authIndex ?? '')
-        );
+        const providerFiles = providerAccountFiles(provider, files);
         const preferred = values?.preferredAccounts ?? {};
         const selected = preferred[provider] ?? '';
-        const options = [
-          { value: '', label: t('quota_management.routing.automatic') },
-          ...providerFiles.map((file) => ({
-            value: String(file.authIndex),
-            label:
-              displayName(file) +
-              (file.disabled ? ` · ${t('quota_management.routing.disabled_account')}` : ''),
-          })),
-        ];
-        if (selected && !providerFiles.some((file) => String(file.authIndex) === selected)) {
-          options.push({ value: selected, label: t('quota_management.routing.missing_account') });
-        }
+        const options = preferredAccountOptions(provider, files, selected, displayName, t);
         const latest = latestSubscriptionActivity(activity, provider, providerFiles);
         const latestFile =
           latest && providerFiles.find((file) => String(file.authIndex) === latest.authIndex);

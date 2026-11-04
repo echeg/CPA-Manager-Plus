@@ -5663,6 +5663,16 @@
       "remove": "Remove mapping {{index}}",
       "add": "Add model mapping",
       "invalid": "Fill in both model IDs and use unique source rules. Only a trailing * is allowed in the Claude model. Enabling fallback requires at least one mapping."
+    },
+    "key_profiles": {
+      "summary": {
+        "sticky_on": "Sticky session",
+        "sticky_off": "No sticky session",
+        "account": "{{provider}}: {{account}}",
+        "fallback_off": "Fallback off",
+        "fallback_auto": "Fallback: automatic",
+        "fallback_always": "Fallback: always Codex"
+      }
     }
   },
   "claude_reset": {

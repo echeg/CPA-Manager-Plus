@@ -48,6 +48,42 @@ export function routingStrategyOptions(t: TFunction, current: string | undefined
   return options;
 }
 
+export type RoutingProvider = 'claude' | 'codex';
+
+/** Accounts of one provider that can be preferred (they have an auth index). */
+export function providerAccountFiles(provider: RoutingProvider, files: AuthFileItem[]) {
+  return files.filter(
+    (file) => (file.provider ?? file.type) === provider && String(file.authIndex ?? '')
+  );
+}
+
+/**
+ * Preferred-account choices for one provider: automatic, every account (disabled
+ * ones marked), and the selected value when its account is gone.
+ */
+export function preferredAccountOptions(
+  provider: RoutingProvider,
+  files: AuthFileItem[],
+  selected: string,
+  displayName: (file: AuthFileItem) => string,
+  t: TFunction
+) {
+  const providerFiles = providerAccountFiles(provider, files);
+  const options = [
+    { value: '', label: t('quota_management.routing.automatic') },
+    ...providerFiles.map((file) => ({
+      value: String(file.authIndex),
+      label:
+        displayName(file) +
+        (file.disabled ? ` · ${t('quota_management.routing.disabled_account')}` : ''),
+    })),
+  ];
+  if (selected && !providerFiles.some((file) => String(file.authIndex) === selected)) {
+    options.push({ value: selected, label: t('quota_management.routing.missing_account') });
+  }
+  return options;
+}
+
 export function activityStatusKey(disconnected: boolean, state: ActivityState) {
   if (disconnected || state === 'error') return 'quota_management.routing.activity_unavailable';
   return state === 'loading'
