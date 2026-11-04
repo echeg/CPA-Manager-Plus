@@ -265,6 +265,23 @@ describe('key profiles modal wiring', () => {
     expect(text(keysButton()!)).toBe('Keys 1/2');
   });
 
+  test('a key editor cannot open from cached rows while the profiles reload', async () => {
+    keyProfiles = makeKeyProfiles(profilesState(), { loading: true });
+    await mount();
+    await openModal();
+    expect(toggleOf(keyRows()[1]).props.disabled).toBe(true);
+
+    keyProfiles = makeKeyProfiles(profilesState());
+    await rerender();
+    expect(toggleOf(keyRows()[1]).props.disabled).toBe(false);
+    await expandRow(1);
+
+    // An open editor can still be collapsed during a later reload.
+    keyProfiles = makeKeyProfiles(profilesState(), { loading: true });
+    await rerender();
+    expect(toggleOf(keyRows()[1]).props.disabled).toBe(false);
+  });
+
   test('a failed first load locks the legacy strategy select', async () => {
     keyProfiles = makeKeyProfiles(null, { error: 'offline' });
     await mount();

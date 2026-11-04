@@ -149,7 +149,9 @@ export function KeyProfilesModal({
                           aria-expanded={isOpen}
                           aria-label={toggleLabel}
                           title={toggleLabel}
-                          disabled={saving}
+                          // An editor copies the profile once when it opens, so it must not
+                          // open from the cached rows while a reload is still running.
+                          disabled={saving || (loading && !isOpen)}
                           onClick={() => setExpanded(isOpen ? null : row.key)}
                         >
                           {t(
