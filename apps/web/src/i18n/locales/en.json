@@ -5672,6 +5672,9 @@
         "fallback_off": "Fallback off",
         "fallback_auto": "Fallback: automatic",
         "fallback_always": "Fallback: always Codex"
+      },
+      "errors": {
+        "unknown_key": "This key was removed on the Config page. The key list was reloaded."
       }
     }
   },

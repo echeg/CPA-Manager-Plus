@@ -5671,6 +5671,9 @@
         "fallback_off": "Fallback выкл.",
         "fallback_auto": "Fallback: автоматически",
         "fallback_always": "Fallback: всегда Codex"
+      },
+      "errors": {
+        "unknown_key": "Этот ключ удалён на странице конфигурации. Список ключей обновлён."
       }
     }
   },

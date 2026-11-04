@@ -5667,6 +5667,9 @@
         "fallback_off": "備援已關閉",
         "fallback_auto": "備援：自動",
         "fallback_always": "備援：一律使用 Codex"
+      },
+      "errors": {
+        "unknown_key": "此金鑰已在設定頁面中刪除，金鑰清單已重新載入。"
       }
     }
   },

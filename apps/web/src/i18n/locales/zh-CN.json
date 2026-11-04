@@ -5667,6 +5667,9 @@
         "fallback_off": "回退已关闭",
         "fallback_auto": "回退：自动",
         "fallback_always": "回退：始终使用 Codex"
+      },
+      "errors": {
+        "unknown_key": "此密钥已在配置页面中删除，密钥列表已重新加载。"
       }
     }
   },
