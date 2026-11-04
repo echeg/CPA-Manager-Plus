@@ -240,8 +240,8 @@
 - ➕ note: verified against the existing tests; added tests for the untested branches of `routingProfiles.ts` (a non-string tiebreak, non-list selection options, a 422 without a message, a non-object write error) and a disconnected-panel case in `keyProfiles.lifecycle.test.tsx` (the button is disabled and keeps the last counts). The 7 lint warnings are in files this branch does not touch; lint reports 0 errors
 
 ### Task 10: [Final] Update documentation
-- [ ] add a "Routing profiles per API key" section to `docs/personal-quota.md`, after "Claude to Codex fallback": the two toolbar slots, the "Ключи" modal, copy-of-shared creation, reset to shared, the read-only and older-backend behavior, how keys are shown, and the backend version requirement
-- [ ] update the existing routing description in `docs/personal-quota.md` where it mentions the single strategy select
+- [x] add a "Routing profiles per API key" section to `docs/personal-quota.md`, after "Claude to Codex fallback": the two toolbar slots, the "Ключи" modal, copy-of-shared creation, reset to shared, the read-only and older-backend behavior, how keys are shown, and the backend version requirement
+- [x] update the existing routing description in `docs/personal-quota.md` where it mentions the single strategy select
 
 ## Technical Details
 - **Read**: `GET /v8/management/routing/profiles` maps to `RoutingProfilesState`; kebab-case fields become camelCase in the panel types. `shared.selection` is always present (an effective value).

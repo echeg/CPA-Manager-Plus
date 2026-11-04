@@ -7,8 +7,9 @@ at `4f9ee96`. The ported MIT components retain their attribution in `LICENSE`.
 ## Features
 
 The **Quota** navigation item (`#/quota`) includes compact cards, Ledger and timeline
-views; provider totals; subscription account preferences; routing strategy and
-sticky-session TTL; Codex Fast Mode; per-account soft/hard quota reserves; Codex
+views; provider totals; subscription account preferences; shared pool selection
+(primary and tie-break slots, or the legacy routing strategy on older backends) and
+sticky-session TTL; routing profiles per client API key; Codex Fast Mode; per-account soft/hard quota reserves; Codex
 reset credits and Claude reset grants with expiry dates; inline reset confirmation;
 CPA cooldown clearing after a confirmed reset; refresh on entry; and privacy masking.
 Reserve editing is available directly on the quota cards.
@@ -47,9 +48,11 @@ For example, `soft1 = 30%`, `soft2 = 15%`, and `soft3 = 5%` produce these levels
 | At least 5%, below 15% | soft2 |
 | Below 5% | soft3 |
 
-CPA selects the lowest available level among eligible accounts before applying
-manual preference, credential priority, and the selected routing strategy. The
-level reflects the most constrained usable subscription window. Window expiry or
+Soft levels rank the pool through the `reserves` selection slot, which is the
+default primary slot: it keeps the eligible accounts at the lowest available level,
+and the next slot chooses among them. A usable preferred subscription is taken
+before the pool, even at soft levels 1-3; manual credential priority applies only
+when `priority` is one of the slots. The level reflects the most constrained usable subscription window. Window expiry or
 new observations recalculate it; soft3 remains an available fallback. Existing
 session bindings retain their account and cache. Disabled accounts and actual
 provider cooldowns still take precedence.
@@ -117,6 +120,83 @@ routing:
         to: gpt-6-sol
       - from: claude-fable-*
         to: gpt-6-astra
+```
+
+## Routing profiles per API key
+
+CPA routes each client API key through a profile of four stages: sticky session,
+preferred subscription for Claude and Codex, pool selection, and the Claude → Codex
+fallback. A key without its own profile uses the shared profile, which is the
+global routing configuration edited in the Quota toolbar. A key profile is a full
+copy: nothing is inherited from the shared settings.
+
+**Shared pool selection.** The toolbar shows two slots, **Primary** and **On a
+tie**, in place of the old single strategy select. Each slot accepts a narrowing
+criterion (Priority, Reserves, Earliest reset, Most remaining) or a picker
+(Round-robin, Weighted round-robin, Fill-first). A picker as primary chooses one
+account by itself, so the tie-break slot is disabled. The slots are saved by the
+toolbar's Save button as one `routing.selection` object, with an empty tie-break
+sent as `null`; the legacy `routing.strategy` is left unchanged. A configuration
+without `routing.selection` shows its derived legacy selection, for example
+`strategy: round-robin` appears as Reserves → Round-robin.
+
+**Key profiles.** The **Keys N/M** button opens the per-key editor, where N is the
+number of keys with their own profile and M is the number of client keys in
+`access.api-keys` (or the legacy top-level `api-keys`). Opening it reloads the
+profiles. The top of the modal summarizes the shared settings; they are read-only
+there. Each key row shows its label, a **Shared settings** or **Own profile**
+badge, a one-line chain summary such as `Sticky session · Claude: work@example.com ·
+Codex: Automatic · reserves → round-robin · Fallback: automatic`, and an **Edit**
+button.
+
+- Choosing **Own profile** starts the key from a copy of the current shared
+  settings, so sticky sessions and fallback stay as they were until changed. An
+  empty profile would silently turn them off.
+- The editor covers all four stages. The sticky-session TTL stays global and is
+  set in the toolbar. Preferred subscriptions use the same account list as the
+  toolbar, including disabled and missing accounts. The fallback block uses the
+  same mapping editor as the toolbar control.
+- **Save** writes the complete profile for that one key in a single
+  `PATCH /v8/management/config`, then reads the profiles again and reports an
+  error if CPA did not keep the same value. **Cancel** discards the edit.
+- Choosing **Shared settings** and saving deletes the key's profile with `null`,
+  so the key follows the toolbar again.
+- If the key was removed on the Config page in the meantime (`400
+  unknown_api_key`), the panel says so and reloads the list. A rejected profile
+  (`422 invalid_config`) shows the backend's message. A connection change during a
+  save discards the result.
+
+The toolbar's Claude → Codex fallback control and preferred subscriptions edit the
+shared profile only; keys with their own profile keep their own values.
+
+**How keys are shown.** A key is labeled by its alias from the Manager Server's
+API key aliases, matched by SHA-256, when the panel is served by the Manager
+Server; otherwise, and for keys without an alias, the panel shows a mask such as
+`sk******yz`. Raw keys stay in memory and in the PATCH body; they are never
+rendered, logged, or placed in a request URL, because CPA writes request paths to
+its log. Account names in the summaries follow the email privacy toggle.
+
+**Read-only and older backends.** In Home mode or with a scheduler plugin, CPA
+reports `supported: false`: the modal still lists the keys and their summaries,
+but the editor is read-only and explains why. A backend without
+`GET /v8/management/routing/profiles` (404) hides the Keys button and keeps the
+legacy strategy select and the fallback control exactly as before.
+
+This requires the custom CPA backend with per-key routing profiles
+([echeg/CLIProxyAPI](https://github.com/echeg/CLIProxyAPI) `main` at `ced98b16`
+or later). The Manager Server forwards the new endpoint unchanged. Profiles are stored under `routing.key-profiles`, keyed by the exact
+client key:
+
+```yaml
+routing:
+  session-affinity: true
+  selection: {primary: reserves, tiebreak: earliest-reset}
+  key-profiles:
+    "client-key-a":
+      session-affinity: false
+      preferred-accounts: {claude: "claude-account-index"}
+      selection: {primary: priority, tiebreak: round-robin}
+      claude-fallback: {enabled: false, mode: auto, mappings: []}
 ```
 
 ## Build and verify
