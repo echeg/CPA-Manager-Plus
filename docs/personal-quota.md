@@ -7,9 +7,10 @@ at `4f9ee96`. The ported MIT components retain their attribution in `LICENSE`.
 ## Features
 
 The **Quota** navigation item (`#/quota`) includes compact cards, Ledger and timeline
-views; provider totals; subscription account preferences; shared pool selection
-(primary and tie-break slots, or the legacy routing strategy on older backends) and
-sticky-session TTL; routing profiles per client API key; Codex Fast Mode;
+views; provider totals; a default routing profile (sticky session and its TTL,
+preferred subscriptions, pool selection slots and the Claude → Codex fallback, or the
+legacy routing strategy on older backends); routing profiles per client API key;
+adding and deleting client API keys; Codex Fast Mode;
 per-account soft/hard quota reserves; Codex reset credits and Claude reset grants
 with expiry dates; inline reset confirmation; CPA cooldown clearing after a
 confirmed reset; refresh on entry; and privacy masking.
@@ -30,7 +31,7 @@ The quota workbench requires the custom v8 API implemented by
 [echeg/CLIProxyAPI](https://github.com/echeg/CLIProxyAPI), including nested config,
 credential fields, subscription routing, per-key routing profiles and selection
 slots, quota API calls and cooldown clearing. A backend without routing profiles
-keeps the legacy strategy select and hides the Keys button. Stock CPA installations
+keeps the legacy Quota toolbar, without the Profiles and Keys buttons. Stock CPA installations
 without these endpoints cannot provide the custom workbench. CPAMP's existing v0
 client and screens remain unchanged.
 
@@ -81,9 +82,13 @@ standalone management panel has no staged-reserve editor.
 
 ## Claude to Codex fallback
 
-The Quota toolbar includes **Claude → Codex fallback** beside Codex Fast mode.
-The switch applies immediately and preserves the mappings and selected mode when
-turned off. The settings button opens the model mapping editor. Initial suggestions
+On a backend with routing profiles, the fallback is one stage of each routing
+profile: the default profile and every key profile have a fallback block in the
+profile editor (see [Routing profiles per API key](#routing-profiles-per-api-key)),
+saved together with the rest of that profile. On a backend without routing profiles,
+the legacy Quota toolbar includes **Claude → Codex fallback** beside Codex Fast mode;
+its switch applies immediately and preserves the mappings and selected mode when
+turned off, and its settings button opens the model mapping editor. Initial suggestions
 are `claude-opus-* → gpt-6-astra`, `claude-sonnet-* → gpt-6-sol`, and
 `claude-fable-* → gpt-6-astra`; they are editable and are saved only on user action.
 
@@ -132,65 +137,110 @@ routing:
 
 CPA routes each client API key through a profile of four stages: sticky session,
 preferred subscription for Claude and Codex, pool selection, and the Claude → Codex
-fallback. A key without its own profile uses the shared profile, which is the
-global routing configuration edited in the Quota toolbar. A key profile is a full
-copy: nothing is inherited from the shared settings.
+fallback. A key without its own profile uses the default profile, which is the
+global routing configuration. A key profile is a full copy: nothing is inherited
+from the default.
 
-**Shared pool selection.** The toolbar shows two slots, **Primary** and **On a
-tie**, in place of the old single strategy select. Each slot accepts a narrowing
-criterion (Priority, Reserves, Earliest reset, Most remaining) or a picker
-(Round-robin, Weighted round-robin, Fill-first). A picker as primary chooses one
-account by itself, so the tie-break slot is disabled. The slots are saved by the
-toolbar's Save button as one `routing.selection` object, with an empty tie-break
-sent as `null`; the legacy `routing.strategy` is left unchanged. A configuration
-without `routing.selection` shows its derived legacy selection, for example
-`strategy: round-robin` appears as Reserves → Round-robin.
+**Toolbar.** On a backend that serves `GET /v8/management/routing/profiles`, the
+Quota toolbar holds only Codex Fast mode, the last-routed indicator for each
+provider (the provider, the time of the latest selection, and the account in its
+tooltip), and two buttons:
 
-**Key profiles.** The **Keys N/M** button opens the per-key editor, where N is the
-number of keys with their own profile and M is the number of client keys in
-`access.api-keys` (or the legacy top-level `api-keys`). Opening it reloads the
-profiles. The top of the modal summarizes the shared settings; they are read-only
-there. Each key row shows its label, a **Shared settings** or **Own profile**
-badge, a one-line chain summary such as `Sticky session · Claude: work@example.com ·
-Codex: Automatic · reserves → round-robin · Fallback: automatic`, and an **Edit**
-button.
+```text
+[Codex Fast mode] [Claude ● 10:53] [Codex ● 10:52] [Profiles] [Keys · 2]
+```
 
-- Choosing **Own profile** starts the key from a copy of the current shared
-  settings, so sticky sessions and fallback stay as they were until changed. An
-  empty profile would silently turn them off.
-- The editor covers all four stages. The sticky-session TTL stays global and is
-  set in the toolbar. Preferred subscriptions use the same account list as the
-  toolbar, including disabled and missing accounts. The fallback block uses the
-  same mapping editor as the toolbar control.
-- **Save** writes the complete profile for that one key in a single
-  `PATCH /v8/management/config`, then reads the profiles again and reports an
-  error if CPA did not keep the same value. **Cancel** discards the edit.
-- Choosing **Shared settings** and saving deletes the key's profile with `null`,
-  so the key follows the toolbar again.
-- If the key was removed on the Config page in the meantime (`400
-  unknown_api_key`), the panel says so and reloads the list. A rejected profile
-  (`422 invalid_config`) shows the backend's message. A connection change during a
-  save discards the result.
+**Profiles** opens the routing profiles modal. **Keys · N** opens the client keys
+modal, where N is the number of client keys in `access.api-keys` (or the legacy
+top-level `api-keys`). The shared-profile controls (selection slots, session
+affinity, TTL, preferred subscriptions, fallback switch and Save) are no longer in
+the toolbar; the default profile is edited only in the Profiles modal, so it has a
+single writer. Both buttons are disabled until the first profiles load finishes. If
+that load fails, they are enabled anyway, so the modal can show the error and a
+retry button. Opening either modal reloads the profiles, and only one modal is open
+at a time.
 
-The toolbar's Claude → Codex fallback control and preferred subscriptions edit the
-shared profile only; keys with their own profile keep their own values.
+**Profiles modal.** The modal lists:
+
+- **Default**, the profile of every key without its own. Its editor covers all four
+  stages and the sticky-session TTL, which is global: it applies to every profile and
+  is shown, read-only, in the key editors. An empty or invalid TTL is rejected before
+  any request. **Save** sends one `PATCH /v8/management/config` with
+  `routing.selection`, `session-affinity`, `preferred-accounts` and
+  `claude-fallback`, plus `session-affinity-ttl` only when it changed, then reads the
+  config back and reports an error if CPA did not keep the same values.
+- One row per key with its own profile: its label, a one-line chain summary such as
+  `Sticky session · Claude: work@example.com · Codex: Automatic · reserves →
+  round-robin · Fallback: automatic`, **Edit**, and **Reset to default**. Reset asks
+  for confirmation, then deletes the key's profile with a `null` PATCH.
+- **+ Profile for a key**, which picks a key that still uses the default and opens a
+  new profile for it, started from a copy of the default profile. Sticky sessions and
+  the fallback stay as they were until changed; an empty profile would silently turn
+  them off.
+
+Only one editor is open at a time. In every editor, pool selection has two slots,
+**Primary** and **On a tie**. Each accepts a narrowing criterion (Priority,
+Reserves, Earliest reset, Most remaining) or a picker (Round-robin, Weighted
+round-robin, Fill-first). A picker as primary chooses one account by itself, so the
+tie-break slot is disabled, and an empty tie-break is sent as `null`. A
+configuration without `routing.selection` shows its derived legacy selection, for
+example `strategy: round-robin` appears as Reserves → Round-robin. Preferred
+subscriptions list every account, including disabled and missing ones. A key
+profile's **Save** writes the complete profile for that one key in a single
+`PATCH /v8/management/config` and reads the profiles back; **Cancel** discards the
+edit. A closed editor cannot be opened while the profiles reload.
+
+**Keys modal.** Each client key row shows its label, a **Default** / **Own profile**
+select, the chain summary, **Configure…** for a key with its own profile, and
+**Delete**.
+
+- Choosing **Own profile** switches to the Profiles modal with a new profile for that
+  key; nothing is written until it is saved there. **Configure…** opens the key's
+  existing profile the same way. The Profiles modal then shows **← Back to keys**.
+- Choosing **Default** asks for confirmation and resets the key, as **Reset to
+  default** does.
+- **Delete** asks for confirmation, reads a fresh key list, and writes the list
+  without the key. CPA then drops the key's profile, and the panel deletes its
+  alias. The last client key cannot be deleted. On a panel served by the Manager
+  Server, a key is not deleted while its alias state cannot be confirmed.
+- The **Add a key** form at the bottom has a key field (hidden by default, with a
+  show toggle), **Generate**, **Copy**, an optional **Alias**, and **Add**. A key may
+  contain only visible ASCII characters without spaces, and a key already in the
+  configuration is rejected. An alias must be non-empty, at most 120 characters and
+  unique; it is checked before the key is written. Adding reads a fresh key list and
+  writes the full list with the new key, then saves the alias. If the key was saved
+  but its alias was not, the form clears and shows a separate warning; adding the
+  same key again would fail the duplicate check. Aliases need the Manager Server;
+  without it the alias field is unavailable.
+
+Keys are written through the v8 configuration API: `GET /v8/management/config`,
+then `PATCH /v8/management/config` with `{"access": {"api-keys": [...]}}`, or with
+the legacy top-level `{"api-keys": [...]}` when that is where the config keeps them.
+After each key operation the panel reloads the config, the profiles and the aliases.
+
+**Errors.** If a key was removed on the Config page in the meantime (`400
+unknown_api_key`), the panel says so and reloads the list. A rejected write (`422
+invalid_config`) shows the backend's message with the raw key removed. A connection
+change during a save discards the result. A reload that fails keeps the last loaded
+profiles and key list.
 
 **How keys are shown.** A key is labeled by its alias from the Manager Server's
 API key aliases, matched by SHA-256, when the panel is served by the Manager
 Server; otherwise, and for keys without an alias, the panel shows a mask such as
-`sk******yz`. Raw keys stay in memory and in the PATCH body; they are never
-rendered, logged, or placed in a request URL, because CPA writes request paths to
-its log. Account names in the summaries follow the email privacy toggle.
+`sk******yz`. Raw keys stay in memory and in request bodies; they are never
+rendered (except in the add form's key field before the key is added), logged,
+placed in an error message, or placed in a request URL, because CPA writes request
+paths to its log. Account names in the summaries follow the email privacy toggle.
 
-**Read-only and older backends.** In Home mode or with a scheduler plugin, CPA
-reports `supported: false`: the modal still lists the keys and their summaries,
-but the editor is read-only and explains why. A backend without
-`GET /v8/management/routing/profiles` (404) hides the Keys button and keeps the
-legacy strategy select and the fallback control exactly as before. If the
-profiles fail to load for another reason, the legacy strategy select stays locked,
-because a backend with `routing.selection` ignores `routing.strategy`; the Keys
-button stays visible so the modal can show the error and retry. A reload that fails
-keeps the last loaded slots and key list.
+**Read-only mode and older backends.** In Home mode or with a scheduler plugin, CPA
+reports `supported: false`: per-key profiles are inactive. The toolbar is still the
+slim one. In the Profiles modal the key rows are read-only and **Reset to default**
+and **+ Profile for a key** are hidden, but the Default row stays editable. In the
+Keys modal the profile select is read-only, while adding and deleting keys stay
+available. A backend without `GET /v8/management/routing/profiles` (404) keeps
+today's legacy toolbar unchanged: the legacy strategy select, sticky-session
+settings, preferred subscriptions, the fallback control and Save, with no
+Profiles or Keys button. Keys on such a backend are managed on the Config page.
 
 This requires the custom CPA backend with per-key routing profiles
 ([echeg/CLIProxyAPI](https://github.com/echeg/CLIProxyAPI) `main` at `ced98b16`

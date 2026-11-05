@@ -443,7 +443,7 @@ Run from the repository root:
 - ➕ verified: type-check clean, lint 0 errors and 7 warnings, all pre-existing in files this branch does not touch (AccountsPage.test.tsx, AccountHealthBadge.tsx, DashboardPage.tsx, UsageMaintenanceCapabilityViews.tsx), test:web 305 files and 5052 tests passed. Edge cases map to clientKeys.test.ts, useKeyProfiles.lifecycle.test.tsx, clientKeysModal/routingProfilesModal lifecycle tests, KeyProfileEditor.test.tsx, routingProfiles.test.ts and quotaSettingsHooks.test.ts (invalidTTL); raw-key checks: clientKeys.test.ts "never puts a raw key in a request URL" and the masking tests, plus the "never renders a raw key" tests in both modal suites and keyProfiles.lifecycle.test.tsx
 
 ### Task 12: [Final] Update documentation
-- [ ] update `docs/personal-quota.md`:
+- [x] update `docs/personal-quota.md`:
   - the toolbar now holds Fast mode, the indicators, Профили and Ключи;
   - the Profiles modal (default with TTL, key profiles, `supported: false` behavior);
   - the Keys modal (select, add with generate, copy and alias, delete with the last-key rule);
