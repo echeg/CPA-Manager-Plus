@@ -64,7 +64,9 @@ import {
   UsageArchiveRunView,
   UsageArchiveRunActions,
   UsageMaintenanceOverviewView,
+  type CpaLogStorageState,
 } from './UsageMaintenanceArchiveViews';
+import { cpaLogStorageApi } from './cpaLogStorage';
 import { UsageMaintenanceCreateView, type GuidedArchiveStage } from './UsageMaintenanceCreateView';
 import { UsageMaintenanceDeleteConfirmation } from './UsageMaintenanceDeleteConfirmation';
 import { UsageMaintenanceTransferView } from './UsageMaintenanceTransferView';
@@ -517,6 +519,9 @@ export function UsageMaintenancePage() {
   const historyGenerationRef = useRef(0);
   const selectedArchiveControllerRef = useRef<AbortController | null>(null);
   const selectedArchiveGenerationRef = useRef(0);
+  const [logStorage, setLogStorage] = useState<CpaLogStorageState>({ status: 'loading' });
+  const logStorageControllerRef = useRef<AbortController | null>(null);
+  const logStorageGenerationRef = useRef(0);
 
   const invalidatePreview = useCallback((resetState = false) => {
     previewGenerationRef.current += 1;
@@ -550,8 +555,39 @@ export function UsageMaintenancePage() {
       selectedArchiveGenerationRef.current += 1;
       selectedArchiveControllerRef.current?.abort();
       selectedArchiveControllerRef.current = null;
+      logStorageGenerationRef.current += 1;
+      logStorageControllerRef.current?.abort();
+      logStorageControllerRef.current = null;
       contextGenerationRef.current += 1;
     };
+  }, []);
+
+  /** CPA log disk usage for the overview card; independent of `load()` so a failure never blocks the page. */
+  const loadLogStorage = useCallback(async () => {
+    if (!mountedRef.current) return;
+    const generation = ++logStorageGenerationRef.current;
+    logStorageControllerRef.current?.abort();
+    const controller = new AbortController();
+    logStorageControllerRef.current = controller;
+    const isCurrent = () =>
+      mountedRef.current &&
+      !controller.signal.aborted &&
+      generation === logStorageGenerationRef.current;
+    try {
+      const result = await cpaLogStorageApi.get(controller.signal);
+      if (!isCurrent()) return;
+      setLogStorage(
+        result.supported ? { status: 'ready', storage: result.storage } : { status: 'unsupported' }
+      );
+    } catch (cause) {
+      if (!isCurrent()) return;
+      setLogStorage({
+        status: 'error',
+        message: cause instanceof Error ? cause.message : String(cause),
+      });
+    } finally {
+      if (generation === logStorageGenerationRef.current) logStorageControllerRef.current = null;
+    }
   }, []);
 
   const invalidateOperation = useCallback((resetWorking = false) => {
@@ -888,12 +924,13 @@ export function UsageMaintenancePage() {
   useEffect(() => {
     setPreview(null);
     void load();
+    void loadLogStorage();
     return () => {
       loadGenerationRef.current += 1;
       loadControllerRef.current?.abort();
       loadControllerRef.current = null;
     };
-  }, [load]);
+  }, [load, loadLogStorage]);
 
   const handleUsageChanged = useCallback(() => {
     setPreviewRefreshToken((value) => value + 1);
@@ -1048,6 +1085,7 @@ export function UsageMaintenancePage() {
     void loadHistory();
     setPreviewRefreshToken((value) => value + 1);
     void load();
+    void loadLogStorage();
     if (selectedRunId) setSelectedArchiveRefreshToken((value) => value + 1);
   };
 
@@ -2014,8 +2052,10 @@ export function UsageMaintenancePage() {
                 working && operationArchive ? [operationArchive.run, ...archives] : archives
               }
               stale={postDeleteRefreshFailed}
+              logStorage={logStorage}
               onNavigate={navigateTo}
               onOpenRun={openRun}
+              onOpenConfig={() => navigate('/config')}
             />
             {working && !operationArchive ? (
               <div className={styles.preparingNotice} role="status">

@@ -94,12 +94,13 @@ Run from the repository root:
 - ➕ `logStorage` / `onOpenConfig` are optional on `UsageMaintenanceOverviewView` (card omitted when absent) so the page type-checks before Task 3 wires them; Task 3 may make them required. Locale keys used: `cpa_logs`, `cpa_logs_open_config`, `cpa_logs_files` ({{count}}), `cpa_logs_limit` ({{limit}}), `cpa_logs_no_limit`, `cpa_logs_request_log_on/off`, `cpa_logs_retention` ({{oldest}}, {{days}}), `cpa_logs_per_day` ({{size}}), `cpa_logs_loading`, `cpa_logs_unsupported`, `cpa_logs_error` ({{message}}), `cpa_logs_warning_unbounded`, `cpa_logs_warning_near_limit` ({{used}}, {{limit}})
 
 ### Task 3: Fetch the card data on the Usage maintenance page
-- [ ] in `UsageMaintenancePage.tsx`, add `logStorage` state (initial `{ status: 'loading' }`) and a `loadLogStorage` callback with its own `AbortController` ref and generation counter, independent of `load()`; it calls `cpaLogStorageApi.get(signal)` and maps the result to `ready` / `unsupported`, any thrown error (including a missing connection from `createQuotaRequestConfig`) to `error` with the message; aborted or superseded calls set nothing
-- [ ] run it on mount and whenever the page's foreground `load()` runs (the user-visible refresh), not on background polling; abort it on unmount
-- [ ] pass `logStorage` and `onOpenConfig={() => navigate('/config')}` to `UsageMaintenanceOverviewView`
-- [ ] keep `load()`, its `Promise.all`, unsupported and error handling unchanged: a failing or 404 log storage call must not set the page's `unsupported` or `error`
-- [ ] extend `UsageMaintenancePage.test.tsx` (mock `cpaLogStorageApi` the same way as `usageServiceApi`): card shows the size when the call resolves; a 404-style `{ supported: false }` and a rejected call leave the rest of the page rendered with no page error; unmount aborts the request; the chip navigates to `/config`
-- [ ] run `npm run test:web` - must pass before task 4
+- [x] in `UsageMaintenancePage.tsx`, add `logStorage` state (initial `{ status: 'loading' }`) and a `loadLogStorage` callback with its own `AbortController` ref and generation counter, independent of `load()`; it calls `cpaLogStorageApi.get(signal)` and maps the result to `ready` / `unsupported`, any thrown error (including a missing connection from `createQuotaRequestConfig`) to `error` with the message; aborted or superseded calls set nothing
+- [x] run it on mount and whenever the page's foreground `load()` runs (the user-visible refresh), not on background polling; abort it on unmount
+- [x] pass `logStorage` and `onOpenConfig={() => navigate('/config')}` to `UsageMaintenanceOverviewView`
+- [x] keep `load()`, its `Promise.all`, unsupported and error handling unchanged: a failing or 404 log storage call must not set the page's `unsupported` or `error`
+- [x] extend `UsageMaintenancePage.test.tsx` (mock `cpaLogStorageApi` the same way as `usageServiceApi`): card shows the size when the call resolves; a 404-style `{ supported: false }` and a rejected call leave the rest of the page rendered with no page error; unmount aborts the request; the chip navigates to `/config`
+- [x] run `npm run test:web` - must pass before task 4
+- ➕ while a refresh is in flight the card keeps its previous state (no flash back to loading); `logStorage`/`onOpenConfig` stay optional on the overview view so other callers and the view tests need no change
 
 ### Task 4: Locale keys and the total-size limit label
 - [ ] add the new `usage_maintenance.cpa_logs*` keys to `en.json`, `ru.json`, `zh-CN.json`, `zh-TW.json` (title, open-config chip, files/limit/no-limit/request-log on/off sub-line, retention span, per-day growth, loading, unsupported hint "update CPA to show log size", error, both warnings)

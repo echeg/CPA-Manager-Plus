@@ -9,6 +9,8 @@ import type {
 } from '@/services/api/usageService';
 import en from '@/i18n/locales/en.json';
 import { Drawer } from '@/components/ui/Drawer';
+import { formatFileSize } from '@/utils/format';
+import type { CpaLogStorage, CpaLogStorageResult } from './cpaLogStorage';
 import { UsageMaintenancePage } from './UsageMaintenancePage';
 import {
   COMPACT_DOCKER_COMPOSE_COMMAND,
@@ -40,6 +42,7 @@ const { mocks } = vi.hoisted(() => {
       verifyUsageArchive: vi.fn(),
       deleteUsageArchive: vi.fn(),
       cancelUsageArchive: vi.fn(),
+      getCpaLogStorage: vi.fn(),
       t: vi.fn((key: string, options?: Record<string, unknown>) => {
         if (
           [
@@ -163,6 +166,11 @@ vi.mock('@/services/api/usageService', () => ({
     deleteUsageArchive: mocks.deleteUsageArchive,
     cancelUsageArchive: mocks.cancelUsageArchive,
   },
+}));
+
+vi.mock('./cpaLogStorage', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./cpaLogStorage')>()),
+  cpaLogStorageApi: { get: mocks.getCpaLogStorage },
 }));
 
 vi.mock('@/components/ui/LoadingSpinner', () => ({
@@ -338,6 +346,7 @@ beforeEach(() => {
   mocks.availability.managerServiceBase = 'http://manager-a.local:18317';
   mocks.managementKey = 'management-key-a';
   mocks.probeUsageMaintenance.mockResolvedValue(undefined);
+  mocks.getCpaLogStorage.mockResolvedValue({ supported: false } satisfies CpaLogStorageResult);
   mocks.getUsageArchive.mockImplementation((_base: string, runId: string) =>
     Promise.resolve(archiveStatus(archive('verified', runId)))
   );
@@ -3166,5 +3175,133 @@ describe('maintenance workspace navigation and continuous operations', () => {
     expect(svgIcon.props.className).toBeUndefined();
 
     act(() => renderer.unmount());
+  });
+});
+
+const cpaLogStorage = (overrides: Partial<CpaLogStorage> = {}): CpaLogStorage => ({
+  totalBytes: 185_068_097,
+  totalFiles: 15,
+  cappedBytes: 183_686_396,
+  cappedFiles: 12,
+  oldestModifiedAt: new Date('2026-10-07T07:21:57Z'),
+  newestModifiedAt: new Date('2026-11-05T19:17:08Z'),
+  limitMb: 0,
+  requestLog: false,
+  loggingToFile: false,
+  ...overrides,
+});
+
+const findCpaLogsCard = (renderer: ReactTestRenderer) =>
+  renderer.root.findByProps({ 'data-testid': 'cpa-logs-card' });
+
+describe('UsageMaintenancePage CPA logs card', () => {
+  it('shows the CPA log size once the storage request resolves', async () => {
+    mocks.getCpaLogStorage.mockResolvedValue({
+      supported: true,
+      storage: cpaLogStorage(),
+    } satisfies CpaLogStorageResult);
+
+    const renderer = await renderOverviewPage();
+
+    const card = findCpaLogsCard(renderer);
+    expect(card.props['data-status']).toBe('ready');
+    expect(getText(card)).toContain(formatFileSize(185_068_097));
+    expect(mocks.getCpaLogStorage).toHaveBeenCalledTimes(1);
+    expect(mocks.getCpaLogStorage.mock.calls[0][0]).toBeInstanceOf(AbortSignal);
+  });
+
+  it('keeps the page usable when CPA does not support the storage route', async () => {
+    const renderer = await renderOverviewPage();
+
+    expect(findCpaLogsCard(renderer).props['data-status']).toBe('unsupported');
+    expect(getText(findCpaLogsCard(renderer))).toContain('—');
+    const text = getText(renderer.root);
+    expect(text).toContain('Archive management');
+    expect(text).toContain('Archive records');
+    expect(mocks.getUsageMaintenance).toHaveBeenCalled();
+  });
+
+  it('confines a failed storage request to the card without a page error', async () => {
+    mocks.getCpaLogStorage.mockRejectedValue(new Error('log scan exploded'));
+
+    const renderer = await renderOverviewPage();
+
+    const card = findCpaLogsCard(renderer);
+    expect(card.props['data-status']).toBe('error');
+    expect(getText(card)).toContain('—');
+    const text = getText(renderer.root);
+    expect(text).toContain('Archive management');
+    expect(text).toContain('Archive records');
+    expect(text).not.toContain('log scan exploded');
+    expect(findButtons(renderer, 'New archive')).toHaveLength(1);
+  });
+
+  it('reports a missing management connection as a card error', async () => {
+    mocks.getCpaLogStorage.mockRejectedValue(new Error('The management connection is unavailable'));
+
+    const renderer = await renderOverviewPage();
+
+    expect(findCpaLogsCard(renderer).props['data-status']).toBe('error');
+    expect(getText(renderer.root)).toContain('Archive records');
+  });
+
+  it('aborts the storage request on unmount and ignores its late result', async () => {
+    const pending = deferred<CpaLogStorageResult>();
+    mocks.getCpaLogStorage.mockReturnValue(pending.promise);
+
+    const renderer = await renderOverviewPage();
+    expect(findCpaLogsCard(renderer).props['data-status']).toBe('loading');
+    const signal = mocks.getCpaLogStorage.mock.calls[0][0] as AbortSignal;
+    expect(signal.aborted).toBe(false);
+
+    act(() => renderer.unmount());
+    renderers.delete(renderer);
+    expect(signal.aborted).toBe(true);
+
+    await act(async () => {
+      pending.resolve({ supported: true, storage: cpaLogStorage() });
+      await Promise.resolve();
+    });
+  });
+
+  it('refetches on a user refresh and keeps only the newest result', async () => {
+    const first = deferred<CpaLogStorageResult>();
+    const second = deferred<CpaLogStorageResult>();
+    mocks.getCpaLogStorage.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+
+    const renderer = await renderOverviewPage();
+
+    await act(async () => {
+      findButtons(renderer, 'Refresh')[0].props.onClick();
+      await Promise.resolve();
+    });
+    expect(mocks.getCpaLogStorage).toHaveBeenCalledTimes(2);
+    const firstSignal = mocks.getCpaLogStorage.mock.calls[0][0] as AbortSignal;
+    expect(firstSignal.aborted).toBe(true);
+
+    await act(async () => {
+      second.resolve({ supported: true, storage: cpaLogStorage({ totalBytes: 2_048 }) });
+      await Promise.resolve();
+    });
+    await act(async () => {
+      first.resolve({ supported: false });
+      await Promise.resolve();
+    });
+
+    const card = findCpaLogsCard(renderer);
+    expect(card.props['data-status']).toBe('ready');
+    expect(getText(card)).toContain(formatFileSize(2_048));
+  });
+
+  it('opens the configuration page from the card chip', async () => {
+    const renderer = await renderOverviewPage();
+
+    const chip = findCpaLogsCard(renderer)
+      .findAllByType('button')
+      .find((button) => getText(button).includes('usage_maintenance.cpa_logs_open_config'));
+    expect(chip).toBeDefined();
+    act(() => chip!.props.onClick());
+
+    expect(mocks.navigate).toHaveBeenCalledWith('/config');
   });
 });
