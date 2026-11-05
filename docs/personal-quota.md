@@ -276,6 +276,29 @@ routing:
       claude-fallback: {enabled: false, mode: auto, mappings: []}
 ```
 
+## CPA logs storage
+
+The Usage Maintenance overview (`#/usage-maintenance`) has a read-only **CPA logs**
+card. It reads `GET /v8/management/observability/logs/storage` through the v8 quota
+client and shows the total size of the CPA logs directory, the file count, the
+`logs-max-total-size-mb` limit (or "no limit"), whether request logging is on, the
+retention span and an approximate growth per day. The chip opens `/config`, where the
+limit is edited.
+
+`logs-max-total-size-mb` caps the **total** size of the top-level `*.log` and
+`*.log.gz` files in the logs directory, not the size of each file. The card compares
+those files (`capped_bytes`) with the limit. It warns when they reach 90% of the
+limit, or when request logging is on and there is no limit. `total_bytes` also
+counts nested and other files that the cleaner never removes.
+
+The card loads separately from the page's usage and archive requests. A failing
+call only changes the card. A CPA build without the route answers 404, and the card
+then shows "—" with a hint to update CPA. The route needs
+[echeg/CLIProxyAPI](https://github.com/echeg/CLIProxyAPI)
+`v8.0.10-personal.logs-storage.20261105` or later. Demo mode serves a fixture
+from `handleDemoRawRequest`, because the v8 client sends every call through
+`requestRaw`.
+
 ## Build and verify
 
 ```sh

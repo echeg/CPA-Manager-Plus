@@ -125,8 +125,9 @@ Run from the repository root:
 - [x] run `npm run build` (tsc + vite) to confirm the bundle builds
 
 ### Task 7: [Final] Update documentation
-- [ ] in `apps/docs/operations/configuration.md` and `apps/docs/en/operations/configuration.md`, where `logs-max-total-size-mb` or log settings are described, state that the limit is the total size of the CPA logs directory and that the current usage is shown on the Usage maintenance page; skip a file that does not describe log settings
-- [ ] update project knowledge docs if new patterns were discovered
+- [x] in `apps/docs/operations/configuration.md` and `apps/docs/en/operations/configuration.md`, where `logs-max-total-size-mb` or log settings are described, state that the limit is the total size of the CPA logs directory and that the current usage is shown on the Usage maintenance page; skip a file that does not describe log settings
+- [x] update project knowledge docs if new patterns were discovered
+- ➕ neither `apps/docs/operations/configuration.md` nor its `en` copy describes log settings (they cover Manager Server env vars only), so both were skipped as the item allows. The endpoint, the total-size meaning of `logs-max-total-size-mb`, the warning rules, the 404 fallback and the demo route are documented in a new "CPA logs storage" section of `docs/personal-quota.md`, which already lists this fork's v8 endpoints.
 
 ## Technical Details
 - Endpoint: `GET {base}/v8/management/observability/logs/storage`, admin Bearer key (handled by `createQuotaRequestConfig`).
