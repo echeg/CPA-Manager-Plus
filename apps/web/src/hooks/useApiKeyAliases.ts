@@ -92,5 +92,22 @@ export function useApiKeyAliases() {
     setAliases((previous) => previous.filter((item) => item.apiKeyHash !== hash));
   }, []);
 
-  return { aliases, available, loading, reload, replaceAliases, removeAlias };
+  // A key write can orphan or lose an alias unless the host is confirmed and, on a
+  // manager-hosted panel, the alias list loaded (ApiKeysCardEditor's delete rule).
+  const stateKnown =
+    !featureAvailability.checking &&
+    featureAvailability.panelHostConfirmed &&
+    (featureAvailability.panelHostMode !== 'manager_embedded' || (!!serviceBase && available));
+
+  return {
+    aliases,
+    available,
+    loading,
+    serviceBase,
+    managementKey,
+    stateKnown,
+    reload,
+    replaceAliases,
+    removeAlias,
+  };
 }

@@ -190,6 +190,54 @@ describe('useApiKeyAliases', () => {
   });
 });
 
+describe('useApiKeyAliases alias state', () => {
+  beforeEach(() => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mocks.featureAvailability = managerHosted();
+    mocks.revision = 0;
+    mocks.listeners.clear();
+    mocks.getApiKeyAliases.mockReset();
+    latest = null;
+  });
+
+  afterEach(() => {
+    act(() => renderer?.unmount());
+    renderer = null;
+  });
+
+  it('is known on a manager-hosted panel once the aliases loaded', async () => {
+    mocks.getApiKeyAliases.mockResolvedValue({ items: [] });
+    await mount();
+    expect(current()).toMatchObject({
+      stateKnown: true,
+      serviceBase: 'http://manager.local',
+      managementKey: 'management-key',
+    });
+  });
+
+  it('is unknown on a manager-hosted panel whose alias service failed', async () => {
+    mocks.getApiKeyAliases.mockRejectedValue(new Error('offline'));
+    await mount();
+    expect(current().stateKnown).toBe(false);
+  });
+
+  it('is unknown while the host is checked or unconfirmed', async () => {
+    mocks.featureAvailability = { ...managerHosted(), checking: true };
+    await mount();
+    expect(current().stateKnown).toBe(false);
+    act(() => renderer?.unmount());
+    mocks.featureAvailability = { ...managerHosted(), panelHostConfirmed: false };
+    await mount();
+    expect(current().stateKnown).toBe(false);
+  });
+
+  it('is known with no service base on an external panel', async () => {
+    mocks.featureAvailability = { ...managerHosted(), panelHostMode: 'external_panel' };
+    await mount();
+    expect(current()).toMatchObject({ stateKnown: true, serviceBase: '' });
+  });
+});
+
 describe('resolveAliasServiceBase', () => {
   it('returns the manager base only for a confirmed manager-hosted panel', () => {
     const base = managerHosted() as unknown as PanelFeatureAvailability;

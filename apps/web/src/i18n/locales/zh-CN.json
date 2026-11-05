@@ -5712,6 +5712,19 @@
       "loading": "正在加载路由配置…",
       "empty": "配置中没有客户端 API 密钥。请在配置页面中添加。",
       "unsupported": "此 CPA 版本不支持按密钥的路由配置。"
+    },
+    "client_keys": {
+      "errors": {
+        "invalid_key": "密钥只能包含可见的 ASCII 字符，且不能包含空格。",
+        "duplicate_key": "此密钥已在配置中。",
+        "alias_empty": "别名不能为空。",
+        "alias_too_long": "别名最多 120 个字符。",
+        "alias_duplicate": "另一个密钥已使用此别名。",
+        "last_key": "无法删除最后一个客户端密钥。",
+        "alias_state_unknown": "无法确认密钥别名状态，请稍后重试。",
+        "alias_save_failed": "密钥已保存，但别名未保存：{{message}}",
+        "alias_delete_failed": "密钥已删除，但别名未删除：{{message}}"
+      }
     }
   },
   "claude_reset": {

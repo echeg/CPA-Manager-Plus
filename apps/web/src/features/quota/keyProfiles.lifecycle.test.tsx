@@ -121,11 +121,15 @@ function makeKeyProfiles(
     rows,
     count: rows.filter((row) => row.profile).length,
     total: rows.length,
+    ttl: '1h',
     loading: false,
     saving: false,
     error: '',
     reload: vi.fn(),
     saveKeyProfile: vi.fn(async () => true),
+    saveShared: vi.fn(async () => true),
+    addKey: vi.fn(async () => ({ ok: true })),
+    removeKey: vi.fn(async () => ({ ok: true })),
     ...overrides,
   };
 }

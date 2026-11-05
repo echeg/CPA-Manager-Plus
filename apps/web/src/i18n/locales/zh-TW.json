@@ -5712,6 +5712,19 @@
       "loading": "正在載入路由設定…",
       "empty": "設定中沒有用戶端 API 金鑰。請於設定頁面中新增。",
       "unsupported": "此 CPA 版本不支援依金鑰的路由設定。"
+    },
+    "client_keys": {
+      "errors": {
+        "invalid_key": "金鑰只能包含可見的 ASCII 字元，且不能包含空格。",
+        "duplicate_key": "此金鑰已在設定中。",
+        "alias_empty": "別名不能為空。",
+        "alias_too_long": "別名最多 120 個字元。",
+        "alias_duplicate": "另一個金鑰已使用此別名。",
+        "last_key": "無法刪除最後一個用戶端金鑰。",
+        "alias_state_unknown": "無法確認金鑰別名狀態，請稍後重試。",
+        "alias_save_failed": "金鑰已儲存，但別名未儲存：{{message}}",
+        "alias_delete_failed": "金鑰已刪除，但別名未刪除：{{message}}"
+      }
     }
   },
   "claude_reset": {

@@ -300,24 +300,24 @@ Run from the repository root:
 - [x] run `npm run type-check` and `npm run test:web`; both must pass before Task 5
 
 ### Task 5: useKeyProfiles state for both modals
-- [ ] extend `features/quota/hooks/useKeyProfiles.ts`:
+- [x] extend `features/quota/hooks/useKeyProfiles.ts`:
   - `ttl`, from `config.routingSessionAffinityTTL || '1h'` of the config it loads;
   - `saveShared(profile, ttl?)`, which calls `saveSharedProfile` and then reloads profiles and config;
   - `addKey(key, alias?)` and `removeKey(key)` through `clientKeys.ts`, each followed by a forced config reload and a profiles reload, with `replaceAliases(response.items)` or `removeAlias(hash)` from its `useApiKeyAliases` instance after an alias write or delete
-- [ ] gates:
+- [x] gates:
   - `addKey`, `removeKey` and `saveShared` are gated only on `disabled`, `loading` and `savingRef`, never on `state.supported`;
   - `saveKeyProfile` keeps its `supported` gate.
   
   `addKey` resolves to `{ok, aliasWarning?}`, so the caller can clear the key input when the key was written
-- [ ] error mapping:
+- [x] error mapping:
   - invalid key, duplicate key, invalid or duplicate alias, last key and alias state unknown become localized messages;
   - non-domain errors take the existing generic path (`errorText` and `refetch`);
   - keep the 400/422 handling;
   - a save error survives the reload it triggers.
   
   Add the locale keys these messages use to all four locales
-- [ ] apply the connection-revision guard on every new path, as in the current hook
-- [ ] update `useKeyProfiles.lifecycle.test.tsx`:
+- [x] apply the connection-revision guard on every new path, as in the current hook
+- [x] update `useKeyProfiles.lifecycle.test.tsx`:
   - `ttl` after load and after `saveShared`;
   - a shared save, then the reload;
   - adding a key, then the reload, with its alias shown on the new row without a remount;
@@ -326,7 +326,9 @@ Run from the repository root:
   - the message for each domain error;
   - an alias warning returned with `ok: true`;
   - a stale result dropped after a connection change
-- [ ] run `npm run type-check` and `npm run test:web`; both must pass before Task 6
+- ➕ `useApiKeyAliases` now also returns `serviceBase`, `managementKey` and `stateKnown` (host confirmed and, on a manager-hosted panel, the alias list loaded), which `useKeyProfiles` passes to `clientKeys.ts` as the alias context; covered in `useApiKeyAliases.test.tsx`
+- ➕ `saveShared` also returns false without a loaded state or on a 404 backend (`unsupportedBackend`), because it needs `selectionOptions` and its read-back would fail after a landed PATCH there; `removeKey` resolves to the same `{ok, aliasWarning?}` shape as `addKey`. Domain errors live under `quota_management.client_keys.errors.*`
+- [x] run `npm run type-check` and `npm run test:web`; both must pass before Task 6
 
 ### Task 6: RoutingProfilesModal
 - [ ] create `features/quota/components/RoutingProfilesModal.tsx` and its SCSS module on `Modal`. It shows:

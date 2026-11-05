@@ -5717,6 +5717,19 @@
       "loading": "Loading routing profiles…",
       "empty": "The configuration has no client API keys. Add them on the Config page.",
       "unsupported": "This CPA version has no per-key routing profiles."
+    },
+    "client_keys": {
+      "errors": {
+        "invalid_key": "The key may contain only visible ASCII characters, without spaces.",
+        "duplicate_key": "This key is already in the configuration.",
+        "alias_empty": "The alias cannot be empty.",
+        "alias_too_long": "The alias must be at most 120 characters.",
+        "alias_duplicate": "Another key already uses this alias.",
+        "last_key": "The last client key cannot be deleted.",
+        "alias_state_unknown": "The key alias state could not be confirmed. Try again later.",
+        "alias_save_failed": "The key was saved, but its alias was not: {{message}}",
+        "alias_delete_failed": "The key was deleted, but its alias was not: {{message}}"
+      }
     }
   },
   "claude_reset": {
