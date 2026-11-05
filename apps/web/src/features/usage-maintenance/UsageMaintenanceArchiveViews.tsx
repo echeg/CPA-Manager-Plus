@@ -18,6 +18,7 @@ import {
   IconChevronRight,
   IconCircleHelp,
   IconTriangleAlert,
+  IconScrollText,
 } from '@/components/ui/icons';
 import { useNotificationStore } from '@/stores';
 import { copyToClipboard } from '@/utils/clipboard';
@@ -38,6 +39,7 @@ import {
   type UsageMaintenanceView,
 } from './usageMaintenanceModel';
 import type { MaintenanceIntent } from './usageMaintenanceNavigation';
+import { logRetention, logStorageWarning, type CpaLogStorage } from './cpaLogStorage';
 import styles from './UsageMaintenanceArchiveViews.module.scss';
 
 const archiveStatuses = [
@@ -109,18 +111,125 @@ export function UsageArchiveRunActions({
   );
 }
 
+export type CpaLogStorageState =
+  | { status: 'loading' }
+  | { status: 'unsupported' }
+  | { status: 'error'; message: string }
+  | { status: 'ready'; storage: CpaLogStorage };
+
+const BYTES_PER_MB = 1024 * 1024;
+
+export function CpaLogsSummaryCard({
+  state,
+  onOpenConfig,
+}: {
+  state: CpaLogStorageState;
+  onOpenConfig: () => void;
+}) {
+  const { t, i18n } = useTranslation();
+  const storage = state.status === 'ready' ? state.storage : null;
+  const retention = storage ? logRetention(storage) : null;
+  const warning = storage ? logStorageWarning(storage) : null;
+  const limit =
+    storage && storage.limitMb > 0 ? formatFileSize(storage.limitMb * BYTES_PER_MB) : '';
+
+  const summary = storage
+    ? [
+        t('usage_maintenance.cpa_logs_files', {
+          count: storage.totalFiles.toLocaleString(i18n.language),
+        }),
+        storage.limitMb > 0
+          ? t('usage_maintenance.cpa_logs_limit', { limit })
+          : t('usage_maintenance.cpa_logs_no_limit'),
+        t(
+          storage.requestLog
+            ? 'usage_maintenance.cpa_logs_request_log_on'
+            : 'usage_maintenance.cpa_logs_request_log_off'
+        ),
+      ].join(' · ')
+    : state.status === 'unsupported'
+      ? t('usage_maintenance.cpa_logs_unsupported')
+      : state.status === 'error'
+        ? t('usage_maintenance.cpa_logs_error', { message: state.message })
+        : t('usage_maintenance.cpa_logs_loading');
+
+  const retentionText =
+    storage?.oldestModifiedAt && retention
+      ? [
+          t('usage_maintenance.cpa_logs_retention', {
+            oldest: formatDateTime(storage.oldestModifiedAt, i18n.language),
+            days: retention.spanDays.toLocaleString(i18n.language, {
+              maximumFractionDigits: retention.spanDays < 10 ? 1 : 0,
+            }),
+          }),
+          retention.bytesPerDay === null
+            ? null
+            : t('usage_maintenance.cpa_logs_per_day', {
+                size: formatFileSize(Math.round(retention.bytesPerDay)),
+              }),
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      : null;
+
+  return (
+    <div className={styles.summaryCard} data-testid="cpa-logs-card" data-status={state.status}>
+      <div className={styles.cardHeader}>
+        <div className={`${styles.iconWrap} ${styles.iconAmber}`} aria-hidden="true">
+          <IconScrollText size={18} />
+        </div>
+        <dt className={styles.cardTitle}>{t('usage_maintenance.cpa_logs')}</dt>
+        <button type="button" className={styles.actionChip} onClick={onOpenConfig}>
+          {t('usage_maintenance.cpa_logs_open_config')}
+        </button>
+      </div>
+      <div className={styles.cardBody}>
+        <dd className={styles.cardValue}>{storage ? formatFileSize(storage.totalBytes) : '—'}</dd>
+        <small
+          className={styles.cardSub}
+          title={state.status === 'error' ? state.message : summary}
+        >
+          {summary}
+        </small>
+        {retentionText ? (
+          <small className={styles.cardSub} title={retentionText}>
+            {retentionText}
+          </small>
+        ) : null}
+        {storage && warning ? (
+          <div className={`${styles.reclaimHighlight} ${styles.warningHighlight}`}>
+            <span>
+              {warning === 'unbounded'
+                ? t('usage_maintenance.cpa_logs_warning_unbounded')
+                : t('usage_maintenance.cpa_logs_warning_near_limit', {
+                    used: formatFileSize(storage.cappedBytes),
+                    limit,
+                  })}
+            </span>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export function UsageMaintenanceOverviewView({
   maintenance,
   archives,
   stale = false,
+  logStorage,
   onNavigate,
   onOpenRun,
+  onOpenConfig,
 }: {
   maintenance: UsageMaintenanceStatus;
   archives: UsageArchiveRunSummary[];
   stale?: boolean;
+  /** CPA logs card state; the card is omitted until the page provides it. */
+  logStorage?: CpaLogStorageState;
   onNavigate: Navigate;
   onOpenRun: (run: UsageArchiveRunSummary) => void;
+  onOpenConfig?: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const pending = [maintenance.active_run, ...archives].filter(
@@ -239,6 +348,9 @@ export function UsageMaintenanceOverviewView({
             ) : null}
           </div>
         </div>
+        {logStorage && onOpenConfig ? (
+          <CpaLogsSummaryCard state={logStorage} onOpenConfig={onOpenConfig} />
+        ) : null}
       </dl>
       {active ? (
         <section
@@ -808,9 +920,7 @@ export function UsageArchiveRunView({
                     {t(progress.labelKey)}
                   </strong>
                   {progress.percent !== null ? (
-                    <span className={styles.subphasePercent}>
-                      {progress.percent.toFixed(1)}%
-                    </span>
+                    <span className={styles.subphasePercent}>{progress.percent.toFixed(1)}%</span>
                   ) : null}
                 </div>
                 {progress.total > 0 ? (
