@@ -34,6 +34,7 @@ const aliasState = vi.hoisted(() => ({
   stateKnown: true,
   replaced: [] as unknown[],
   removed: [] as string[],
+  reloads: 0,
 }));
 // A stateful stand-in, so an alias replaced after a key write shows without a remount.
 vi.mock('@/hooks/useApiKeyAliases', async () => {
@@ -48,7 +49,9 @@ vi.mock('@/hooks/useApiKeyAliases', async () => {
         serviceBase: aliasState.serviceBase,
         managementKey: 'management-key',
         stateKnown: aliasState.stateKnown,
-        reload: () => undefined,
+        reload: () => {
+          aliasState.reloads += 1;
+        },
         replaceAliases: (items: ApiKeyAlias[]) => {
           aliasState.replaced.push(items);
           setAliases(items);
@@ -142,6 +145,7 @@ beforeEach(() => {
   aliasState.stateKnown = true;
   aliasState.replaced = [];
   aliasState.removed = [];
+  aliasState.reloads = 0;
   vi.spyOn(apiClient, 'getConnectionRevision').mockImplementation(() => revision);
   useConfigStore.setState(initialConfigState, true);
   useConfigStore.setState({ fetchConfig: vi.fn(async () => config()) });
@@ -762,5 +766,63 @@ describe('useKeyProfiles client keys', () => {
     });
     await expect(result).resolves.toEqual({ ok: false });
     expect(hook.error).toBe('');
+  });
+
+  test('a write callback kept past a connection change sends no request', async () => {
+    const remove = vi.spyOn(clientKeysApi, 'removeClientKey').mockResolvedValue({});
+    const save = vi.spyOn(routingProfilesApi, 'saveKeyProfile');
+    await mount();
+    // A confirmation dialog keeps the callbacks of the render that opened it.
+    const { removeKey, saveKeyProfile } = hook;
+    revision += 1;
+    await act(async () => hook.reload());
+    let removed!: Awaited<ReturnType<KeyProfilesState['removeKey']>>;
+    let saved = true;
+    await act(async () => {
+      removed = await removeKey(KEY_A);
+      saved = await saveKeyProfile(KEY_B, null);
+    });
+    expect(removed).toEqual({ ok: false });
+    expect(saved).toBe(false);
+    expect(remove).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  test('a write callback kept past an unmount sends no request', async () => {
+    const add = vi.spyOn(clientKeysApi, 'addClientKey').mockResolvedValue({});
+    const remove = vi.spyOn(clientKeysApi, 'removeClientKey').mockResolvedValue({});
+    await mount();
+    const { addKey, removeKey } = hook;
+    await act(async () => renderer!.unmount());
+    renderer = undefined;
+    await expect(removeKey(KEY_A)).resolves.toEqual({ ok: false });
+    await expect(addKey(KEY_C)).resolves.toEqual({ ok: false });
+    expect(remove).not.toHaveBeenCalled();
+    expect(add).not.toHaveBeenCalled();
+  });
+
+  test('a reload retries an alias list that did not load and keeps a known one', async () => {
+    aliasState.stateKnown = false;
+    await mount();
+    await act(async () => hook.reload());
+    expect(aliasState.reloads).toBe(1);
+    await act(async () => renderer!.unmount());
+    aliasState.stateKnown = true;
+    await mount();
+    await act(async () => hook.reload());
+    expect(aliasState.reloads).toBe(1);
+  });
+
+  test('a delete refused for an unknown alias state loads the alias list again', async () => {
+    vi.spyOn(clientKeysApi, 'removeClientKey').mockRejectedValue(new AliasStateUnknownError());
+    await mount();
+    let result!: Awaited<ReturnType<KeyProfilesState['removeKey']>>;
+    await act(async () => {
+      result = await hook.removeKey(KEY_A);
+    });
+    expect(result).toEqual({ ok: false });
+    expect(hook.error).toBe('The key alias state could not be confirmed. Try again later.');
+    expect(aliasState.reloads).toBe(1);
+    expect(routingProfilesApi.get).toHaveBeenCalledTimes(1);
   });
 });

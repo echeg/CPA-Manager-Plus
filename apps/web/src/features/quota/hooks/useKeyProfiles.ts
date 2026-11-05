@@ -70,6 +70,7 @@ export function useKeyProfiles(disabled: boolean) {
     serviceBase: aliasServiceBase,
     managementKey,
     stateKnown: aliasStateKnown,
+    reload: reloadAliases,
     replaceAliases,
     removeAlias,
   } = useApiKeyAliases();
@@ -128,14 +129,25 @@ export function useKeyProfiles(disabled: boolean) {
   }, [disabled, fetchConfig, revision, reloadToken, t]);
 
   const refetch = useCallback(() => setReloadToken((value) => value + 1), []);
+  // A user reload, or opening a modal, also retries an alias list that is not known:
+  // until it loads, a manager-hosted panel can neither delete a key nor save an alias.
+  // A known list is kept, so the alias input does not turn off during every reload.
   const reload = useCallback(() => {
     setSaveError('');
     refetch();
-  }, [refetch]);
+    if (!aliasStateKnown) reloadAliases();
+  }, [aliasStateKnown, refetch, reloadAliases]);
 
-  /** Claim the single write slot; false while disabled, loading or another write runs. */
+  const isCurrent = () => mounted.current && revision === apiClient.getConnectionRevision();
+
+  /**
+   * Claim the single write slot; false while disabled, loading or another write runs.
+   * A callback kept past an unmount or a connection change, such as the `onConfirm`
+   * of a delete confirmation, is refused before it sends a request: the services pin
+   * the connection that is current when they are called, which would be the new one.
+   */
   const beginWrite = () => {
-    if (disabled || loading || savingRef.current) return false;
+    if (!isCurrent() || disabled || loading || savingRef.current) return false;
     savingRef.current = true;
     setSaving(true);
     setSaveError('');
@@ -145,7 +157,6 @@ export function useKeyProfiles(disabled: boolean) {
     savingRef.current = false;
     if (mounted.current) setSaving(false);
   };
-  const isCurrent = () => mounted.current && revision === apiClient.getConnectionRevision();
 
   /** Show a write error. Call only while the write's connection is current. */
   const failWrite = (err: unknown) => {
@@ -153,6 +164,8 @@ export function useKeyProfiles(disabled: boolean) {
     if (domain) {
       // Rejected before any write, so the stored state is unchanged.
       setSaveError(domain);
+      // Load the alias list again, so a retry passes once the alias service answers.
+      if (err instanceof AliasStateUnknownError) reloadAliases();
     } else if (err instanceof UnknownApiKeyError) {
       setSaveError(t('quota_management.key_profiles.errors.unknown_key'));
       refetch();

@@ -211,7 +211,9 @@ select, the chain summary, **Configure…** for a key with its own profile, and
   without the key. CPA then drops the key's profile, and the panel deletes its
   alias. The last client key cannot be deleted. A key is not deleted while the
   panel host is still being checked or cannot be confirmed, or, on a panel served by
-  the Manager Server, while the alias list is loading or did not load.
+  the Manager Server, while the alias list is loading or did not load. Such a refused
+  delete, **Refresh**, and opening either modal load an alias list that did not load
+  again, so a retry passes once the Manager Server answers.
 - The **Add a key** form at the bottom has a key field (hidden by default, with a
   show toggle), **Generate**, **Copy**, an optional **Alias**, and **Add**. A key may
   contain only visible ASCII characters without spaces, and a key already in the
@@ -233,7 +235,8 @@ from the alias service's response.
 **Errors.** If a key was removed on the Config page in the meantime (`400
 unknown_api_key`), the panel says so and reloads the list. A rejected write (`422
 invalid_config`) shows the backend's message with the raw key removed. A connection
-change during a save discards the result. A reload that fails keeps the last loaded
+change during a save discards the result, and a confirmation opened before a
+connection change or before the toolbar unmounted sends nothing. A reload that fails keeps the last loaded
 profiles and key list.
 
 **How keys are shown.** A key is labeled by its alias from the Manager Server's
