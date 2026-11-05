@@ -116,12 +116,13 @@ Run from the repository root:
 - ➕ the v8 quota client sends every call through `requestRaw`, so only `handleDemoRawRequest` serves the route (`handleDemoApiRequest` is never reached). ⚠️ 380 MB of 512 MB is 74%, under the 90% threshold, so the fixture uses ~470 MB capped (≈92%) to actually show the near-limit warning; `request_log`/`logging_to_file`/`limit_mb` follow the current demo config. `check:demo-isolation` needs a built bundle, so run `npm run build` first.
 
 ### Task 6: Verify acceptance criteria
-- [ ] verify all requirements from Overview are implemented (card, warning rules, 404 → "—", independent fetch, `/config` chip, label fix, demo)
-- [ ] verify edge cases: missing logs directory (zeros, `null` timestamps), `limit_mb` 0, span under one day, connection unavailable
-- [ ] run `npm run type-check`
-- [ ] run `npm run lint` - all issues must be fixed
-- [ ] run `npm run test:web`
-- [ ] run `npm run build` (tsc + vite) to confirm the bundle builds
+- [x] verify all requirements from Overview are implemented (card, warning rules, 404 → "—", independent fetch, `/config` chip, label fix, demo)
+- [x] verify edge cases: missing logs directory (zeros, `null` timestamps), `limit_mb` 0, span under one day, connection unavailable
+- [x] run `npm run type-check`
+- [x] run `npm run lint` - all issues must be fixed
+- ➕ lint: 0 errors; 7 pre-existing warnings in files this branch does not touch (AccountsPage.test.tsx, AccountHealthBadge.tsx, DashboardPage.tsx, UsageMaintenanceCapabilityViews.tsx) filed as `docs/backlog/web-lint-warnings.md`. Type-check, 309 files / 5132 tests and build pass; every Overview requirement and edge case has code and a test.
+- [x] run `npm run test:web`
+- [x] run `npm run build` (tsc + vite) to confirm the bundle builds
 
 ### Task 7: [Final] Update documentation
 - [ ] in `apps/docs/operations/configuration.md` and `apps/docs/en/operations/configuration.md`, where `logs-max-total-size-mb` or log settings are described, state that the limit is the total size of the CPA logs directory and that the current usage is shown on the Usage maintenance page; skip a file that does not describe log settings
