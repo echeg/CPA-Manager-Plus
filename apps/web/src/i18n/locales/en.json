@@ -5716,7 +5716,21 @@
       "collapse_label": "Collapse routing for {{label}}",
       "loading": "Loading routing profiles…",
       "empty": "The configuration has no client API keys. Add them on the Config page.",
-      "unsupported": "This CPA version has no per-key routing profiles."
+      "unsupported": "This CPA version has no per-key routing profiles.",
+      "profiles": {
+        "title": "Routing profiles",
+        "default": "Default",
+        "default_hint": "Every key without its own profile uses it. The sticky session TTL is global.",
+        "none": "No key has its own profile yet.",
+        "reset": "Reset to default",
+        "reset_label": "Reset {{label}} to the default profile",
+        "reset_confirm_title": "Reset to the default profile?",
+        "reset_confirm": "{{label}} will use the default profile again, and its own profile will be deleted.",
+        "add": "+ Profile for a key",
+        "add_label": "Create a routing profile for a key",
+        "new_badge": "New profile",
+        "back": "← Back to keys"
+      }
     },
     "client_keys": {
       "errors": {

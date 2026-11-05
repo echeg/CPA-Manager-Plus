@@ -331,17 +331,17 @@ Run from the repository root:
 - [x] run `npm run type-check` and `npm run test:web`; both must pass before Task 6
 
 ### Task 6: RoutingProfilesModal
-- [ ] create `features/quota/components/RoutingProfilesModal.tsx` and its SCSS module on `Modal`. It shows:
+- [x] create `features/quota/components/RoutingProfilesModal.tsx` and its SCSS module on `Modal`. It shows:
   - a "По умолчанию" row with `chainSummary(shared)` and Изменить, which opens the editor in variant `default` with `ttl` from the hook and saves through `saveShared`;
   - one row per key with its own profile: alias or mask, the summary, Изменить (variant `key`), and Сбросить на умолчание (`showConfirmation`, then `saveKeyProfile(key, null)`)
-- [ ] "+ Профиль для ключа": a `Select` of keys on the default, by alias or mask. It opens an editor with `initial = copyOfShared(shared)` and `isNew`. The control is hidden when every key has a profile
-- [ ] props:
+- [x] "+ Профиль для ключа": a `Select` of keys on the default, by alias or mask. It opens an editor with `initial = copyOfShared(shared)` and `isNew`. The control is hidden when every key has a profile
+- [x] props:
   - `focus?: string` opens that key's editor on open (`isNew` when its row has no profile);
   - `onBackToKeys?: () => void` renders "← К ключам".
   
   Only one editor is open at a time, keyed by the row's key hash. Edit is disabled while profiles reload unless that editor is already open (carry over `KeyProfilesModal.tsx:152-154`)
-- [ ] with `supported: false`, key rows are read-only and Сбросить and "+" are hidden. The По умолчанию row stays editable. Add this task's locale keys (title, По умолчанию, Сбросить and its confirmation, "+ Профиль для ключа", "← К ключам") to all four locales
-- [ ] write tests in `routingProfilesModal.lifecycle.test.tsx` with a mocked `useKeyProfiles` and a stubbed `showConfirmation`:
+- [x] with `supported: false`, key rows are read-only and Сбросить and "+" are hidden. The По умолчанию row stays editable. Add this task's locale keys (title, По умолчанию, Сбросить and its confirmation, "+ Профиль для ключа", "← К ключам") to all four locales
+- [x] write tests in `routingProfilesModal.lifecycle.test.tsx` with a mocked `useKeyProfiles` and a stubbed `showConfirmation`:
   - the default row calls `saveShared(profile, ttl)`;
   - a key row calls `saveKeyProfile(key, profile)`;
   - a reset after confirm calls `saveKeyProfile(key, null)`, and a cancelled confirm makes no call;
@@ -352,7 +352,8 @@ Run from the repository root:
   - `supported: false`, where only the default row can be edited;
   - Edit is disabled during a reload;
   - no raw key in the output, titles or aria labels
-- [ ] run `npm run type-check` and `npm run test:web`; both must pass before Task 7
+- ➕ the modal takes the `useKeyProfiles` result as its `keyProfiles` prop, as `KeyProfilesModal` did, so the tests pass a stand-in object for the hook. Locale keys live under `quota_management.key_profiles.profiles.*`. The focus is applied during render once the profiles are loaded (the React Compiler lint rejects setState in an effect), and a focus on a key on the default is ignored when `supported: false`
+- [x] run `npm run type-check` and `npm run test:web`; both must pass before Task 7
 
 ### Task 7: ClientKeysModal
 - [ ] create `features/quota/components/ClientKeysModal.tsx` and its SCSS module on `Modal`. Each row has:

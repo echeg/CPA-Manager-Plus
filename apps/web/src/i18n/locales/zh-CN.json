@@ -5711,7 +5711,21 @@
       "collapse_label": "收起 {{label}} 的路由",
       "loading": "正在加载路由配置…",
       "empty": "配置中没有客户端 API 密钥。请在配置页面中添加。",
-      "unsupported": "此 CPA 版本不支持按密钥的路由配置。"
+      "unsupported": "此 CPA 版本不支持按密钥的路由配置。",
+      "profiles": {
+        "title": "路由配置档",
+        "default": "默认",
+        "default_hint": "没有专属配置档的密钥都使用它。会话粘滞 TTL 为全局设置。",
+        "none": "目前还没有密钥拥有专属配置档。",
+        "reset": "重置为默认",
+        "reset_label": "将 {{label}} 重置为默认配置档",
+        "reset_confirm_title": "重置为默认配置档？",
+        "reset_confirm": "{{label}} 将重新使用默认配置档，其专属配置档将被删除。",
+        "add": "+ 为密钥创建配置档",
+        "add_label": "为密钥创建路由配置档",
+        "new_badge": "新配置档",
+        "back": "← 返回密钥"
+      }
     },
     "client_keys": {
       "errors": {
