@@ -15,6 +15,7 @@ import {
   mergeKeyRows,
   readRoutingProfiles,
   routingProfilesApi,
+  sharedProfilePatch,
   UnknownApiKeyError,
   type RoutingProfile,
 } from './routingProfiles';
@@ -431,5 +432,164 @@ describe('write errors', () => {
       'connection changed'
     );
     assertNoKeyInRequests();
+  });
+});
+
+describe('writing the shared profile', () => {
+  const sharedProfile = (): RoutingProfile => ({
+    sessionAffinity: true,
+    preferredAccounts: { claude: 'claude-1' },
+    selection: { primary: 'reserves', tiebreak: 'earliest-reset' },
+    claudeFallback: {
+      enabled: true,
+      mode: 'auto',
+      mappings: [{ from: 'claude-opus-*', to: 'gpt-6-astra' }],
+    },
+  });
+  const routeGets = (profiles: unknown, config: unknown = { routing: {} }) =>
+    mocks.get.mockImplementation(async (url: string) => {
+      if (url === '/routing/profiles') return profiles;
+      if (url === '/config') return config;
+      throw new Error(`unexpected GET ${url}`);
+    });
+
+  it('sends the complete profile as top-level routing fields', () => {
+    expect(sharedProfilePatch(sharedProfile(), undefined, options)).toEqual({
+      routing: {
+        'session-affinity': true,
+        'preferred-accounts': { claude: 'claude-1', codex: null },
+        selection: { primary: 'reserves', tiebreak: 'earliest-reset' },
+        'claude-fallback': {
+          enabled: true,
+          mode: 'auto',
+          mappings: [{ from: 'claude-opus-*', to: 'gpt-6-astra' }],
+        },
+      },
+    });
+  });
+
+  it('sends a cleared preferred account as null and a picker primary with a null tiebreak', () => {
+    const patch = sharedProfilePatch(
+      {
+        ...sharedProfile(),
+        preferredAccounts: { claude: '  ', codex: 'codex-1' },
+        selection: { primary: 'round-robin', tiebreak: 'priority' },
+      },
+      undefined,
+      options
+    ) as { routing: Record<string, unknown> };
+    expect(patch.routing['preferred-accounts']).toEqual({ claude: null, codex: 'codex-1' });
+    expect(patch.routing.selection).toEqual({ primary: 'round-robin', tiebreak: null });
+  });
+
+  it('includes the TTL only when it is passed', () => {
+    const without = sharedProfilePatch(sharedProfile(), undefined, options) as {
+      routing: Record<string, unknown>;
+    };
+    expect(without.routing).not.toHaveProperty('session-affinity-ttl');
+    const withTTL = sharedProfilePatch(sharedProfile(), ' 24h ', options) as {
+      routing: Record<string, unknown>;
+    };
+    expect(withTTL.routing['session-affinity-ttl']).toBe('24h');
+  });
+
+  it('patches the config once and verifies the stored shared profile', async () => {
+    mocks.patch.mockResolvedValue({});
+    routeGets(response());
+    const state = await routingProfilesApi.saveSharedProfile(sharedProfile(), undefined, options);
+    expect(state.shared).toEqual(sharedProfile());
+    expect(mocks.patch).toHaveBeenCalledTimes(1);
+    expect(mocks.patch).toHaveBeenCalledWith(
+      '/config',
+      sharedProfilePatch(sharedProfile(), undefined, options)
+    );
+    expect(mocks.get).toHaveBeenCalledWith('/routing/profiles');
+    expect(mocks.get).not.toHaveBeenCalledWith('/config');
+  });
+
+  it('verifies a sent TTL by reading the config back', async () => {
+    mocks.patch.mockResolvedValue({});
+    routeGets(response(), { routing: { 'session-affinity-ttl': '24h0m0s' } });
+    await expect(
+      routingProfilesApi.saveSharedProfile(sharedProfile(), '24h', options)
+    ).resolves.toBeTruthy();
+    expect(mocks.patch).toHaveBeenCalledWith('/config', {
+      routing: expect.objectContaining({ 'session-affinity-ttl': '24h' }),
+    });
+    expect(mocks.get).toHaveBeenCalledWith('/config');
+  });
+
+  it.each([
+    ['empty', ''],
+    ['zero', '0s'],
+    ['negative', '-1h'],
+    ['garbage', 'soon'],
+  ])('rejects an invalid TTL before any request: %s', async (_name, ttl) => {
+    await expect(
+      routingProfilesApi.saveSharedProfile(sharedProfile(), ttl, options)
+    ).rejects.toThrow('Invalid session affinity TTL');
+    expect(mocks.patch).not.toHaveBeenCalled();
+    expect(mocks.get).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid fallback mappings before any request', async () => {
+    await expect(
+      routingProfilesApi.saveSharedProfile(
+        { ...sharedProfile(), claudeFallback: { enabled: true, mode: 'auto', mappings: [] } },
+        undefined,
+        options
+      )
+    ).rejects.toThrow('Invalid Claude fallback mappings');
+    expect(mocks.patch).not.toHaveBeenCalled();
+  });
+
+  it('rejects a shared profile the backend did not retain', async () => {
+    mocks.patch.mockResolvedValue({});
+    routeGets({ ...response(), shared: { ...rawShared(), 'session-affinity': false } });
+    await expect(
+      routingProfilesApi.saveSharedProfile(sharedProfile(), undefined, options)
+    ).rejects.toThrow('CPA did not retain the routing profile');
+  });
+
+  it('rejects a TTL the backend did not retain', async () => {
+    mocks.patch.mockResolvedValue({});
+    routeGets(response(), { routing: { 'session-affinity-ttl': '1h' } });
+    await expect(
+      routingProfilesApi.saveSharedProfile(sharedProfile(), '24h', options)
+    ).rejects.toThrow('CPA did not retain the routing profile');
+    routeGets(response(), { routing: {} });
+    await expect(
+      routingProfilesApi.saveSharedProfile(sharedProfile(), '24h', options)
+    ).rejects.toThrow('did not retain');
+  });
+
+  it('fails the save when the read-back finds an older backend', async () => {
+    mocks.patch.mockResolvedValue({});
+    mocks.get.mockRejectedValue({ status: 404 });
+    await expect(
+      routingProfilesApi.saveSharedProfile(sharedProfile(), undefined, options)
+    ).rejects.toThrow('did not retain');
+  });
+
+  it('maps 422 invalid_config to InvalidRoutingConfigError with the backend message', async () => {
+    const message = 'routing.selection.primary: unsupported value';
+    mocks.patch.mockRejectedValue({ status: 422, apiCode: 'invalid_config', message });
+    const error = await routingProfilesApi
+      .saveSharedProfile(sharedProfile(), undefined, options)
+      .catch((e) => e);
+    expect(error).toBeInstanceOf(InvalidRoutingConfigError);
+    expect(error.message).toBe(message);
+    expect(mocks.get).not.toHaveBeenCalled();
+  });
+
+  it('aborts when the connection changes during the write', async () => {
+    mocks.patch.mockImplementation(async () => {
+      mocks.revision++;
+      return {};
+    });
+    await expect(
+      routingProfilesApi.saveSharedProfile(sharedProfile(), '24h', options)
+    ).rejects.toThrow('connection changed');
+    expect(mocks.get).not.toHaveBeenCalled();
   });
 });

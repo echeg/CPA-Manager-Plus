@@ -1,10 +1,13 @@
 import { normalizeProfile, profileDirty } from '@/features/quota/keyProfilesModel';
+import { invalidTTL } from '@/features/quota/routingModel';
+import { goDurationSeconds } from '@/features/quota/utils/goDuration';
 import { apiClient } from './client';
 import {
   readFallbackSettings,
   validFallbackSettings,
   type ClaudeFallbackSettings,
 } from './claudeFallback';
+import { configApi } from './config';
 import { guardConfigConnection } from './configValue';
 
 export interface SelectionSlots {
@@ -166,36 +169,58 @@ export function mergeKeyRows(apiKeys: string[], keys: KeyProfileEntry[]): KeyPro
 const noSelectionOptions: RoutingSelectionOptions = { narrowing: [], pickers: [] };
 
 /**
- * One complete key profile, so a PATCH merge leaves nothing from the old one:
- * cleared providers and an empty tiebreak are `null`, and mappings replace the list.
- * `null` deletes the profile and returns the key to the shared settings.
+ * One complete profile body in kebab-case, normalized against the selection
+ * options, so a PATCH merge leaves nothing from the old one: cleared providers
+ * and an empty or picker-blocked tiebreak are `null`, and mappings replace the list.
+ */
+export function profileBody(
+  profile: RoutingProfile,
+  selectionOptions: RoutingSelectionOptions = noSelectionOptions
+): Record<string, unknown> {
+  const normalized = normalizeProfile(profile, selectionOptions);
+  return {
+    'session-affinity': normalized.sessionAffinity,
+    'preferred-accounts': {
+      claude: normalized.preferredAccounts.claude ?? null,
+      codex: normalized.preferredAccounts.codex ?? null,
+    },
+    selection: {
+      primary: normalized.selection.primary,
+      tiebreak: normalized.selection.tiebreak ?? null,
+    },
+    'claude-fallback': {
+      enabled: normalized.claudeFallback.enabled,
+      mode: normalized.claudeFallback.mode,
+      mappings: normalized.claudeFallback.mappings,
+    },
+  };
+}
+
+/**
+ * One complete key profile. `null` deletes the profile and returns the key to
+ * the shared settings.
  */
 export function keyProfilePatch(
   key: string,
   profile: RoutingProfile | null,
   selectionOptions: RoutingSelectionOptions = noSelectionOptions
 ): Record<string, unknown> {
-  let body: Record<string, unknown> | null = null;
-  if (profile) {
-    const normalized = normalizeProfile(profile, selectionOptions);
-    body = {
-      'session-affinity': normalized.sessionAffinity,
-      'preferred-accounts': {
-        claude: normalized.preferredAccounts.claude ?? null,
-        codex: normalized.preferredAccounts.codex ?? null,
-      },
-      selection: {
-        primary: normalized.selection.primary,
-        tiebreak: normalized.selection.tiebreak ?? null,
-      },
-      'claude-fallback': {
-        enabled: normalized.claudeFallback.enabled,
-        mode: normalized.claudeFallback.mode,
-        mappings: normalized.claudeFallback.mappings,
-      },
-    };
-  }
+  const body = profile ? profileBody(profile, selectionOptions) : null;
   return { routing: { 'key-profiles': { [key]: body } } };
+}
+
+/**
+ * The shared (default) profile as top-level `routing.*` fields. The global sticky
+ * TTL is sent only when passed, so an unchanged TTL stays out of the PATCH.
+ */
+export function sharedProfilePatch(
+  profile: RoutingProfile,
+  ttl: string | undefined,
+  selectionOptions: RoutingSelectionOptions = noSelectionOptions
+): Record<string, unknown> {
+  const routing = profileBody(profile, selectionOptions);
+  if (ttl !== undefined) routing['session-affinity-ttl'] = ttl.trim();
+  return { routing };
 }
 
 const sameProfile = (
@@ -248,6 +273,43 @@ export const routingProfilesApi = {
     const stored = saved.keys.find((entry) => entry.key === key)?.profile ?? null;
     if (saved.unsupportedBackend || !sameProfile(stored, profile, saved.selectionOptions))
       throw new Error('CPA did not retain the routing profile');
+    return saved;
+  },
+  /**
+   * Write the shared profile, and the global TTL when passed, in one PATCH, then
+   * verify both by reading them back. The toolbar no longer writes these fields on
+   * a backend that serves `/routing/profiles`, so this is their single writer.
+   */
+  async saveSharedProfile(
+    profile: RoutingProfile,
+    ttl: string | undefined,
+    selectionOptions: RoutingSelectionOptions = noSelectionOptions
+  ): Promise<RoutingProfilesState> {
+    const assertCurrent = guardConfigConnection();
+    if (!validFallbackSettings(profile.claudeFallback))
+      throw new Error('Invalid Claude fallback mappings');
+    if (ttl !== undefined && invalidTTL(ttl)) throw new Error('Invalid session affinity TTL');
+    try {
+      await apiClient.patch('/config', sharedProfilePatch(profile, ttl, selectionOptions));
+    } catch (error) {
+      assertCurrent();
+      throw translateWriteError(error, '');
+    }
+    assertCurrent();
+    const saved = await routingProfilesApi.get();
+    assertCurrent();
+    if (saved.unsupportedBackend || !sameProfile(saved.shared, profile, saved.selectionOptions))
+      throw new Error('CPA did not retain the routing profile');
+    if (ttl !== undefined) {
+      const config = await configApi.getConfig();
+      assertCurrent();
+      const stored = config.routingSessionAffinityTTL;
+      if (
+        stored === undefined ||
+        goDurationSeconds(stored.trim()) !== goDurationSeconds(ttl.trim())
+      )
+        throw new Error('CPA did not retain the routing profile');
+    }
     return saved;
   },
 };

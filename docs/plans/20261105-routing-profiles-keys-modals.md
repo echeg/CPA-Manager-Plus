@@ -257,8 +257,8 @@ Run from the repository root:
 - [x] run `npm run type-check` and `npm run test:web`; both must pass before Task 3
 
 ### Task 3: Shared profile writer
-- [ ] extract `profileBody(normalized, selectionOptions)` from `keyProfilePatch` (`routingProfiles.ts:181-196`). It produces kebab-case `selection` with `tiebreak: null` for a picker primary, `session-affinity`, `preferred-accounts` with `null` for a cleared provider, and the complete `claude-fallback`. Make `keyProfilePatch` use it
-- [ ] add `sharedProfilePatch(profile, ttl | undefined, selectionOptions)`, which returns `{routing: {...profileBody, 'session-affinity-ttl'?: ttl}}` with the TTL only when it is passed. Add `routingProfilesApi.saveSharedProfile(profile, ttl | undefined, selectionOptions)`:
+- [x] extract `profileBody(normalized, selectionOptions)` from `keyProfilePatch` (`routingProfiles.ts:181-196`). It produces kebab-case `selection` with `tiebreak: null` for a picker primary, `session-affinity`, `preferred-accounts` with `null` for a cleared provider, and the complete `claude-fallback`. Make `keyProfilePatch` use it
+- [x] add `sharedProfilePatch(profile, ttl | undefined, selectionOptions)`, which returns `{routing: {...profileBody, 'session-affinity-ttl'?: ttl}}` with the TTL only when it is passed. Add `routingProfilesApi.saveSharedProfile(profile, ttl | undefined, selectionOptions)`:
   - capture the guard first;
   - reject invalid fallback mappings (`validFallbackSettings`);
   - reject `invalidTTL(ttl)` before any request;
@@ -266,7 +266,7 @@ Run from the repository root:
   - read back `/routing/profiles` and compare `shared` through `normalizeProfile`, and read back config for the TTL when it was sent;
   - throw "CPA did not retain the routing profile" on a mismatch;
   - map errors through `translateWriteError`
-- [ ] write tests:
+- [x] write tests:
   - the full PATCH body;
   - a cleared preferred account sent as `null`;
   - a picker primary sending `tiebreak: null`;
@@ -276,7 +276,7 @@ Run from the repository root:
   - a mismatch on the profile, and a mismatch on the TTL;
   - a 422 with the backend message;
   - existing `keyProfilePatch` tests unchanged
-- [ ] run `npm run type-check` and `npm run test:web`; both must pass before Task 4
+- [x] run `npm run type-check` and `npm run test:web`; both must pass before Task 4
 
 ### Task 4: KeyProfileEditor as a pure profile editor
 - [ ] change the `KeyProfileEditor.tsx` props to `{initial: RoutingProfile, isNew: boolean, variant: 'default' | 'key', ttl: string, files, showEmails, selectionOptions, models, saving, readOnly, onSave(profile, ttl?), onCancel}`:
