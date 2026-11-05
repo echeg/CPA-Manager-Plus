@@ -3,6 +3,7 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import i18n from '@/i18n';
 import { Button } from '@/components/ui/Button';
+import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { apiClient } from '@/features/personal-quota-support/services/api/client';
 import {
   claudeFallbackApi,
@@ -21,6 +22,7 @@ import { KeyProfileEditor } from './components/KeyProfileEditor';
 import { QuotaSettingsBar } from './components/QuotaSettingsToolbar';
 import { RoutingProfilesModal } from './components/RoutingProfilesModal';
 import { Select } from './components/Select';
+import { useClaudeFallback } from './hooks/useClaudeFallback';
 import { useKeyProfiles, type KeyProfilesState } from './hooks/useKeyProfiles';
 import { useSubscriptionRouting } from './hooks/useSubscriptionRouting';
 import { buildKeyRows } from './keyProfilesModel';
@@ -31,6 +33,10 @@ vi.mock('@/components/ui/Modal', () => ({
 }));
 vi.mock('./hooks/useKeyProfiles', () => ({ useKeyProfiles: vi.fn() }));
 vi.mock('./hooks/useSubscriptionRouting', () => ({ useSubscriptionRouting: vi.fn() }));
+vi.mock('./hooks/useClaudeFallback', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./hooks/useClaudeFallback')>();
+  return { useClaudeFallback: vi.fn(actual.useClaudeFallback) };
+});
 vi.mock('./hooks/useCodexFastMode', () => ({
   useCodexFastMode: () => ({ enabled: false, saving: false, error: '', toggle: vi.fn() }),
 }));
@@ -159,7 +165,6 @@ beforeEach(() => {
         invalidTTL: false,
         blocked: false,
         options: [],
-        slots: null,
         change: vi.fn(),
         save: vi.fn(),
         reload: vi.fn(),
@@ -239,6 +244,8 @@ describe('quota settings bar on a backend with /routing/profiles', () => {
     expect(buttonWith('data-routing-save')).toBeUndefined();
     expect(root().findAllByType(ClaudeFallbackControl)).toHaveLength(0);
     expect(root().findAllByType(Select)).toHaveLength(0);
+    // The fallback hook only supplies the editors' models; nothing reloads after its saves.
+    expect(vi.mocked(useClaudeFallback).mock.calls.every((args) => args.length === 1)).toBe(true);
     expect(root().findAll((node) => node.props['data-last-selected'] === 'codex')).not.toHaveLength(
       0
     );
@@ -387,18 +394,24 @@ describe('quota settings bar on a backend without /routing/profiles', () => {
     expect(root().findAllByType(ClaudeFallbackControl)).toHaveLength(1);
     expect(root().findAllByType(RoutingProfilesModal)).toHaveLength(0);
     expect(root().findAllByType(ClientKeysModal)).toHaveLength(0);
-    expect(useSubscriptionRouting).toHaveBeenLastCalledWith(
-      false,
-      expect.objectContaining({ supported: false })
-    );
+    expect(useSubscriptionRouting).toHaveBeenLastCalledWith(false, { failed: false });
+  });
+
+  test('a legacy fallback toggle saves without reloading the key profiles', async () => {
+    keyProfiles = makeKeyProfiles(unsupportedRoutingProfiles());
+    await mount();
+    const toggle = root()
+      .findAll((node) => node.props['data-switch'] === 'claude-fallback')[0]
+      .findByType(ToggleSwitch);
+    await act(async () => toggle.props.onChange(true));
+    expect(claudeFallbackApi.save).toHaveBeenCalledTimes(1);
+    expect(keyProfiles.reload).not.toHaveBeenCalled();
+    expect(vi.mocked(useClaudeFallback).mock.calls.every((args) => args.length === 1)).toBe(true);
   });
 
   test('a failed first load locks the legacy strategy select', async () => {
     keyProfiles = makeKeyProfiles(null, { error: 'offline' });
     await mount();
-    expect(useSubscriptionRouting).toHaveBeenLastCalledWith(
-      false,
-      expect.objectContaining({ supported: false, failed: true })
-    );
+    expect(useSubscriptionRouting).toHaveBeenLastCalledWith(false, { failed: true });
   });
 });

@@ -5589,7 +5589,6 @@
       "tiebreak": "相同時",
       "tiebreak_none": "無",
       "tiebreak_inactive": "未使用：主要策略會直接選擇一個帳戶。",
-      "selection_hint": "沒有獨立設定的金鑰使用的共用池策略。先執行主要策略，相同時由第二個策略決定。主要策略為輪詢、加權輪詢或填充優先時，會直接選擇一個帳戶。",
       "slots": {
         "priority": "優先順序",
         "reserves": "儲備",

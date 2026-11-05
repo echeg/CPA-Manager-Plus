@@ -5594,7 +5594,6 @@
       "tiebreak": "On a tie",
       "tiebreak_none": "None",
       "tiebreak_inactive": "Not used: the primary slot picks one account.",
-      "selection_hint": "Shared pool strategy for keys without their own profile. The primary slot runs first; on a tie, the second slot decides. A picker as primary (round-robin, weighted, fill-first) chooses one account by itself.",
       "slots": {
         "priority": "Priority",
         "reserves": "Reserves",

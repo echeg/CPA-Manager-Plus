@@ -413,15 +413,16 @@ Run from the repository root:
 - [x] run `npm run type-check` and `npm run test:web`; both must pass before Task 9
 
 ### Task 9: Single writer for the shared profile
-- [ ] on a capable backend, nothing in the toolbar writes the shared profile. `useSubscriptionRouting` serves only the 404 legacy path:
+- [x] on a capable backend, nothing in the toolbar writes the shared profile. `useSubscriptionRouting` serves only the 404 legacy path:
   - remove its slot plumbing (`selection`, `selectionOptions`, `slots` branches, `useSubscriptionRouting.ts:22-127`) and the `profiles` parameter;
   - `RoutingProfilesSource` shrinks to what the legacy path needs (`failed` for `strategyLocked`)
-- [ ] `useClaudeFallback` stays mounted only to supply `models` to the editors. Remove its `onSaved` wiring (`QuotaSettingsToolbar.tsx:345`), and remove `ClaudeFallbackControl`'s `fallback` prop if it becomes unused
-- [ ] update tests:
+- [x] `useClaudeFallback` stays mounted only to supply `models` to the editors. Remove its `onSaved` wiring (`QuotaSettingsToolbar.tsx:345`), and remove `ClaudeFallbackControl`'s `fallback` prop if it becomes unused
+- [x] update tests:
   - `quotaSettingsHooks.test.ts`, `settingsHooks.lifecycle.test.tsx` and `claudeFallback.lifecycle.test.tsx` for the removed branches;
   - assert that on a capable backend the bar renders no `[data-routing-save]` and no `ClaudeFallbackControl`, and that `useClaudeFallback` gets no `onSaved`;
   - the legacy 404 save path still sends `routing.strategy`
-- [ ] run `npm run type-check` and `npm run test:web`; both must pass before Task 10
+- ➕ the legacy `SubscriptionRoutingSettings.selection` and the selection branch of `subscriptionRoutingPatch` are removed too, so the legacy save can only send `routing.strategy`. `RoutingProfilesSource` is now `{failed?}`. `useClaudeFallback` loses its `onSaved` parameter (the bar was its only caller). `ClaudeFallbackControl` keeps its `fallback` prop, because the legacy 404 toolbar still renders it. The toolbar-only `quota_management.routing.selection_hint` locale key is removed from all four locales
+- [x] run `npm run type-check` and `npm run test:web`; both must pass before Task 10
 
 ### Task 10: Locale cleanup and parity
 - [ ] remove the keys that are no longer used from all four locales (`key_profiles.button` and `button_hint` with `{{count}}/{{total}}`, `editor.mode*`, `editor.shared_hint`, `badge_shared`, if unused). Grep `apps/web/src` to confirm that none are still referenced

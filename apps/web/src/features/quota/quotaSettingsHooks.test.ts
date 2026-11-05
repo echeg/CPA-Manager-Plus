@@ -67,34 +67,19 @@ describe('routing form state', () => {
   });
 });
 
-describe('shared selection patch', () => {
-  const baseline = {
-    ...readSubscriptionRouting({ routingStrategy: 'fill-first', routingSessionAffinityTTL: '1h' }),
-    selection: { primary: 'reserves', tiebreak: 'earliest-reset' },
-  };
-
-  test('a selection change makes the form dirty and sends the whole selection', () => {
-    const edited = { ...baseline, selection: { primary: 'priority', tiebreak: 'earliest-reset' } };
-    expect(routingFormState(edited, baseline).dirty).toBe(true);
-    expect(subscriptionRoutingPatch(baseline, edited)).toEqual({
-      selection: { primary: 'priority', tiebreak: 'earliest-reset' },
-    });
-  });
-
-  test('sends an empty tiebreak as null and leaves the legacy strategy untouched', () => {
-    const edited = { ...baseline, strategy: 'round-robin', selection: { primary: 'fill-first' } };
-    expect(subscriptionRoutingPatch(baseline, edited)).toEqual({
-      selection: { primary: 'fill-first', tiebreak: null },
-    });
-  });
-
-  test('an unchanged selection is clean, and no selection keeps the legacy strategy', () => {
-    const same = { ...baseline, selection: { primary: ' reserves ', tiebreak: 'earliest-reset' } };
-    expect(routingFormState(same, baseline).dirty).toBe(false);
+describe('legacy routing patch', () => {
+  test('sends routing.strategy, and no selection, for a strategy change', () => {
     const legacy = readSubscriptionRouting({ routingStrategy: 'fill-first' });
-    expect(subscriptionRoutingPatch(legacy, { ...legacy, strategy: 'round-robin' })).toEqual({
-      strategy: 'round-robin',
-    });
+    const edited = { ...legacy, strategy: 'round-robin' };
+    expect(routingFormState(edited, legacy).dirty).toBe(true);
+    expect(subscriptionRoutingPatch(legacy, edited)).toEqual({ strategy: 'round-robin' });
+  });
+
+  test('ignores a stray selection, which only the Profiles modal writes', () => {
+    const legacy = readSubscriptionRouting({ routingStrategy: 'fill-first' });
+    const stray = { ...legacy, selection: { primary: 'priority' } };
+    expect(routingFormState(stray, legacy).dirty).toBe(false);
+    expect(subscriptionRoutingPatch(legacy, stray)).toEqual({});
   });
 });
 

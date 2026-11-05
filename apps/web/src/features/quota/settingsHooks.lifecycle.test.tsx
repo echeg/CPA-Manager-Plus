@@ -216,20 +216,8 @@ describe('personal quota settings session lifecycle', () => {
     expect(read).toHaveBeenCalledTimes(1);
   });
 
-  describe('shared selection slots', () => {
-    const selectionOptions = {
-      narrowing: ['priority', 'reserves', 'earliest-reset', 'most-remaining'],
-      pickers: ['round-robin', 'weighted-round-robin', 'fill-first'],
-    };
+  describe('legacy routing on a backend without /routing/profiles', () => {
     const config: Config = { routingStrategy: 'fill-first', routingSessionAffinityTTL: '1h' };
-    const source = (patch: Partial<RoutingProfilesSource> = {}): RoutingProfilesSource => ({
-      supported: true,
-      selection: { primary: 'reserves', tiebreak: 'earliest-reset' },
-      selectionOptions,
-      loading: false,
-      reload: vi.fn(),
-      ...patch,
-    });
 
     let state!: SubscriptionRoutingState;
     const onState = (next: SubscriptionRoutingState) => {
@@ -253,94 +241,10 @@ describe('personal quota settings session lifecycle', () => {
       });
     }
 
-    test('joins the selection only after the config and the profiles have loaded', async () => {
-      const response = deferred<Config>();
-      useConfigStore.setState({ fetchConfig: vi.fn(() => response.promise) });
-      await mountWith(source({ loading: true, selection: undefined }));
-      expect(state.values).toBeNull();
-      expect(state.blocked).toBe(true);
-
-      await act(async () => {
-        response.resolve(config);
-      });
-      expect(state.values?.selection).toBeUndefined();
-      expect(state.slots).toBeNull();
-      expect(state.blocked).toBe(true);
-
-      await rerender(source());
-      expect(state.values?.selection).toEqual({ primary: 'reserves', tiebreak: 'earliest-reset' });
-      expect(state.slots?.tiebreakDisabled).toBe(false);
-      expect(state.blocked).toBe(false);
-      expect(state.dirty).toBe(false);
-    });
-
-    test('a slot change marks the form dirty and a save sends the whole selection', async () => {
-      const fetchConfig = vi.fn(async () => config);
-      const patch = vi.spyOn(apiClient, 'patch').mockResolvedValue(undefined);
-      useConfigStore.setState({ fetchConfig, clearCache: vi.fn() });
-      const profiles = source();
-      await mountWith(profiles);
-      await act(async () => {
-        state.change({ selection: { primary: 'priority', tiebreak: 'earliest-reset' } });
-      });
-      expect(state.dirty).toBe(true);
-      expect(patch).not.toHaveBeenCalled();
-
-      await act(async () => {
-        await state.save();
-      });
-      expect(patch).toHaveBeenCalledExactlyOnceWith('/config', {
-        routing: { selection: { primary: 'priority', tiebreak: 'earliest-reset' } },
-      });
-      expect(profiles.reload).toHaveBeenCalledTimes(1);
-      expect(fetchConfig).toHaveBeenLastCalledWith(true);
-      expect(state.saved).toBe(true);
-      // The draft stays until the reloaded profiles report the stored selection.
-      expect(state.values?.selection?.primary).toBe('priority');
-
-      await rerender(source({ loading: true }));
-      expect(state.blocked).toBe(true);
-      await rerender(source({ selection: { primary: 'priority', tiebreak: 'earliest-reset' } }));
-      expect(state.values?.selection).toEqual({ primary: 'priority', tiebreak: 'earliest-reset' });
-      expect(state.dirty).toBe(false);
-    });
-
-    test('a picker primary disables the tiebreak and sends it as null', async () => {
-      const patch = vi.spyOn(apiClient, 'patch').mockResolvedValue(undefined);
-      useConfigStore.setState({ fetchConfig: vi.fn(async () => config), clearCache: vi.fn() });
-      await mountWith(source());
-      await act(async () => {
-        state.change({
-          selection: { primary: 'weighted-round-robin', tiebreak: 'earliest-reset' },
-        });
-      });
-      expect(state.values?.selection).toEqual({ primary: 'weighted-round-robin' });
-      expect(state.slots?.tiebreakDisabled).toBe(true);
-      await act(async () => {
-        await state.save();
-      });
-      expect(patch).toHaveBeenCalledExactlyOnceWith('/config', {
-        routing: { selection: { primary: 'weighted-round-robin', tiebreak: null } },
-      });
-    });
-
-    test('a profiles reload with the same selection keeps an unsaved slot edit', async () => {
-      useConfigStore.setState({ fetchConfig: vi.fn(async () => config) });
-      await mountWith(source());
-      await act(async () => {
-        state.change({ selection: { primary: 'most-remaining' } });
-      });
-      await rerender(source({ loading: true }));
-      await rerender(source());
-      expect(state.values?.selection).toEqual({ primary: 'most-remaining' });
-      expect(state.dirty).toBe(true);
-    });
-
     test('a failed profiles load locks the legacy strategy but not the other settings', async () => {
       const patch = vi.spyOn(apiClient, 'patch').mockResolvedValue(undefined);
       useConfigStore.setState({ fetchConfig: vi.fn(async () => config), clearCache: vi.fn() });
-      await mountWith({ supported: false, failed: true, loading: false, reload: vi.fn() });
-      expect(state.slots).toBeNull();
+      await mountWith({ failed: true });
       expect(state.strategyLocked).toBe(true);
       await act(async () => {
         state.change({ strategy: 'round-robin', sessionAffinity: true });
@@ -353,21 +257,20 @@ describe('personal quota settings session lifecycle', () => {
         routing: { 'session-affinity': true },
       });
 
-      // Once the profiles load, the slots replace the strategy and the lock lifts.
-      await rerender(source());
-      expect(state.slots).not.toBeNull();
+      // Once the profiles load, the lock lifts.
+      await rerender({ failed: false });
       expect(state.strategyLocked).toBe(false);
     });
 
     test.each([
       ['no profiles source', undefined],
-      ['an older backend', { supported: false, loading: false, reload: () => {} }],
-    ])('keeps writing the legacy strategy with %s', async (_name, profiles) => {
+      ['a loaded 404 backend', { failed: false }],
+    ])('writes routing.strategy and never a selection with %s', async (_name, profiles) => {
       const patch = vi.spyOn(apiClient, 'patch').mockResolvedValue(undefined);
       useConfigStore.setState({ fetchConfig: vi.fn(async () => config), clearCache: vi.fn() });
       await mountWith(profiles);
-      expect(state.slots).toBeNull();
-      expect(state.values?.selection).toBeUndefined();
+      expect(state).not.toHaveProperty('slots');
+      expect(state.values).not.toHaveProperty('selection');
       await act(async () => {
         state.change({ strategy: 'round-robin' });
       });

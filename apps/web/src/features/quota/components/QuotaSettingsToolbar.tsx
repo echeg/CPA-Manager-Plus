@@ -40,7 +40,6 @@ type RoutingProps = Pick<
   | 'invalidTTL'
   | 'blocked'
   | 'options'
-  | 'slots'
   | 'strategyLocked'
   | 'change'
   | 'save'
@@ -143,8 +142,6 @@ export function QuotaSettingsToolbar({
   const { t } = useTranslation();
   const id = useId();
   const { values, blocked, invalidTTL } = routing;
-  const slots = routing.slots ?? null;
-  const selection = values?.selection;
   const displayName = (file: AuthFileItem) => {
     const name = getQuotaDisplayName(file);
     return showEmails ? name : maskQuotaName(name);
@@ -237,59 +234,20 @@ export function QuotaSettingsToolbar({
       data-quota-settings
       aria-label={t('quota_management.routing.title')}
     >
-      {slots ? (
-        <div className={styles.group} title={t('quota_management.routing.selection_hint')}>
-          <span className={styles.caption} id={`${id}-primary`}>
-            {t('quota_management.routing.primary')}
-          </span>
-          <Select
-            size="sm"
-            className={styles.slot}
-            value={selection?.primary ?? ''}
-            options={slots.primary}
-            ariaLabelledBy={`${id}-primary`}
-            disabled={blocked}
-            onChange={(primary) => routing.change({ selection: { ...selection, primary } })}
-          />
-          <span className={styles.caption} id={`${id}-tiebreak`}>
-            {t('quota_management.routing.tiebreak')}
-          </span>
-          <Select
-            size="sm"
-            className={styles.slot}
-            value={slots.tiebreakDisabled ? '' : (selection?.tiebreak ?? '')}
-            options={slots.tiebreak}
-            ariaLabelledBy={`${id}-tiebreak`}
-            ariaDescribedBy={slots.tiebreakDisabled ? `${id}-tiebreak-hint` : undefined}
-            disabled={blocked || slots.tiebreakDisabled}
-            onChange={(tiebreak) =>
-              routing.change({
-                selection: { primary: selection?.primary ?? '', tiebreak: tiebreak || undefined },
-              })
-            }
-          />
-          {slots.tiebreakDisabled && (
-            <span id={`${id}-tiebreak-hint`} className={styles.slotHint}>
-              {t('quota_management.routing.tiebreak_inactive')}
-            </span>
-          )}
-        </div>
-      ) : (
-        <div className={styles.group} title={t('quota_management.routing.description')}>
-          <span className={styles.caption} id={`${id}-strategy`}>
-            {t('quota_management.toolbar.switching')}
-          </span>
-          <Select
-            size="sm"
-            className={styles.strategy}
-            value={values?.strategy ?? 'round-robin'}
-            options={routing.options}
-            ariaLabelledBy={`${id}-strategy`}
-            disabled={blocked || !!routing.strategyLocked}
-            onChange={(strategy) => routing.change({ strategy })}
-          />
-        </div>
-      )}
+      <div className={styles.group} title={t('quota_management.routing.description')}>
+        <span className={styles.caption} id={`${id}-strategy`}>
+          {t('quota_management.toolbar.switching')}
+        </span>
+        <Select
+          size="sm"
+          className={styles.strategy}
+          value={values?.strategy ?? 'round-robin'}
+          options={routing.options}
+          ariaLabelledBy={`${id}-strategy`}
+          disabled={blocked || !!routing.strategyLocked}
+          onChange={(strategy) => routing.change({ strategy })}
+        />
+      </div>
 
       <div className={styles.group} title={t('quota_management.routing.ttl_hint')}>
         <span
@@ -424,16 +382,13 @@ export function QuotaSettingsBar({
 }) {
   const keyProfiles = useKeyProfiles(disabled);
   const profilesState = keyProfiles.state;
+  // The legacy routing form; on a backend with /routing/profiles the Profiles modal
+  // is the only writer of the shared profile, so this form is not rendered there.
   const routing = useSubscriptionRouting(disabled, {
-    supported: profilesState ? !profilesState.unsupportedBackend : false,
-    selection: profilesState?.shared.selection,
-    selectionOptions: profilesState?.selectionOptions,
-    loading: keyProfiles.loading,
     failed: !profilesState && !keyProfiles.loading && !!keyProfiles.error,
-    reload: keyProfiles.reload,
   });
-  // A fallback change rewrites the shared profile, so the key summaries reload.
-  const fallback = useClaudeFallback(disabled, keyProfiles.reload);
+  // The fallback control of the legacy toolbar, and the model lists of the editors.
+  const fallback = useClaudeFallback(disabled);
   const fastMode = useCodexFastMode(disabled);
   const { activity, activityState } = useSubscriptionActivity(disabled);
   const [nav, setNav] = useState<Navigation>(CLOSED);

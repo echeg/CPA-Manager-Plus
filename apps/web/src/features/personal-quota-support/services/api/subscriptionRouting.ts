@@ -1,17 +1,11 @@
 import type { Config } from '@/features/personal-quota-support/types';
 import { apiClient } from './client';
-import type { SelectionSlots } from './routingProfiles';
 
 export interface SubscriptionRoutingSettings {
   strategy: string;
   sessionAffinity: boolean;
   sessionAffinityTTL: string;
   preferredAccounts: Record<string, string>;
-  /**
-   * The shared `routing.selection`, present only when the backend serves
-   * `/routing/profiles`; it then replaces the legacy `strategy` in the form.
-   */
-  selection?: SelectionSlots;
 }
 
 export function readSubscriptionRouting(config: Config): SubscriptionRoutingSettings {
@@ -23,26 +17,13 @@ export function readSubscriptionRouting(config: Config): SubscriptionRoutingSett
   };
 }
 
-/** The slots as PATCH writes them: trimmed, with an empty tiebreak as `null`. */
-const selectionBody = (selection: SelectionSlots) => ({
-  primary: selection.primary.trim(),
-  tiebreak: selection.tiebreak?.trim() || null,
-});
-
 /** Patch only edited fields so independent config edits are preserved. */
 export function subscriptionRoutingPatch(
   before: SubscriptionRoutingSettings,
   after: SubscriptionRoutingSettings
 ): Record<string, unknown> {
   const routing: Record<string, unknown> = {};
-  if (after.selection) {
-    // PATCH merges objects, so the selection is always sent whole. With a
-    // selection in the form, the legacy strategy is left as it is.
-    const next = selectionBody(after.selection);
-    const previous = before.selection ? selectionBody(before.selection) : null;
-    if (next.primary !== previous?.primary || next.tiebreak !== previous?.tiebreak)
-      routing.selection = next;
-  } else if (before.strategy !== after.strategy) routing.strategy = after.strategy;
+  if (before.strategy !== after.strategy) routing.strategy = after.strategy;
   if (before.sessionAffinity !== after.sessionAffinity)
     routing['session-affinity'] = after.sessionAffinity;
   if (before.sessionAffinityTTL !== after.sessionAffinityTTL.trim()) {

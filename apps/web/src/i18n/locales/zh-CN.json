@@ -5589,7 +5589,6 @@
       "tiebreak": "相同时",
       "tiebreak_none": "无",
       "tiebreak_inactive": "未使用：主要策略会直接选择一个账户。",
-      "selection_hint": "没有独立配置的密钥使用的共享池策略。先执行主要策略，相同时由第二个策略决定。主要策略为轮询、加权轮询或填充优先时，会直接选择一个账户。",
       "slots": {
         "priority": "优先级",
         "reserves": "储备",

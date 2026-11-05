@@ -13,10 +13,10 @@ import { useConfigStore } from '@/features/personal-quota-support/stores';
 import { errorText } from '../routingModel';
 
 /**
- * Loads and saves the shared Claude -> Codex fallback. `onSaved` runs after a save
- * that the backend retained, so dependent views (the key profiles) can reload.
+ * Loads and saves the shared Claude -> Codex fallback. The legacy toolbar edits it;
+ * on a backend with `/routing/profiles` only its model lists feed the profile editors.
  */
-export function useClaudeFallback(disabled: boolean, onSaved?: () => void) {
+export function useClaudeFallback(disabled: boolean) {
   const { t } = useTranslation();
   const revision = useSyncExternalStore(
     onQuotaConnectionChange,
@@ -69,7 +69,6 @@ export function useClaudeFallback(disabled: boolean, onSaved?: () => void) {
       if (!isCurrent()) return false;
       useConfigStore.getState().clearCache();
       setState(saved);
-      onSaved?.();
       return true;
     } catch (err) {
       if (isCurrent()) {
