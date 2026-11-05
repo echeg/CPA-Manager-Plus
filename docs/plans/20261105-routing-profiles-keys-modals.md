@@ -223,8 +223,8 @@ Run from the repository root:
 - [x] run `npm run type-check` and `npm run test:web`; both must pass before Task 2
 
 ### Task 2: Client key service on the v8 config API
-- [ ] create `features/personal-quota-support/services/api/clientKeys.ts`. It uses the quota `apiClient` only, captures `guardConfigConnection()` before the read and checks it before every write. Reading: `GET /config`, then `clientApiKeys(raw)` with a record of whether the list came from `access.api-keys` or the legacy top-level `api-keys`
-- [ ] `addClientKey(key, alias?, aliasContext?)`:
+- [x] create `features/personal-quota-support/services/api/clientKeys.ts`. It uses the quota `apiClient` only, captures `guardConfigConnection()` before the read and checks it before every write. Reading: `GET /config`, then `clientApiKeys(raw)` with a record of whether the list came from `access.api-keys` or the legacy top-level `api-keys`
+- [x] `addClientKey(key, alias?, aliasContext?)`:
   1. trim the key and reject one that fails `isValidApiKeyCharset` (`InvalidClientKeyError`);
   2. read a fresh list and reject a trimmed duplicate (`DuplicateClientKeyError`);
   3. when an alias is given, validate it before any write: not empty after trim, at most 120 characters, and not equal (case-insensitive) to an alias of another active key (`InvalidAliasError` / `DuplicateAliasError`);
@@ -232,7 +232,7 @@ Run from the repository root:
   5. write the alias with `usageServiceApi.saveApiKeyAliases(base, [{apiKeyHash: sha256Hex(key).toLowerCase(), alias}], managementKey, activeHashes)`.
   
   It returns `{aliasError?: Error, aliases?: ApiKeyAlias[]}` once the key is written. An alias failure, including an orphan conflict, is returned in `aliasError` and never rolls back the key. `aliasContext = {serviceBase, managementKey, aliases, aliasStateKnown}`
-- [ ] `removeClientKey(key, aliasContext?)`:
+- [x] `removeClientKey(key, aliasContext?)`:
   - read a fresh list;
   - throw `UnknownApiKeyError` when no trimmed entry matches, and `LastClientKeyError` when it is the only key;
   - throw `AliasStateUnknownError` when the panel is manager-hosted and the alias state is unknown (`ApiKeysCardEditor.tsx:390-397`);
@@ -240,8 +240,8 @@ Run from the repository root:
   - `deleteApiKeyAlias(base, hash, managementKey)` when an alias exists; a failure is returned as `aliasError`.
   
   Never use `apiKeysApi`, `DELETE`, or any URL that carries the key
-- [ ] write errors go through the same scrubbing as `translateWriteError`: the raw key becomes `***` in the message. A 400 `unknown_api_key` maps to `UnknownApiKeyError`, and a 422 to `InvalidRoutingConfigError`
-- [ ] write tests in `clientKeys.test.ts` with `vi.mock` on the quota client and `usageServiceApi`:
+- [x] write errors go through the same scrubbing as `translateWriteError`: the raw key becomes `***` in the message. A 400 `unknown_api_key` maps to `UnknownApiKeyError`, and a 422 to `InvalidRoutingConfigError`
+- [x] write tests in `clientKeys.test.ts` with `vi.mock` on the quota client and `usageServiceApi`:
   - the PATCH body after an add and after a remove, for both the `access.api-keys` path and the legacy path;
   - an invalid charset;
   - a duplicate key, including an untrimmed stored entry;
@@ -254,7 +254,7 @@ Run from the repository root:
   - an error message containing the key comes back masked;
   - a connection change between read and write aborts the write;
   - no request URL contains the raw key
-- [ ] run `npm run type-check` and `npm run test:web`; both must pass before Task 3
+- [x] run `npm run type-check` and `npm run test:web`; both must pass before Task 3
 
 ### Task 3: Shared profile writer
 - [ ] extract `profileBody(normalized, selectionOptions)` from `keyProfilePatch` (`routingProfiles.ts:181-196`). It produces kebab-case `selection` with `tiebreak: null` for a picker primary, `session-affinity`, `preferred-accounts` with `null` for a cleared provider, and the complete `claude-fallback`. Make `keyProfilePatch` use it

@@ -204,12 +204,16 @@ const sameProfile = (
   options: RoutingSelectionOptions
 ) => (a === null || b === null ? a === b : !profileDirty(a, b, options));
 
-function translateWriteError(error: unknown, key: string): unknown {
+/** Replace every occurrence of a raw client key in a message with `***`. */
+export const scrubKey = (message: string, key: string): string =>
+  key ? message.split(key).join('***') : message;
+
+export function translateWriteError(error: unknown, key: string): unknown {
   if (!isRecord(error)) return error;
   if (error.status === 400 && error.apiCode === 'unknown_api_key') return new UnknownApiKeyError();
   if (error.status === 422 && error.apiCode === 'invalid_config') {
     const message = typeof error.message === 'string' ? error.message : '';
-    return new InvalidRoutingConfigError(key ? message.split(key).join('***') : message);
+    return new InvalidRoutingConfigError(scrubKey(message, key));
   }
   return error;
 }
