@@ -392,24 +392,25 @@ Run from the repository root:
 - [x] run `npm run type-check` and `npm run test:web`; both must pass before Task 8
 
 ### Task 8: Slim toolbar and modal navigation
-- [ ] in `QuotaSettingsToolbar.tsx`, when `state && !state.unsupportedBackend`, or before the first profiles load, render only:
+- [x] in `QuotaSettingsToolbar.tsx`, when `state && !state.unsupportedBackend`, or before the first profiles load, render only:
   - Codex Fast mode;
   - the last-routed indicators (`ProviderPill` and time per provider from `useSubscriptionActivity`, with the account in the title);
   - **Профили**;
   - **Ключи · {total}**.
   
   Before the first load, both buttons are disabled. After a failed first load, both are enabled, so the modal can show the error and retry. When `state.unsupportedBackend`, render today's legacy toolbar unchanged, without Профили and Ключи. Add the button locale keys to all four locales
-- [ ] in `QuotaSettingsBar`:
+- [x] in `QuotaSettingsBar`:
   - one navigation state `{open: 'keys' | 'profiles' | null, focus?: string, fromKeys: boolean}`;
   - opening either modal reloads the profiles;
   - Keys → Профили goes through `onOpenProfiles(key)`, which sets `focus` and `fromKeys`;
   - Профили → Keys goes through `onBackToKeys`;
   - delete `KeyProfilesModal.tsx` and its SCSS, and point `keyProfiles.lifecycle.test.tsx` at the new modals or fold it into the new modal tests
-- [ ] ➕ reword `key_profiles.editor.ttl` in all four locales: it still says the TTL is "set in the toolbar", which is wrong once the TTL lives in the По умолчанию row
-- [ ] update tests:
+- [x] ➕ reword `key_profiles.editor.ttl` in all four locales: it still says the TTL is "set in the toolbar", which is wrong once the TTL lives in the По умолчанию row
+- [x] update tests:
   - `quotaSettingsToolbar.test.ts` and the bar-level lifecycle tests: the slim toolbar on a capable backend, including `supported: false`; buttons disabled before the first load; labels "Ключи · 2" and "Профили"; Keys → Профили with `focus` and back;
   - `QuotaPage.lifecycle.test.tsx`: the 404 stub still renders the legacy toolbar, with no Профили and no Ключи
-- [ ] run `npm run type-check` and `npm run test:web`; both must pass before Task 9
+- ➕ the toolbar takes a `profileButtons` prop (`{total, disabled, onOpenProfiles, onOpenKeys}`); when set it renders the slim row (`data-toolbar="slim"`), otherwise the legacy one. The last-routed indicator is a shared `LastRouted` piece for both rows. Button keys live under `key_profiles.profiles_button*` and `client_keys.button*`. The navigation `focus` is passed to the Profiles modal only after the reload it started is seen (`focusArmed`), so a draft or edit never copies the cached rows. The modals render only on the slim toolbar. `keyProfiles.lifecycle.test.tsx` now covers the bar: slim toolbar, buttons, navigation, focus and the legacy 404 toolbar
+- [x] run `npm run type-check` and `npm run test:web`; both must pass before Task 9
 
 ### Task 9: Single writer for the shared profile
 - [ ] on a capable backend, nothing in the toolbar writes the shared profile. `useSubscriptionRouting` serves only the 404 legacy path:

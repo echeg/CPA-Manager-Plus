@@ -5693,7 +5693,7 @@
         "mode_own": "独立配置",
         "shared_hint": "此密钥使用工具栏中的共享设置。选择“独立配置”可从共享设置的副本开始。",
         "sticky": "会话粘性",
-        "ttl": "TTL {{ttl}} 为全局设置，在工具栏中配置。",
+        "ttl": "TTL {{ttl}} 为全局设置，在默认配置中设置。",
         "accounts": "首选订阅",
         "selection": "账号池选择",
         "summary": "路由链：",
@@ -5725,7 +5725,9 @@
         "add_label": "为密钥创建路由配置档",
         "new_badge": "新配置档",
         "back": "← 返回密钥"
-      }
+      },
+      "profiles_button": "配置档",
+      "profiles_button_hint": "路由配置档：含会话 TTL 的默认配置，以及使用独立配置的密钥。"
     },
     "client_keys": {
       "title": "客户端密钥",
@@ -5765,7 +5767,9 @@
         "alias_state_unknown": "无法确认密钥别名状态，请稍后重试。",
         "alias_save_failed": "密钥已保存，但别名未保存：{{message}}",
         "alias_delete_failed": "密钥已删除，但别名未删除：{{message}}"
-      }
+      },
+      "button": "密钥 · {{count}}",
+      "button_hint": "客户端 API 密钥（{{count}}）：添加、删除并选择路由配置档。"
     }
   },
   "claude_reset": {

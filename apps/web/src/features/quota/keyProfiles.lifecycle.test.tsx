@@ -3,7 +3,6 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import i18n from '@/i18n';
 import { Button } from '@/components/ui/Button';
-import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { apiClient } from '@/features/personal-quota-support/services/api/client';
 import {
   claudeFallbackApi,
@@ -16,13 +15,15 @@ import {
 } from '@/features/personal-quota-support/services/api/routingProfiles';
 import type { AuthFileItem } from '@/features/personal-quota-support/types';
 import { sha256Hex } from '@/utils/apiKeyHash';
-import { FallbackSettingsEditor } from './components/FallbackSettingsEditor';
+import { ClaudeFallbackControl } from './components/ClaudeFallbackControl';
+import { ClientKeysModal } from './components/ClientKeysModal';
 import { KeyProfileEditor } from './components/KeyProfileEditor';
 import { QuotaSettingsBar } from './components/QuotaSettingsToolbar';
+import { RoutingProfilesModal } from './components/RoutingProfilesModal';
+import { Select } from './components/Select';
 import { useKeyProfiles, type KeyProfilesState } from './hooks/useKeyProfiles';
 import { useSubscriptionRouting } from './hooks/useSubscriptionRouting';
-import { buildKeyRows, chainSummary } from './keyProfilesModel';
-import { maskQuotaName } from './ledgerModel';
+import { buildKeyRows } from './keyProfilesModel';
 
 vi.mock('@/components/ui/Modal', () => ({
   Modal: ({ open, children, footer }: { open: boolean; children: ReactNode; footer: ReactNode }) =>
@@ -180,336 +181,180 @@ afterEach(async () => {
   vi.mocked(useSubscriptionRouting).mockReset();
 });
 
-const bar = (showEmails = false, disabled = false) =>
+const bar = (disabled = false) =>
   createElement(QuotaSettingsBar, {
     disabled,
     files,
-    showEmails,
+    showEmails: false,
     resolvedTheme: 'light',
   });
 
-async function mount(showEmails = false) {
+async function mount() {
   await act(async () => {
-    renderer = create(bar(showEmails));
+    renderer = create(bar());
   });
 }
 
-async function rerender(showEmails = false, disabled = false) {
+async function rerender(disabled = false) {
   await act(async () => {
-    renderer!.update(bar(showEmails, disabled));
+    renderer!.update(bar(disabled));
   });
 }
 
 const root = () => renderer!.root;
-const keysButton = () =>
-  root()
-    .findAllByType(Button)
-    .find((button) => button.props['data-key-profiles']);
-const modal = () => root().findAll((node) => node.props['data-key-profiles-modal']);
-const keyRows = () => root().findAll((node) => node.type === 'li' && node.props['data-key-row']);
+const buttonWith = (attr: string, scope: ReactTestInstance = root()) =>
+  scope.findAllByType(Button).find((button) => button.props[attr]);
+const profilesButton = () => buttonWith('data-open-profiles');
+const keysButton = () => buttonWith('data-open-keys');
 const text = (node: ReactTestInstance): string =>
   node.children.map((child) => (typeof child === 'string' ? child : text(child))).join('');
-const toggleOf = (row: ReactTestInstance) =>
-  row.findAllByType(Button).find((button) => button.props['data-key-toggle'])!;
+const profilesModal = () => root().findByType(RoutingProfilesModal);
+const keysModal = () => root().findByType(ClientKeysModal);
+const keyRows = () =>
+  root().findAll((node) => node.type === 'li' && node.props['data-client-key-row']);
+const editors = () => root().findAllByType(KeyProfileEditor);
 
-async function openModal() {
-  await act(async () => keysButton()!.props.onClick());
+async function click(button: ReactTestInstance | undefined) {
+  await act(async () => button!.props.onClick());
 }
 
-async function expandRow(index: number) {
-  await act(async () => toggleOf(keyRows()[index]).props.onClick());
+/** The reload a navigation starts: loading, then the fresh state. */
+async function finishReload(state: RoutingProfilesState | null = profilesState()) {
+  keyProfiles = makeKeyProfiles(state, { loading: true });
+  await rerender();
+  keyProfiles = makeKeyProfiles(state);
+  await rerender();
 }
 
-const resetButtons = () =>
-  root()
-    .findAllByType(Button)
-    .filter((button) => button.props['data-key-reset']);
-
-const editorSave = () =>
-  root()
-    .findByType(KeyProfileEditor)
-    .findAllByType(Button)
-    .find((button) => button.props['data-key-profile-save'])!;
-
-describe('key profiles modal wiring', () => {
-  test('passes the shared selection to the routing hook and shows the N/M button', async () => {
+describe('quota settings bar on a backend with /routing/profiles', () => {
+  test('renders the slim toolbar with Profiles and Keys · N', async () => {
     await mount();
-    expect(useSubscriptionRouting).toHaveBeenLastCalledWith(false, {
-      supported: true,
-      selection: shared().selection,
-      selectionOptions: profilesState().selectionOptions,
-      loading: false,
-      failed: false,
-      reload: keyProfiles.reload,
-    });
-    expect(text(keysButton()!)).toBe('Keys 1/2');
-    expect(modal()).toHaveLength(0);
-  });
-
-  test('the button opens the modal and reloads the profiles', async () => {
-    await mount();
-    await openModal();
-    expect(modal()).toHaveLength(1);
-    expect(keyProfiles.reload).toHaveBeenCalledTimes(1);
-
-    const rows = keyRows();
-    expect(rows).toHaveLength(2);
-    expect(text(rows[0])).toContain('Laptop');
-    expect(text(rows[0])).toContain('Shared settings');
-    expect(text(rows[1])).toContain('Own profile');
-
-    const t = i18n.t.bind(i18n);
-    const summaries = root().findAll((node) => node.type === 'p' && node.props['data-key-summary']);
-    expect(text(summaries[0])).toBe(chainSummary(shared(), files, false, t));
-    expect(text(summaries[1])).toBe(chainSummary(betaProfile(), files, false, t));
-    expect(text(root().find((node) => node.props['data-key-profiles-shared']))).toContain(
-      chainSummary(shared(), files, false, t)
+    const toolbar = root().find((node) => node.props['data-quota-settings']);
+    expect(toolbar.props['data-toolbar']).toBe('slim');
+    expect(text(profilesButton()!)).toBe('Profiles');
+    expect(text(keysButton()!)).toBe('Keys · 2');
+    expect(profilesButton()!.props.disabled).toBe(false);
+    expect(keysButton()!.props.disabled).toBe(false);
+    // The shared routing controls live in the Profiles modal now.
+    expect(buttonWith('data-routing-save')).toBeUndefined();
+    expect(root().findAllByType(ClaudeFallbackControl)).toHaveLength(0);
+    expect(root().findAllByType(Select)).toHaveLength(0);
+    expect(root().findAll((node) => node.props['data-last-selected'] === 'codex')).not.toHaveLength(
+      0
     );
+    expect(profilesModal().props.open).toBe(false);
+    expect(keysModal().props.open).toBe(false);
   });
 
-  test('keeps the button while the profiles reload', async () => {
-    await mount();
-    // useKeyProfiles keeps the last loaded state while it reloads.
-    keyProfiles = makeKeyProfiles(profilesState(), { loading: true });
-    await rerender();
-    expect(text(keysButton()!)).toBe('Keys 1/2');
-  });
-
-  test('a key editor cannot open from cached rows while the profiles reload', async () => {
-    keyProfiles = makeKeyProfiles(profilesState(), { loading: true });
-    await mount();
-    await openModal();
-    expect(toggleOf(keyRows()[1]).props.disabled).toBe(true);
-
-    keyProfiles = makeKeyProfiles(profilesState());
-    await rerender();
-    expect(toggleOf(keyRows()[1]).props.disabled).toBe(false);
-    await expandRow(1);
-
-    // An open editor can still be collapsed during a later reload.
-    keyProfiles = makeKeyProfiles(profilesState(), { loading: true });
-    await rerender();
-    expect(toggleOf(keyRows()[1]).props.disabled).toBe(false);
-  });
-
-  test('a failed first load locks the legacy strategy select', async () => {
-    keyProfiles = makeKeyProfiles(null, { error: 'offline' });
-    await mount();
-    expect(useSubscriptionRouting).toHaveBeenLastCalledWith(
-      false,
-      expect.objectContaining({ supported: false, failed: true })
-    );
-  });
-
-  test('editing and saving sends the draft for that key and collapses the editor', async () => {
-    await mount();
-    await openModal();
-    await expandRow(1);
-    const editor = root().findByType(KeyProfileEditor);
-    expect(editor.props.models).toEqual(fallbackState().models);
-    expect(editor.props.ttl).toBe('2h');
-    expect(editor.props.variant).toBe('key');
-    expect(editor.props.isNew).toBe(false);
-    expect(editor.props.initial).toEqual(betaProfile());
-    expect(editor.props.readOnly).toBe(false);
-
-    await act(async () => editor.findAllByType(ToggleSwitch)[0].props.onChange(false));
-    await act(async () => editorSave().props.onClick());
-
-    expect(keyProfiles.saveKeyProfile).toHaveBeenCalledWith(RAW_BETA, {
-      ...betaProfile(),
-      sessionAffinity: false,
-    });
-    expect(root().findAllByType(KeyProfileEditor)).toHaveLength(0);
-  });
-
-  test('a failed save keeps the editor open', async () => {
-    keyProfiles = makeKeyProfiles(profilesState(), { saveKeyProfile: vi.fn(async () => false) });
-    await mount();
-    await openModal();
-    await expandRow(1);
-    await act(async () =>
-      root().findByType(KeyProfileEditor).findAllByType(ToggleSwitch)[0].props.onChange(false)
-    );
-    await act(async () => editorSave().props.onClick());
-    expect(keyProfiles.saveKeyProfile).toHaveBeenCalledTimes(1);
-    expect(root().findAllByType(KeyProfileEditor)).toHaveLength(1);
-  });
-
-  test('a key without a profile opens a new draft copied from the shared settings', async () => {
-    await mount();
-    await openModal();
-    await expandRow(0);
-    const editor = root().findByType(KeyProfileEditor);
-    expect(editor.props.isNew).toBe(true);
-    expect(editor.props.initial).toEqual(shared());
-    expect(editor.props.initial).not.toBe(keyProfiles.state!.shared);
-    // Only a key with its own profile can go back to the shared settings.
-    expect(resetButtons()).toHaveLength(0);
-    await act(async () => editorSave().props.onClick());
-    expect(keyProfiles.saveKeyProfile).toHaveBeenCalledWith(RAW_ALPHA, shared());
-  });
-
-  test('a reset to the shared settings saves null and collapses the editor', async () => {
-    await mount();
-    await openModal();
-    expect(resetButtons()).toHaveLength(0);
-    await expandRow(1);
-    expect(resetButtons()).toHaveLength(1);
-    await act(async () => resetButtons()[0].props.onClick());
-    expect(keyProfiles.saveKeyProfile).toHaveBeenCalledWith(RAW_BETA, null);
-    expect(root().findAllByType(KeyProfileEditor)).toHaveLength(0);
-  });
-
-  test('the reset is locked while saving, reloading, or read-only', async () => {
-    for (const overrides of [{ saving: true }, { loading: true }]) {
-      keyProfiles = makeKeyProfiles(profilesState());
-      await mount();
-      await openModal();
-      await expandRow(1);
-      keyProfiles = makeKeyProfiles(profilesState(), overrides);
-      await rerender();
-      expect(resetButtons()[0].props.disabled).toBe(true);
-      await act(async () => renderer?.unmount());
-    }
+  test('stays slim with supported: false', async () => {
     keyProfiles = makeKeyProfiles(profilesState({ supported: false }));
     await mount();
-    await openModal();
-    await expandRow(1);
-    expect(resetButtons()[0].props.disabled).toBe(true);
+    expect(text(keysButton()!)).toBe('Keys · 2');
+    expect(profilesButton()!.props.disabled).toBe(false);
+    expect(buttonWith('data-routing-save')).toBeUndefined();
   });
 
-  test('only one editor is open at a time', async () => {
-    await mount();
-    await openModal();
-    await expandRow(0);
-    await expandRow(1);
-    expect(root().findAllByType(KeyProfileEditor)).toHaveLength(1);
-    expect(toggleOf(keyRows()[0]).props['aria-expanded']).toBe(false);
-    expect(toggleOf(keyRows()[1]).props['aria-expanded']).toBe(true);
-  });
-
-  test('a fallback save reloads the profiles, and the fallback loads once', async () => {
-    await mount();
-    const fallbackToggle = root()
-      .findAllByType(ToggleSwitch)
-      .find((toggle) => toggle.props.label === i18n.t('quota_management.fallback.title'))!;
-    await act(async () => fallbackToggle.props.onChange(false));
-    expect(claudeFallbackApi.save).toHaveBeenCalledWith({
-      ...shared().claudeFallback,
-      enabled: false,
-    });
-    expect(keyProfiles.reload).toHaveBeenCalledTimes(1);
-    expect(claudeFallbackApi.get).toHaveBeenCalledTimes(1);
-  });
-
-  test('a failed fallback save does not reload the profiles', async () => {
-    vi.mocked(claudeFallbackApi.save).mockRejectedValue(new Error('offline'));
-    await mount();
-    const fallbackToggle = root()
-      .findAllByType(ToggleSwitch)
-      .find((toggle) => toggle.props.label === i18n.t('quota_management.fallback.title'))!;
-    await act(async () => fallbackToggle.props.onChange(false));
-    expect(keyProfiles.reload).not.toHaveBeenCalled();
-  });
-});
-
-describe('key profiles modal states and errors', () => {
-  test('hides the button on a backend without /routing/profiles', async () => {
-    keyProfiles = makeKeyProfiles(unsupportedRoutingProfiles());
-    await mount();
-    expect(keysButton()).toBeUndefined();
-    expect(useSubscriptionRouting).toHaveBeenLastCalledWith(
-      false,
-      expect.objectContaining({ supported: false })
-    );
-  });
-
-  test('hides the button until the first load, but shows it after a failed load', async () => {
+  test('disables both buttons before the first load and enables them after a failure', async () => {
     keyProfiles = makeKeyProfiles(null, { loading: true });
     await mount();
-    expect(keysButton()).toBeUndefined();
+    expect(profilesButton()!.props.disabled).toBe(true);
+    expect(keysButton()!.props.disabled).toBe(true);
+    expect(buttonWith('data-routing-save')).toBeUndefined();
+
     keyProfiles = makeKeyProfiles(null, { error: 'offline' });
     await rerender();
-    expect(keysButton()).toBeDefined();
-    await openModal();
+    expect(profilesButton()!.props.disabled).toBe(false);
+    expect(keysButton()!.props.disabled).toBe(false);
+    await click(keysButton());
     const alert = root().find((node) => node.type === 'div' && node.props.role === 'alert');
     expect(text(alert)).toContain('offline');
   });
 
-  test('a disconnected panel disables the button and keeps the last counts', async () => {
+  test('a disconnected panel disables both buttons and keeps the last count', async () => {
     await mount();
-    // useKeyProfiles keeps the state while disabled on the same connection.
     keyProfiles = makeKeyProfiles(profilesState(), { loading: true });
-    await rerender(false, true);
-    expect(useKeyProfiles).toHaveBeenLastCalledWith(true);
-    expect(useSubscriptionRouting).toHaveBeenLastCalledWith(
-      true,
-      expect.objectContaining({ loading: true })
-    );
-    expect(keysButton()!.props.disabled).toBe(true);
-    expect(text(keysButton()!)).toBe('Keys 1/2');
-  });
-
-  test('is read-only when the backend reports supported: false', async () => {
-    keyProfiles = makeKeyProfiles(profilesState({ supported: false }));
-    await mount();
-    await openModal();
-    const notes = root().findAll((node) => node.type === 'p' && node.props.role === 'note');
-    expect(notes.map(text).join(' ')).toContain('read-only');
-    await expandRow(1);
-    expect(root().findByType(KeyProfileEditor).props.readOnly).toBe(true);
-    expect(editorSave().props.disabled).toBe(true);
-  });
-
-  test('shows the 400 and 422 messages', async () => {
-    keyProfiles = makeKeyProfiles(profilesState(), {
-      error: i18n.t('quota_management.key_profiles.errors.unknown_key'),
-    });
-    await mount();
-    await openModal();
-    const alert = () => root().find((node) => node.type === 'div' && node.props.role === 'alert');
-    expect(text(alert())).toContain('This key was removed on the Config page');
-
-    keyProfiles = makeKeyProfiles(profilesState(), {
-      error: 'routing.key-profiles.ab12cd34ef56.selection.primary: unknown slot "bogus"',
-    });
-    await rerender();
-    expect(text(alert())).toContain('ab12cd34ef56.selection.primary: unknown slot');
-  });
-
-  test('masks account names when emails are hidden', async () => {
-    await mount(false);
-    await openModal();
-    const masked = text(modal()[0]);
-    expect(masked).not.toContain('bob@example.com');
-    expect(masked).toContain(maskQuotaName('claude-bob@example.com.json'));
     await rerender(true);
-    expect(text(modal()[0])).toContain('claude-bob@example.com.json');
+    expect(useKeyProfiles).toHaveBeenLastCalledWith(true);
+    expect(profilesButton()!.props.disabled).toBe(true);
+    expect(keysButton()!.props.disabled).toBe(true);
+    expect(text(keysButton()!)).toBe('Keys · 2');
   });
 
-  test('masks emails in an error message when emails are hidden', async () => {
-    keyProfiles = makeKeyProfiles(profilesState(), { error: 'failed for bob@example.com' });
-    await mount(false);
-    await openModal();
-    const alert = root().find((node) => node.type === 'div' && node.props.role === 'alert');
-    expect(text(alert)).not.toContain('bob@example.com');
-  });
-
-  test('shows the empty and loading states', async () => {
-    keyProfiles = { ...makeKeyProfiles(profilesState({ keys: [] })), rows: [], total: 0 };
+  test('each button opens its modal and reloads the profiles', async () => {
     await mount();
-    await openModal();
-    expect(text(modal()[0])).toContain('no client API keys');
+    await click(profilesButton());
+    expect(profilesModal().props.open).toBe(true);
+    expect(keysModal().props.open).toBe(false);
+    expect(profilesModal().props.onBackToKeys).toBeUndefined();
+    expect(profilesModal().props.focus).toBeUndefined();
+    expect(profilesModal().props.models).toEqual(fallbackState().models);
+    expect(keyProfiles.reload).toHaveBeenCalledTimes(1);
 
-    keyProfiles = makeKeyProfiles(null, { loading: true });
-    await rerender();
-    expect(text(modal()[0])).toContain('Loading routing profiles');
+    await act(async () => profilesModal().props.onClose());
+    expect(profilesModal().props.open).toBe(false);
+
+    await click(keysButton());
+    expect(keysModal().props.open).toBe(true);
+    expect(profilesModal().props.open).toBe(false);
+    expect(keyRows()).toHaveLength(2);
+    expect(keyProfiles.reload).toHaveBeenCalledTimes(2);
+  });
+
+  test('Configure opens the Profiles modal on that key, and Back returns to the keys', async () => {
+    await mount();
+    await click(keysButton());
+    await click(buttonWith('data-client-key-configure', keyRows()[1]));
+    expect(keysModal().props.open).toBe(false);
+    expect(profilesModal().props.open).toBe(true);
+    expect(keyProfiles.reload).toHaveBeenCalledTimes(2);
+    // The focus waits for the reload, so the editor does not copy the cached rows.
+    expect(profilesModal().props.focus).toBeUndefined();
+    expect(editors()).toHaveLength(0);
+
+    await finishReload();
+    expect(profilesModal().props.focus).toBe(RAW_BETA);
+    expect(editors()).toHaveLength(1);
+    expect(editors()[0].props.isNew).toBe(false);
+    expect(editors()[0].props.initial).toEqual(betaProfile());
+
+    await click(buttonWith('data-profiles-back'));
+    expect(profilesModal().props.open).toBe(false);
+    expect(keysModal().props.open).toBe(true);
+    // finishReload installed a fresh hook stub, so Back is its first reload.
+    expect(keyProfiles.reload).toHaveBeenCalledTimes(1);
+    expect(profilesModal().props.onBackToKeys).toBeUndefined();
+    expect(profilesModal().props.focus).toBeUndefined();
+  });
+
+  test('choosing "Own profile" opens a new draft for a key on the default', async () => {
+    await mount();
+    await click(keysButton());
+    const select = keyRows()[0].findByType(Select);
+    await act(async () => select.props.onChange('own'));
+    expect(keyProfiles.saveKeyProfile).not.toHaveBeenCalled();
+    expect(profilesModal().props.open).toBe(true);
+
+    await finishReload();
+    expect(editors()).toHaveLength(1);
+    expect(editors()[0].props.isNew).toBe(true);
+    expect(editors()[0].props.initial).toEqual(shared());
+    expect(keyProfiles.saveKeyProfile).not.toHaveBeenCalled();
+  });
+
+  test('the toolbar Profiles button opens the modal without a focus or Back', async () => {
+    await mount();
+    await click(keysButton());
+    await click(buttonWith('data-client-key-configure', keyRows()[1]));
+    await act(async () => profilesModal().props.onClose());
+    await click(profilesButton());
+    await finishReload();
+    expect(profilesModal().props.focus).toBeUndefined();
+    expect(profilesModal().props.onBackToKeys).toBeUndefined();
+    expect(editors()).toHaveLength(0);
   });
 
   test('never renders a raw key in text, titles, or aria labels', async () => {
     await mount();
-    await openModal();
     const check = () => {
       const json = JSON.stringify(renderer!.toJSON());
       const labels = root()
@@ -522,10 +367,38 @@ describe('key profiles modal states and errors', () => {
       }
     };
     check();
-    await expandRow(0);
-    expect(root().findAllByType(FallbackSettingsEditor)).toHaveLength(1);
+    await click(keysButton());
     check();
-    await expandRow(1);
+    await click(buttonWith('data-client-key-configure', keyRows()[1]));
+    await finishReload();
     check();
+  });
+});
+
+describe('quota settings bar on a backend without /routing/profiles', () => {
+  test('renders the legacy toolbar with no Profiles, no Keys and no modals', async () => {
+    keyProfiles = makeKeyProfiles(unsupportedRoutingProfiles());
+    await mount();
+    const toolbar = root().find((node) => node.props['data-quota-settings']);
+    expect(toolbar.props['data-toolbar']).toBeUndefined();
+    expect(profilesButton()).toBeUndefined();
+    expect(keysButton()).toBeUndefined();
+    expect(buttonWith('data-routing-save')).toBeDefined();
+    expect(root().findAllByType(ClaudeFallbackControl)).toHaveLength(1);
+    expect(root().findAllByType(RoutingProfilesModal)).toHaveLength(0);
+    expect(root().findAllByType(ClientKeysModal)).toHaveLength(0);
+    expect(useSubscriptionRouting).toHaveBeenLastCalledWith(
+      false,
+      expect.objectContaining({ supported: false })
+    );
+  });
+
+  test('a failed first load locks the legacy strategy select', async () => {
+    keyProfiles = makeKeyProfiles(null, { error: 'offline' });
+    await mount();
+    expect(useSubscriptionRouting).toHaveBeenLastCalledWith(
+      false,
+      expect.objectContaining({ supported: false, failed: true })
+    );
   });
 });

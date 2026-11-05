@@ -5693,7 +5693,7 @@
         "mode_own": "獨立設定檔",
         "shared_hint": "此金鑰使用工具列中的共用設定。選擇「獨立設定檔」可從共用設定的副本開始。",
         "sticky": "工作階段黏著",
-        "ttl": "TTL {{ttl}} 為全域設定，於工具列中設定。",
+        "ttl": "TTL {{ttl}} 為全域設定，於預設設定中設定。",
         "accounts": "偏好訂閱",
         "selection": "帳號池選擇",
         "summary": "路由鏈：",
@@ -5725,7 +5725,9 @@
         "add_label": "為金鑰建立路由設定檔",
         "new_badge": "新設定檔",
         "back": "← 返回金鑰"
-      }
+      },
+      "profiles_button": "設定檔",
+      "profiles_button_hint": "路由設定檔：含工作階段 TTL 的預設設定，以及使用獨立設定的金鑰。"
     },
     "client_keys": {
       "title": "用戶端金鑰",
@@ -5765,7 +5767,9 @@
         "alias_state_unknown": "無法確認金鑰別名狀態，請稍後重試。",
         "alias_save_failed": "金鑰已儲存，但別名未儲存：{{message}}",
         "alias_delete_failed": "金鑰已刪除，但別名未刪除：{{message}}"
-      }
+      },
+      "button": "金鑰 · {{count}}",
+      "button_hint": "用戶端 API 金鑰（{{count}}）：新增、刪除並選擇路由設定檔。"
     }
   },
   "claude_reset": {

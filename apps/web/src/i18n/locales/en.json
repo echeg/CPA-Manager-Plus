@@ -5698,7 +5698,7 @@
         "mode_own": "Own profile",
         "shared_hint": "This key follows the shared settings from the toolbar. Choose “Own profile” to start from a copy of them.",
         "sticky": "Sticky session",
-        "ttl": "TTL {{ttl}} is global and set in the toolbar.",
+        "ttl": "TTL {{ttl}} is global and set in the Default profile.",
         "accounts": "Preferred subscription",
         "selection": "Pool selection",
         "summary": "Chain:",
@@ -5730,7 +5730,9 @@
         "add_label": "Create a routing profile for a key",
         "new_badge": "New profile",
         "back": "← Back to keys"
-      }
+      },
+      "profiles_button": "Profiles",
+      "profiles_button_hint": "Routing profiles: the default profile with the session TTL, and keys with their own profile."
     },
     "client_keys": {
       "title": "Client keys",
@@ -5770,7 +5772,9 @@
         "alias_state_unknown": "The key alias state could not be confirmed. Try again later.",
         "alias_save_failed": "The key was saved, but its alias was not: {{message}}",
         "alias_delete_failed": "The key was deleted, but its alias was not: {{message}}"
-      }
+      },
+      "button": "Keys · {{count}}",
+      "button_hint": "Client API keys ({{count}}): add, delete and choose a routing profile."
     }
   },
   "claude_reset": {

@@ -75,6 +75,18 @@ async function mountPage() {
 }
 
 describe('personal quota page lifecycle', () => {
+  test('keeps the legacy toolbar without Profiles or Keys on a backend without profiles', async () => {
+    vi.spyOn(authFilesApi, 'list').mockResolvedValue({ files: [file] });
+    await mountPage();
+    expect(routingProfilesApi.get).toHaveBeenCalled();
+    const toolbar = renderer!.root.find((node) => node.props['data-quota-settings']);
+    expect(toolbar.props['data-toolbar']).toBeUndefined();
+    const buttons = renderer!.root.findAll((node) => node.type === 'button');
+    expect(buttons.some((node) => node.props['data-routing-save'])).toBe(true);
+    expect(buttons.some((node) => node.props['data-open-profiles'])).toBe(false);
+    expect(buttons.some((node) => node.props['data-open-keys'])).toBe(false);
+  });
+
   test('refreshes credential quotas on entry and records completion', async () => {
     const list = vi.spyOn(authFilesApi, 'list').mockResolvedValue({ files: [file] });
     await mountPage();

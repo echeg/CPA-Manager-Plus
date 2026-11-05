@@ -196,33 +196,81 @@ describe('quota settings toolbar', () => {
     });
   });
 
-  describe('keys button', () => {
-    const keyButton = (markup: string) =>
-      markup.match(/<button[^>]*data-key-profiles[^>]*>.*?<\/button>/)?.[0] ?? '';
-    const keyProfiles = (patch: Record<string, unknown> = {}) => ({
-      count: 1,
+  describe('slim toolbar with profile buttons', () => {
+    const buttonWith = (markup: string, attr: string) =>
+      markup.match(new RegExp(`<button[^>]*${attr}[^>]*>.*?</button>`))?.[0] ?? '';
+    const profileButtons = (patch: Record<string, unknown> = {}) => ({
       total: 2,
-      hidden: false,
       disabled: false,
-      onOpen: () => {},
+      onOpenProfiles: () => {},
+      onOpenKeys: () => {},
       ...patch,
     });
 
-    test('shows N/M with an explanation', () => {
-      const button = keyButton(render({ keyProfiles: keyProfiles() }));
-      expect(button).toContain('Keys 1/2');
-      expect(button).toContain(
-        'title="Routing profiles per client API key: 1 of 2 keys have their own profile."'
+    test('keeps only Fast mode, the last-routed indicators, Profiles and Keys · N', () => {
+      const markup = render({
+        profileButtons: profileButtons(),
+        fallbackControl: createElement('span', { 'data-fallback-control': true }),
+      });
+      expect(markup).toContain('data-toolbar="slim"');
+      expect(markup).toContain(i18n.t('quota_management.codex_fast.title'));
+      expect(markup).toContain('data-last-selected="codex"');
+      expect(markup).toContain('data-last-selected="claude"');
+      expect(buttonWith(markup, 'data-open-profiles')).toContain('>Profiles<');
+      expect(buttonWith(markup, 'data-open-keys')).toContain('>Keys · 2<');
+      expect(buttonWith(markup, 'data-open-keys')).toContain(
+        'title="Client API keys (2): add, delete and choose a routing profile."'
       );
-      expect(button).not.toMatch(/<button[^>]*disabled/);
+      for (const absent of [
+        'data-routing-save',
+        'data-fallback-control',
+        'data-switch="affinity"',
+        i18n.t('quota_management.toolbar.switching'),
+        i18n.t('config_management.visual.sections.network.session_affinity_ttl'),
+        'value="24h"',
+      ]) {
+        expect(markup).not.toContain(absent);
+      }
+      expect(markup).not.toMatch(/<button[^>]*data-open-(profiles|keys)[^>]*disabled/);
     });
 
-    test('is disabled on request and hidden on an older backend or without the prop', () => {
-      expect(keyButton(render({ keyProfiles: keyProfiles({ disabled: true }) }))).toMatch(
-        /<button[^>]*disabled/
+    test('masks the account in the indicator title unless emails are shown', () => {
+      const masked = render({ profileButtons: profileButtons() });
+      expect(masked).not.toContain('alice@example.com');
+      expect(render({ profileButtons: profileButtons(), showEmails: true })).toContain(
+        'alice@example.com'
       );
-      expect(keyButton(render({ keyProfiles: keyProfiles({ hidden: true }) }))).toBe('');
-      expect(keyButton(render())).toBe('');
+    });
+
+    test('disables both buttons on request', () => {
+      const markup = render({ profileButtons: profileButtons({ disabled: true }) });
+      expect(buttonWith(markup, 'data-open-profiles')).toMatch(/<button[^>]*disabled/);
+      expect(buttonWith(markup, 'data-open-keys')).toMatch(/<button[^>]*disabled/);
+    });
+
+    test('shows only the fast mode error, masked', () => {
+      const markup = render({
+        profileButtons: profileButtons(),
+        routing: routing({ error: 'routing failed' }),
+        fastMode: {
+          enabled: false,
+          saving: false,
+          error: 'fast failed for alice@example.com',
+          toggle: async () => {},
+        },
+      });
+      expect(markup).toContain('role="alert"');
+      expect(markup).toContain('fast failed');
+      expect(markup).not.toContain('alice@example.com');
+      expect(markup).not.toContain('routing failed');
+    });
+
+    test('the legacy toolbar has no Profiles or Keys buttons', () => {
+      const markup = render();
+      expect(markup).not.toContain('data-toolbar="slim"');
+      expect(markup).not.toContain('data-open-profiles');
+      expect(markup).not.toContain('data-open-keys');
+      expect(markup).toContain('data-routing-save');
     });
   });
 });

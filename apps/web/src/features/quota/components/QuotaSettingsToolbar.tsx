@@ -24,7 +24,8 @@ import {
 } from '../routingModel';
 import { ProviderPill } from './ProviderPill';
 import { ClaudeFallbackControl } from './ClaudeFallbackControl';
-import { KeyProfilesModal } from './KeyProfilesModal';
+import { ClientKeysModal } from './ClientKeysModal';
+import { RoutingProfilesModal } from './RoutingProfilesModal';
 import styles from './QuotaSettingsToolbar.module.scss';
 
 const PROVIDERS = ['codex', 'claude'] as const;
@@ -46,21 +47,19 @@ type RoutingProps = Pick<
   | 'reload'
 >;
 
-/** The "Keys N/M" button that opens the per-key routing profiles. */
-export interface KeyProfilesButtonProps {
-  /** Keys with their own profile. */
-  count: number;
+/** The Profiles and Keys buttons; set on a backend that serves `/routing/profiles`. */
+export interface ProfileButtonsProps {
   /** All client keys. */
   total: number;
-  /** True on a backend without `/routing/profiles`. */
-  hidden: boolean;
   disabled: boolean;
-  onOpen: () => void;
+  onOpenProfiles: () => void;
+  onOpenKeys: () => void;
 }
 
 interface ToolbarProps {
   fallbackControl?: ReactNode;
-  keyProfiles?: KeyProfilesButtonProps;
+  /** Renders the slim toolbar: Fast mode, last-routed indicators, Profiles and Keys. */
+  profileButtons?: ProfileButtonsProps;
   routing: RoutingProps;
   fastMode: CodexFastModeState;
   activity: SubscriptionActivity[];
@@ -72,7 +71,63 @@ interface ToolbarProps {
   resolvedTheme: ResolvedTheme;
 }
 
-/** Subscription switching and Codex Fast mode as one compact row. */
+interface LastRoutedProps {
+  provider: (typeof PROVIDERS)[number];
+  activity: SubscriptionActivity[];
+  activityState: ActivityState;
+  files: AuthFileItem[];
+  disabled: boolean;
+  displayName: (file: AuthFileItem) => string;
+}
+
+/** The time a provider last routed a request, with the account in the title. */
+function LastRouted({
+  provider,
+  activity,
+  activityState,
+  files,
+  disabled,
+  displayName,
+}: LastRoutedProps) {
+  const { t, i18n } = useTranslation();
+  const providerFiles = providerAccountFiles(provider, files);
+  const latest = latestSubscriptionActivity(activity, provider, providerFiles);
+  const latestFile =
+    latest && providerFiles.find((file) => String(file.authIndex) === latest.authIndex);
+  if (latestFile && latest && !disabled) {
+    return (
+      <time
+        className={styles.last}
+        data-last-selected={provider}
+        dateTime={latest.lastSelectedAt}
+        title={`${t('quota_management.toolbar.last', {
+          name: displayName(latestFile),
+          time: new Date(latest.lastSelectedAt).toLocaleString(i18n.language),
+        })} — ${t('quota_management.routing.activity_hint')}`}
+      >
+        {new Date(latest.lastSelectedAt).toLocaleTimeString(i18n.language, {
+          hour: '2-digit',
+          minute: '2-digit',
+        })}
+      </time>
+    );
+  }
+  return (
+    <span
+      className={styles.last}
+      data-last-selected={provider}
+      title={t(activityStatusKey(disabled, activityState))}
+    >
+      —
+    </span>
+  );
+}
+
+/**
+ * Subscription switching and Codex Fast mode as one compact row. With `profileButtons`
+ * the shared routing controls live in the Profiles modal, so the row keeps only Fast
+ * mode, the last-routed indicators and the Profiles and Keys buttons.
+ */
 export function QuotaSettingsToolbar({
   routing,
   fastMode,
@@ -83,9 +138,9 @@ export function QuotaSettingsToolbar({
   disabled,
   resolvedTheme,
   fallbackControl,
-  keyProfiles,
+  profileButtons,
 }: ToolbarProps) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const id = useId();
   const { values, blocked, invalidTTL } = routing;
   const slots = routing.slots ?? null;
@@ -95,6 +150,86 @@ export function QuotaSettingsToolbar({
     return showEmails ? name : maskQuotaName(name);
   };
   const ttlErrorId = `${id}-ttl-error`;
+  const lastRouted = (provider: (typeof PROVIDERS)[number]) => (
+    <LastRouted
+      provider={provider}
+      activity={activity}
+      activityState={activityState}
+      files={files}
+      disabled={disabled}
+      displayName={displayName}
+    />
+  );
+
+  const fastModeSwitch = (
+    <div className={styles.group} title={t('quota_management.codex_fast.description')}>
+      <span
+        className={styles.switch}
+        data-switch="fast-mode"
+        data-state={fastMode.enabled ? 'on' : 'off'}
+      >
+        <ToggleSwitch
+          checked={fastMode.enabled ?? false}
+          disabled={disabled || fastMode.saving || fastMode.enabled === null}
+          onChange={(next) => void fastMode.toggle(next)}
+          label={t('quota_management.codex_fast.title')}
+        />
+      </span>
+    </div>
+  );
+
+  if (profileButtons) {
+    return (
+      <section
+        className={styles.bar}
+        data-quota-settings
+        data-toolbar="slim"
+        aria-label={t('quota_management.routing.title')}
+      >
+        {fastModeSwitch}
+
+        <span className={styles.separator} aria-hidden="true" />
+
+        {PROVIDERS.map((provider) => (
+          <div className={styles.group} key={provider}>
+            <ProviderPill type={provider} resolvedTheme={resolvedTheme} />
+            {lastRouted(provider)}
+          </div>
+        ))}
+
+        <div className={styles.actions}>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            data-open-profiles
+            disabled={profileButtons.disabled}
+            title={t('quota_management.key_profiles.profiles_button_hint')}
+            onClick={profileButtons.onOpenProfiles}
+          >
+            {t('quota_management.key_profiles.profiles_button')}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            data-open-keys
+            disabled={profileButtons.disabled}
+            title={t('quota_management.client_keys.button_hint', { count: profileButtons.total })}
+            onClick={profileButtons.onOpenKeys}
+          >
+            {t('quota_management.client_keys.button', { count: profileButtons.total })}
+          </Button>
+        </div>
+
+        {fastMode.error && (
+          <div className={styles.error} role="alert">
+            {showEmails ? fastMode.error : maskQuotaText(fastMode.error)}
+          </div>
+        )}
+      </section>
+    );
+  }
 
   return (
     <section
@@ -189,13 +324,9 @@ export function QuotaSettingsToolbar({
       <span className={styles.separator} aria-hidden="true" />
 
       {PROVIDERS.map((provider) => {
-        const providerFiles = providerAccountFiles(provider, files);
         const preferred = values?.preferredAccounts ?? {};
         const selected = preferred[provider] ?? '';
         const options = preferredAccountOptions(provider, files, selected, displayName, t);
-        const latest = latestSubscriptionActivity(activity, provider, providerFiles);
-        const latestFile =
-          latest && providerFiles.find((file) => String(file.authIndex) === latest.authIndex);
         const providerLabel = provider === 'codex' ? 'Codex' : 'Claude';
         return (
           <div
@@ -217,72 +348,16 @@ export function QuotaSettingsToolbar({
                 routing.change({ preferredAccounts: { ...preferred, [provider]: value } })
               }
             />
-            {latestFile && latest && !disabled ? (
-              <time
-                className={styles.last}
-                data-last-selected={provider}
-                dateTime={latest.lastSelectedAt}
-                title={`${t('quota_management.toolbar.last', {
-                  name: displayName(latestFile),
-                  time: new Date(latest.lastSelectedAt).toLocaleString(i18n.language),
-                })} — ${t('quota_management.routing.activity_hint')}`}
-              >
-                {new Date(latest.lastSelectedAt).toLocaleTimeString(i18n.language, {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </time>
-            ) : (
-              <span
-                className={styles.last}
-                data-last-selected={provider}
-                title={t(activityStatusKey(disabled, activityState))}
-              >
-                —
-              </span>
-            )}
+            {lastRouted(provider)}
           </div>
         );
       })}
 
       <span className={styles.separator} aria-hidden="true" />
 
-      <div className={styles.group} title={t('quota_management.codex_fast.description')}>
-        <span
-          className={styles.switch}
-          data-switch="fast-mode"
-          data-state={fastMode.enabled ? 'on' : 'off'}
-        >
-          <ToggleSwitch
-            checked={fastMode.enabled ?? false}
-            disabled={disabled || fastMode.saving || fastMode.enabled === null}
-            onChange={(next) => void fastMode.toggle(next)}
-            label={t('quota_management.codex_fast.title')}
-          />
-        </span>
-      </div>
+      {fastModeSwitch}
 
       {fallbackControl}
-
-      {keyProfiles && !keyProfiles.hidden && (
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          data-key-profiles
-          disabled={keyProfiles.disabled}
-          title={t('quota_management.key_profiles.button_hint', {
-            count: keyProfiles.count,
-            total: keyProfiles.total,
-          })}
-          onClick={keyProfiles.onOpen}
-        >
-          {t('quota_management.key_profiles.button', {
-            count: keyProfiles.count,
-            total: keyProfiles.total,
-          })}
-        </Button>
-      )}
 
       <div className={styles.actions}>
         {routing.saved && (
@@ -319,6 +394,22 @@ export function QuotaSettingsToolbar({
   );
 }
 
+type ModalName = 'keys' | 'profiles';
+
+/**
+ * Which modal is open. `focus` is the raw key the Profiles modal opens on (memory only);
+ * it is armed once the reload started by the navigation is seen, so the editor copies
+ * fresh rows rather than the cached ones. `fromKeys` renders "← Back to keys".
+ */
+interface Navigation {
+  open: ModalName | null;
+  focus?: string;
+  focusArmed: boolean;
+  fromKeys: boolean;
+}
+
+const CLOSED: Navigation = { open: null, focusArmed: false, fromKeys: false };
+
 /** Wires the toolbar to live routing, fast mode, activity, fallback and key profile state. */
 export function QuotaSettingsBar({
   disabled,
@@ -345,12 +436,28 @@ export function QuotaSettingsBar({
   const fallback = useClaudeFallback(disabled, keyProfiles.reload);
   const fastMode = useCodexFastMode(disabled);
   const { activity, activityState } = useSubscriptionActivity(disabled);
-  const [modalOpen, setModalOpen] = useState(false);
+  const [nav, setNav] = useState<Navigation>(CLOSED);
 
-  const openModal = () => {
-    setModalOpen(true);
+  // The slim toolbar shows until a load reports a backend without /routing/profiles.
+  const slim = profilesState ? !profilesState.unsupportedBackend : true;
+  // Before the first load the buttons wait; a failed first load enables them, so the
+  // modal can show the error and retry.
+  const buttonsDisabled = disabled || (!profilesState && !keyProfiles.error);
+
+  if (nav.focus && !nav.focusArmed && keyProfiles.loading) {
+    setNav({ ...nav, focusArmed: true });
+  }
+
+  const navigate = (next: Navigation) => {
+    setNav(next);
     keyProfiles.reload();
   };
+  const openKeys = () => navigate({ open: 'keys', focusArmed: false, fromKeys: false });
+  const openProfiles = () => navigate({ open: 'profiles', focusArmed: false, fromKeys: false });
+  const openProfilesForKey = (key: string) =>
+    navigate({ open: 'profiles', focus: key, focusArmed: false, fromKeys: true });
+  const close = () => setNav(CLOSED);
+  const models = fallback.state?.models ?? EMPTY_MODELS;
 
   return (
     <>
@@ -366,25 +473,39 @@ export function QuotaSettingsBar({
         fallbackControl={
           <ClaudeFallbackControl disabled={disabled} showEmails={showEmails} fallback={fallback} />
         }
-        keyProfiles={{
-          count: keyProfiles.count,
-          total: keyProfiles.total,
-          // Hidden on an older backend and until the first load; a failed first load
-          // still shows the button so the modal can report the error and retry.
-          hidden: profilesState ? profilesState.unsupportedBackend : !keyProfiles.error,
-          disabled,
-          onOpen: openModal,
-        }}
+        profileButtons={
+          slim
+            ? {
+                total: keyProfiles.total,
+                disabled: buttonsDisabled,
+                onOpenProfiles: openProfiles,
+                onOpenKeys: openKeys,
+              }
+            : undefined
+        }
       />
-      <KeyProfilesModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        keyProfiles={keyProfiles}
-        files={files}
-        showEmails={showEmails}
-        models={fallback.state?.models ?? EMPTY_MODELS}
-        sessionAffinityTTL={routing.values?.sessionAffinityTTL}
-      />
+      {slim && (
+        <>
+          <RoutingProfilesModal
+            open={nav.open === 'profiles'}
+            onClose={close}
+            keyProfiles={keyProfiles}
+            files={files}
+            showEmails={showEmails}
+            models={models}
+            focus={nav.focusArmed ? nav.focus : undefined}
+            onBackToKeys={nav.fromKeys ? openKeys : undefined}
+          />
+          <ClientKeysModal
+            open={nav.open === 'keys'}
+            onClose={close}
+            keyProfiles={keyProfiles}
+            files={files}
+            showEmails={showEmails}
+            onOpenProfiles={openProfilesForKey}
+          />
+        </>
+      )}
     </>
   );
 }
