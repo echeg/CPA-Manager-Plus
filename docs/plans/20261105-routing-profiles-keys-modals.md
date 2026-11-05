@@ -431,15 +431,16 @@ Run from the repository root:
 - ➕ removed 13 keys from `quota_management.key_profiles` in all four locales: `button`, `button_hint`, `title`, `shared_title`, `shared_hint`, `badge_shared`, `badge_own`, `reset`, `empty`, `editor.mode`, `editor.mode_shared`, `editor.mode_own`, `editor.shared_hint`. The grep covered the literal keys and the `${prefix}` lookups in `ClientKeysModal` and `useKeyProfiles`, which only use `client_keys`. The locale test also checks that every value is a non-empty string
 
 ### Task 11: Verify acceptance criteria
-- [ ] verify the Overview requirements:
+- [x] verify the Overview requirements:
   - the slim toolbar on a capable backend, including `supported: false`;
   - both modals and the navigation between them;
   - adding a key (generate, copy, alias) and deleting one (not the last);
   - the default and key profile writes go through one PATCH each, with read-back;
   - the 404 path is unchanged
-- [ ] verify the edge cases each have a test: an invalid key, a duplicate key, an invalid or duplicate alias, the last key, alias state unknown, an alias failure after the key was written, a reload during editing, `supported: false`, no client keys, an invalid TTL
-- [ ] confirm that the raw-key assertions from Tasks 2, 6 and 7 exist (URLs, error messages, rendered output, titles, aria labels)
-- [ ] run `npm run type-check`, `npm run lint` and `npm run test:web`. All must pass, with no new lint warnings
+- [x] verify the edge cases each have a test: an invalid key, a duplicate key, an invalid or duplicate alias, the last key, alias state unknown, an alias failure after the key was written, a reload during editing, `supported: false`, no client keys, an invalid TTL
+- [x] confirm that the raw-key assertions from Tasks 2, 6 and 7 exist (URLs, error messages, rendered output, titles, aria labels)
+- [x] run `npm run type-check`, `npm run lint` and `npm run test:web`. All must pass, with no new lint warnings
+- ➕ verified: type-check clean, lint 0 errors and 7 warnings, all pre-existing in files this branch does not touch (AccountsPage.test.tsx, AccountHealthBadge.tsx, DashboardPage.tsx, UsageMaintenanceCapabilityViews.tsx), test:web 305 files and 5052 tests passed. Edge cases map to clientKeys.test.ts, useKeyProfiles.lifecycle.test.tsx, clientKeysModal/routingProfilesModal lifecycle tests, KeyProfileEditor.test.tsx, routingProfiles.test.ts and quotaSettingsHooks.test.ts (invalidTTL); raw-key checks: clientKeys.test.ts "never puts a raw key in a request URL" and the masking tests, plus the "never renders a raw key" tests in both modal suites and keyProfiles.lifecycle.test.tsx
 
 ### Task 12: [Final] Update documentation
 - [ ] update `docs/personal-quota.md`:
