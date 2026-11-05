@@ -16,6 +16,7 @@ import { chainSummary, copyOfShared, profileDirty } from '../keyProfilesModel';
 import { maskQuotaName } from '../ledgerModel';
 import {
   preferredAccountOptions,
+  invalidTTL,
   selectionSlotOptions,
   withPickerRule,
   type RoutingProvider,
@@ -29,23 +30,24 @@ const PROVIDERS: ReadonlyArray<{ id: RoutingProvider; label: string }> = [
   { id: 'codex', label: 'Codex' },
 ];
 
-type EditorMode = 'shared' | 'own';
-
 export interface KeyProfileEditorProps {
-  /** The key's stored profile, or null when it follows the shared settings. */
-  profile: RoutingProfile | null;
-  shared: RoutingProfile;
+  /** The profile to edit: the stored one, or for a new key profile a copy of the shared one. */
+  initial: RoutingProfile;
+  /** No profile is stored yet, so saving creates one even when nothing was edited. */
+  isNew: boolean;
+  /** `default` edits the shared profile and the global TTL; `key` edits one key's profile. */
+  variant: 'default' | 'key';
+  /** The global session-affinity TTL. */
+  ttl: string;
   files: AuthFileItem[];
   showEmails: boolean;
   selectionOptions: RoutingSelectionOptions;
   models: { claude: string[]; codex: string[] };
   saving: boolean;
-  /** The backend reports `supported: false`; nothing can be changed. */
+  /** Nothing can be changed, for example a key profile when the backend reports `supported: false`. */
   readOnly: boolean;
-  /** The global session-affinity TTL, shown as text because it is not per key. */
-  sessionAffinityTTL?: string;
-  /** Saves the complete profile, or null to return the key to the shared settings. */
-  onSave: (profile: RoutingProfile | null) => void;
+  /** Saves the complete profile; the TTL is passed only when the default variant changed it. */
+  onSave: (profile: RoutingProfile, ttl?: string) => void;
   onCancel: () => void;
 }
 
@@ -55,200 +57,189 @@ const withFallbackSuggestions = (profile: RoutingProfile): RoutingProfile => ({
   claudeFallback: withSuggestions(profile.claudeFallback),
 });
 
-/** Editor for one client key: shared settings or its own copy of the four routing stages. */
+/** Editor for one routing profile: the four routing stages, plus the TTL for the default one. */
 export function KeyProfileEditor({
-  profile,
-  shared,
+  initial,
+  isNew,
+  variant,
+  ttl,
   files,
   showEmails,
   selectionOptions,
   models,
   saving,
   readOnly,
-  sessionAffinityTTL,
   onSave,
   onCancel,
 }: KeyProfileEditorProps) {
   const { t } = useTranslation();
   const id = useId();
-  const [mode, setMode] = useState<EditorMode>(profile ? 'own' : 'shared');
-  // A key without a profile gets its draft when the user switches to "own".
-  const [draft, setDraft] = useState<RoutingProfile | null>(() =>
-    profile ? withFallbackSuggestions(copyOfShared(profile)) : null
+  // The editor copies the profile once; the caller remounts it to start over.
+  const [draft, setDraft] = useState<RoutingProfile>(() =>
+    withFallbackSuggestions(copyOfShared(initial))
   );
-  const baseline = useMemo(() => (profile ? withFallbackSuggestions(profile) : null), [profile]);
+  const [ttlDraft, setTtlDraft] = useState(ttl);
+  const baseline = useMemo(
+    () => (isNew ? null : withFallbackSuggestions(initial)),
+    [initial, isNew]
+  );
   const locked = readOnly || saving;
+  const editsTTL = variant === 'default';
+  const ttlInvalid = editsTTL && invalidTTL(ttlDraft);
+  const ttlChanged = editsTTL && ttlDraft.trim() !== ttl.trim();
 
   const displayName = (file: AuthFileItem) => {
     const name = getQuotaDisplayName(file);
     return showEmails ? name : maskQuotaName(name);
   };
 
-  const chooseMode = (next: EditorMode) => {
-    if (locked || next === mode) return;
-    if (next === 'own' && !draft) setDraft(withFallbackSuggestions(copyOfShared(shared)));
-    setMode(next);
-  };
-
-  const ownDraft = mode === 'own' ? draft : null;
   const invalid =
-    !!ownDraft &&
-    (!ownDraft.selection.primary.trim() || !validFallbackSettings(ownDraft.claudeFallback));
+    !draft.selection.primary.trim() || !validFallbackSettings(draft.claudeFallback) || ttlInvalid;
   // Creating a profile is a change even when the copy still equals the shared settings:
-  // from then on the key no longer follows the toolbar.
-  const dirty = ownDraft
-    ? !baseline || profileDirty(ownDraft, baseline, selectionOptions)
-    : profile !== null;
+  // from then on the key no longer follows the default profile.
+  const dirty = !baseline || profileDirty(draft, baseline, selectionOptions) || ttlChanged;
 
   const update = (patch: Partial<RoutingProfile>) =>
-    setDraft((current) => (current ? { ...current, ...patch } : current));
+    setDraft((current) => ({ ...current, ...patch }));
 
   const save = () => {
     if (readOnly || saving || !dirty || invalid) return;
-    onSave(
-      ownDraft
-        ? { ...ownDraft, selection: withPickerRule(ownDraft.selection, selectionOptions) }
-        : null
-    );
+    const profile = { ...draft, selection: withPickerRule(draft.selection, selectionOptions) };
+    if (ttlChanged) onSave(profile, ttlDraft.trim());
+    else onSave(profile);
   };
 
-  const slots = ownDraft ? selectionSlotOptions(t, selectionOptions, ownDraft.selection) : null;
-  const summary = chainSummary(ownDraft ?? shared, files, showEmails, t);
+  const slots = selectionSlotOptions(t, selectionOptions, draft.selection);
+  const summary = chainSummary(draft, files, showEmails, t);
+  const ttlErrorId = `${id}-ttl-error`;
 
   return (
-    <div className={styles.editor} data-key-profile-editor>
+    <div className={styles.editor} data-key-profile-editor data-variant={variant}>
       {readOnly && (
         <p className={styles.notice} role="note">
           {t('quota_management.key_profiles.editor.read_only')}
         </p>
       )}
 
-      <div
-        className={styles.segmented}
-        role="radiogroup"
-        aria-label={t('quota_management.key_profiles.editor.mode')}
-      >
-        {(['shared', 'own'] as const).map((value) => (
-          <button
-            key={value}
-            type="button"
-            role="radio"
-            aria-checked={mode === value}
-            data-mode={value}
-            className={mode === value ? styles.segmentActive : styles.segment}
+      <section className={styles.stage} aria-labelledby={`${id}-sticky`}>
+        <h4 id={`${id}-sticky`}>{t('quota_management.key_profiles.editor.sticky')}</h4>
+        <div className={styles.row}>
+          <ToggleSwitch
+            checked={draft.sessionAffinity}
             disabled={locked}
-            onClick={() => chooseMode(value)}
-          >
-            {t(`quota_management.key_profiles.editor.mode_${value}`)}
-          </button>
-        ))}
-      </div>
-
-      {!ownDraft || !slots ? (
-        <p className={styles.hint}>{t('quota_management.key_profiles.editor.shared_hint')}</p>
-      ) : (
-        <>
-          <section className={styles.stage} aria-labelledby={`${id}-sticky`}>
-            <h4 id={`${id}-sticky`}>{t('quota_management.key_profiles.editor.sticky')}</h4>
-            <div className={styles.row}>
-              <ToggleSwitch
-                checked={ownDraft.sessionAffinity}
+            onChange={(sessionAffinity) => update({ sessionAffinity })}
+            label={t('config_management.visual.sections.network.session_affinity')}
+          />
+          {editsTTL ? (
+            <>
+              <input
+                className={`input ${styles.ttl}`}
+                data-key-profile-ttl
+                title={t('quota_management.routing.ttl_hint')}
+                aria-label={t('config_management.visual.sections.network.session_affinity_ttl')}
+                aria-invalid={ttlInvalid}
+                aria-describedby={ttlInvalid ? ttlErrorId : undefined}
+                placeholder="1h"
+                value={ttlDraft}
                 disabled={locked}
-                onChange={(sessionAffinity) => update({ sessionAffinity })}
-                label={t('config_management.visual.sections.network.session_affinity')}
+                onChange={(event) => setTtlDraft(event.target.value)}
               />
-              {sessionAffinityTTL?.trim() && (
-                <span className={styles.hint}>
-                  {t('quota_management.key_profiles.editor.ttl', {
-                    ttl: sessionAffinityTTL.trim(),
-                  })}
+              {ttlInvalid && (
+                <span id={ttlErrorId} className={styles.fieldError}>
+                  {t('quota_management.routing.invalid_ttl')}
                 </span>
               )}
-            </div>
-          </section>
-
-          <section className={styles.stage} aria-labelledby={`${id}-accounts`}>
-            <h4 id={`${id}-accounts`}>{t('quota_management.key_profiles.editor.accounts')}</h4>
-            <div className={styles.row}>
-              {PROVIDERS.map(({ id: provider, label }) => {
-                const selected = ownDraft.preferredAccounts[provider] ?? '';
-                return (
-                  <Select
-                    key={provider}
-                    size="sm"
-                    className={styles.account}
-                    value={selected}
-                    options={preferredAccountOptions(provider, files, selected, displayName, t)}
-                    ariaLabel={t('quota_management.routing.preferred_account', {
-                      provider: label,
-                    })}
-                    disabled={locked}
-                    onChange={(value) => {
-                      const preferredAccounts = { ...ownDraft.preferredAccounts };
-                      if (value) preferredAccounts[provider] = value;
-                      else delete preferredAccounts[provider];
-                      update({ preferredAccounts });
-                    }}
-                  />
-                );
-              })}
-            </div>
-          </section>
-
-          <section className={styles.stage} aria-labelledby={`${id}-selection`}>
-            <h4 id={`${id}-selection`}>{t('quota_management.key_profiles.editor.selection')}</h4>
-            <div className={styles.row}>
-              <span className={styles.caption} id={`${id}-primary`}>
-                {t('quota_management.routing.primary')}
+            </>
+          ) : (
+            ttl.trim() && (
+              <span className={styles.hint}>
+                {t('quota_management.key_profiles.editor.ttl', { ttl: ttl.trim() })}
               </span>
+            )
+          )}
+        </div>
+      </section>
+
+      <section className={styles.stage} aria-labelledby={`${id}-accounts`}>
+        <h4 id={`${id}-accounts`}>{t('quota_management.key_profiles.editor.accounts')}</h4>
+        <div className={styles.row}>
+          {PROVIDERS.map(({ id: provider, label }) => {
+            const selected = draft.preferredAccounts[provider] ?? '';
+            return (
               <Select
+                key={provider}
                 size="sm"
-                className={styles.slot}
-                value={ownDraft.selection.primary}
-                options={slots.primary}
-                ariaLabelledBy={`${id}-primary`}
+                className={styles.account}
+                value={selected}
+                options={preferredAccountOptions(provider, files, selected, displayName, t)}
+                ariaLabel={t('quota_management.routing.preferred_account', {
+                  provider: label,
+                })}
                 disabled={locked}
-                onChange={(primary) => update({ selection: { ...ownDraft.selection, primary } })}
+                onChange={(value) => {
+                  const preferredAccounts = { ...draft.preferredAccounts };
+                  if (value) preferredAccounts[provider] = value;
+                  else delete preferredAccounts[provider];
+                  update({ preferredAccounts });
+                }}
               />
-              <span className={styles.caption} id={`${id}-tiebreak`}>
-                {t('quota_management.routing.tiebreak')}
-              </span>
-              <Select
-                size="sm"
-                className={styles.slot}
-                value={slots.tiebreakDisabled ? '' : (ownDraft.selection.tiebreak ?? '')}
-                options={slots.tiebreak}
-                ariaLabelledBy={`${id}-tiebreak`}
-                ariaDescribedBy={slots.tiebreakDisabled ? `${id}-tiebreak-hint` : undefined}
-                disabled={locked || slots.tiebreakDisabled}
-                onChange={(tiebreak) =>
-                  update({
-                    selection: {
-                      primary: ownDraft.selection.primary,
-                      tiebreak: tiebreak || undefined,
-                    },
-                  })
-                }
-              />
-              {slots.tiebreakDisabled && (
-                <span id={`${id}-tiebreak-hint`} className={styles.hint}>
-                  {t('quota_management.routing.tiebreak_inactive')}
-                </span>
-              )}
-            </div>
-          </section>
+            );
+          })}
+        </div>
+      </section>
 
-          <section className={styles.stage} aria-labelledby={`${id}-fallback`}>
-            <h4 id={`${id}-fallback`}>{t('quota_management.fallback.title')}</h4>
-            <FallbackSettingsEditor
-              value={ownDraft.claudeFallback}
-              models={models}
-              disabled={locked}
-              onChange={(claudeFallback) => update({ claudeFallback })}
-            />
-          </section>
-        </>
-      )}
+      <section className={styles.stage} aria-labelledby={`${id}-selection`}>
+        <h4 id={`${id}-selection`}>{t('quota_management.key_profiles.editor.selection')}</h4>
+        <div className={styles.row}>
+          <span className={styles.caption} id={`${id}-primary`}>
+            {t('quota_management.routing.primary')}
+          </span>
+          <Select
+            size="sm"
+            className={styles.slot}
+            value={draft.selection.primary}
+            options={slots.primary}
+            ariaLabelledBy={`${id}-primary`}
+            disabled={locked}
+            onChange={(primary) => update({ selection: { ...draft.selection, primary } })}
+          />
+          <span className={styles.caption} id={`${id}-tiebreak`}>
+            {t('quota_management.routing.tiebreak')}
+          </span>
+          <Select
+            size="sm"
+            className={styles.slot}
+            value={slots.tiebreakDisabled ? '' : (draft.selection.tiebreak ?? '')}
+            options={slots.tiebreak}
+            ariaLabelledBy={`${id}-tiebreak`}
+            ariaDescribedBy={slots.tiebreakDisabled ? `${id}-tiebreak-hint` : undefined}
+            disabled={locked || slots.tiebreakDisabled}
+            onChange={(tiebreak) =>
+              update({
+                selection: {
+                  primary: draft.selection.primary,
+                  tiebreak: tiebreak || undefined,
+                },
+              })
+            }
+          />
+          {slots.tiebreakDisabled && (
+            <span id={`${id}-tiebreak-hint`} className={styles.hint}>
+              {t('quota_management.routing.tiebreak_inactive')}
+            </span>
+          )}
+        </div>
+      </section>
+
+      <section className={styles.stage} aria-labelledby={`${id}-fallback`}>
+        <h4 id={`${id}-fallback`}>{t('quota_management.fallback.title')}</h4>
+        <FallbackSettingsEditor
+          value={draft.claudeFallback}
+          models={models}
+          disabled={locked}
+          onChange={(claudeFallback) => update({ claudeFallback })}
+        />
+      </section>
 
       <div className={styles.footer}>
         <p className={styles.summary} data-key-profile-summary>

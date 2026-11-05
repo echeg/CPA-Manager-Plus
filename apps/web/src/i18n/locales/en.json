@@ -5709,6 +5709,7 @@
       "shared_hint": "Edited in the toolbar. Every key without its own profile uses them.",
       "badge_shared": "Shared settings",
       "badge_own": "Own profile",
+      "reset": "Back to shared settings",
       "edit": "Edit",
       "collapse": "Collapse",
       "edit_label": "Edit routing for {{label}}",

@@ -102,3 +102,8 @@
   color: var(--text-secondary);
   overflow-wrap: anywhere;
 }
+
+.rowActions {
+  display: flex;
+  justify-content: flex-end;
+}

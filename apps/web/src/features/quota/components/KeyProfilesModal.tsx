@@ -6,7 +6,7 @@ import type { RoutingProfile } from '@/features/personal-quota-support/services/
 import type { AuthFileItem } from '@/features/personal-quota-support/types';
 import { sha256Hex } from '@/utils/apiKeyHash';
 import type { KeyProfilesState } from '../hooks/useKeyProfiles';
-import { chainSummary } from '../keyProfilesModel';
+import { chainSummary, copyOfShared } from '../keyProfilesModel';
 import { maskQuotaText } from '../ledgerModel';
 import { KeyProfileEditor } from './KeyProfileEditor';
 import styles from './KeyProfilesModal.module.scss';
@@ -164,10 +164,26 @@ export function KeyProfilesModal({
                       <p className={styles.summary} data-key-summary>
                         {chainSummary(row.profile ?? state.shared, files, showEmails, t)}
                       </p>
+                      {isOpen && own && (
+                        <div className={styles.rowActions}>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            data-key-reset
+                            disabled={readOnly || saving || loading}
+                            onClick={() => void save(row.key, null)}
+                          >
+                            {t('quota_management.key_profiles.reset')}
+                          </Button>
+                        </div>
+                      )}
                       {isOpen && (
                         <KeyProfileEditor
-                          profile={row.profile}
-                          shared={state.shared}
+                          initial={row.profile ?? copyOfShared(state.shared)}
+                          isNew={!row.profile}
+                          variant="key"
+                          ttl={sessionAffinityTTL ?? ''}
                           files={files}
                           showEmails={showEmails}
                           selectionOptions={state.selectionOptions}
@@ -176,7 +192,6 @@ export function KeyProfilesModal({
                           // because the hook refuses a save while the profiles load.
                           saving={saving || loading}
                           readOnly={readOnly}
-                          sessionAffinityTTL={sessionAffinityTTL}
                           onSave={(profile) => void save(row.key, profile)}
                           onCancel={() => setExpanded(null)}
                         />

@@ -279,24 +279,25 @@ Run from the repository root:
 - [x] run `npm run type-check` and `npm run test:web`; both must pass before Task 4
 
 ### Task 4: KeyProfileEditor as a pure profile editor
-- [ ] change the `KeyProfileEditor.tsx` props to `{initial: RoutingProfile, isNew: boolean, variant: 'default' | 'key', ttl: string, files, showEmails, selectionOptions, models, saving, readOnly, onSave(profile, ttl?), onCancel}`:
+- [x] change the `KeyProfileEditor.tsx` props to `{initial: RoutingProfile, isNew: boolean, variant: 'default' | 'key', ttl: string, files, showEmails, selectionOptions, models, saving, readOnly, onSave(profile, ttl?), onCancel}`:
   - the baseline is `isNew ? null : withFallbackSuggestions(initial)`;
   - dirty is `!baseline || profileDirty(...)`, as at `:99-101` today;
   - remove the shared/own `mode` switch
-- [ ] variant `default` renders an editable TTL field validated with `invalidTTL`. Save is disabled while it is invalid, and `onSave` passes the TTL only when it changed. Variant `key` shows the TTL as text. Keep `withSuggestions` on the draft, the picker rule on the tiebreak slot, the chain summary and the read-only hint
-- [ ] adapt the `KeyProfilesModal.tsx:168-182` call site so it compiles and behaves as before until Task 8 replaces it:
+- [x] variant `default` renders an editable TTL field validated with `invalidTTL`. Save is disabled while it is invalid, and `onSave` passes the TTL only when it changed. Variant `key` shows the TTL as text. Keep `withSuggestions` on the draft, the picker rule on the tiebreak slot, the chain summary and the read-only hint
+- [x] adapt the `KeyProfilesModal.tsx:168-182` call site so it compiles and behaves as before until Task 8 replaces it:
   - "own" uses `variant='key'` with `initial = profile ?? copyOfShared(shared)` and `isNew = !profile`;
   - "back to shared" becomes a modal button that calls `saveKeyProfile(key, null)`.
   
   Update `keyProfiles.lifecycle.test.tsx` to match
-- [ ] update `KeyProfileEditor.test.tsx`:
+  - note: the reset button (`data-key-reset`, locale `key_profiles.reset`) shows in the expanded row of a key with its own profile, with no confirmation; Task 6 adds the confirmed Сбросить. The TTL field reuses the existing `session_affinity_ttl`, `routing.ttl_hint` and `routing.invalid_ttl` locale keys
+- [x] update `KeyProfileEditor.test.tsx`:
   - both variants;
   - TTL validation;
   - TTL passed only when changed;
   - `isNew` counts as dirty;
   - read-only mode;
   - no mode switch rendered
-- [ ] run `npm run type-check` and `npm run test:web`; both must pass before Task 5
+- [x] run `npm run type-check` and `npm run test:web`; both must pass before Task 5
 
 ### Task 5: useKeyProfiles state for both modals
 - [ ] extend `features/quota/hooks/useKeyProfiles.ts`:
@@ -400,6 +401,7 @@ Run from the repository root:
   - Keys → Профили goes through `onOpenProfiles(key)`, which sets `focus` and `fromKeys`;
   - Профили → Keys goes through `onBackToKeys`;
   - delete `KeyProfilesModal.tsx` and its SCSS, and point `keyProfiles.lifecycle.test.tsx` at the new modals or fold it into the new modal tests
+- [ ] ➕ reword `key_profiles.editor.ttl` in all four locales: it still says the TTL is "set in the toolbar", which is wrong once the TTL lives in the По умолчанию row
 - [ ] update tests:
   - `quotaSettingsToolbar.test.ts` and the bar-level lifecycle tests: the slim toolbar on a capable backend, including `supported: false`; buttons disabled before the first load; labels "Ключи · 2" and "Профили"; Keys → Профили with `focus` and back;
   - `QuotaPage.lifecycle.test.tsx`: the 404 stub still renders the legacy toolbar, with no Профили and no Ключи

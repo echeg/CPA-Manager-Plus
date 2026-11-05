@@ -215,6 +215,11 @@ async function expandRow(index: number) {
   await act(async () => toggleOf(keyRows()[index]).props.onClick());
 }
 
+const resetButtons = () =>
+  root()
+    .findAllByType(Button)
+    .filter((button) => button.props['data-key-reset']);
+
 const editorSave = () =>
   root()
     .findByType(KeyProfileEditor)
@@ -297,7 +302,10 @@ describe('key profiles modal wiring', () => {
     await expandRow(1);
     const editor = root().findByType(KeyProfileEditor);
     expect(editor.props.models).toEqual(fallbackState().models);
-    expect(editor.props.sessionAffinityTTL).toBe('2h');
+    expect(editor.props.ttl).toBe('2h');
+    expect(editor.props.variant).toBe('key');
+    expect(editor.props.isNew).toBe(false);
+    expect(editor.props.initial).toEqual(betaProfile());
     expect(editor.props.readOnly).toBe(false);
 
     await act(async () => editor.findAllByType(ToggleSwitch)[0].props.onChange(false));
@@ -323,16 +331,47 @@ describe('key profiles modal wiring', () => {
     expect(root().findAllByType(KeyProfileEditor)).toHaveLength(1);
   });
 
-  test('a reset to the shared settings saves null', async () => {
+  test('a key without a profile opens a new draft copied from the shared settings', async () => {
+    await mount();
+    await openModal();
+    await expandRow(0);
+    const editor = root().findByType(KeyProfileEditor);
+    expect(editor.props.isNew).toBe(true);
+    expect(editor.props.initial).toEqual(shared());
+    expect(editor.props.initial).not.toBe(keyProfiles.state!.shared);
+    // Only a key with its own profile can go back to the shared settings.
+    expect(resetButtons()).toHaveLength(0);
+    await act(async () => editorSave().props.onClick());
+    expect(keyProfiles.saveKeyProfile).toHaveBeenCalledWith(RAW_ALPHA, shared());
+  });
+
+  test('a reset to the shared settings saves null and collapses the editor', async () => {
+    await mount();
+    await openModal();
+    expect(resetButtons()).toHaveLength(0);
+    await expandRow(1);
+    expect(resetButtons()).toHaveLength(1);
+    await act(async () => resetButtons()[0].props.onClick());
+    expect(keyProfiles.saveKeyProfile).toHaveBeenCalledWith(RAW_BETA, null);
+    expect(root().findAllByType(KeyProfileEditor)).toHaveLength(0);
+  });
+
+  test('the reset is locked while saving, reloading, or read-only', async () => {
+    for (const overrides of [{ saving: true }, { loading: true }]) {
+      keyProfiles = makeKeyProfiles(profilesState());
+      await mount();
+      await openModal();
+      await expandRow(1);
+      keyProfiles = makeKeyProfiles(profilesState(), overrides);
+      await rerender();
+      expect(resetButtons()[0].props.disabled).toBe(true);
+      await act(async () => renderer?.unmount());
+    }
+    keyProfiles = makeKeyProfiles(profilesState({ supported: false }));
     await mount();
     await openModal();
     await expandRow(1);
-    const sharedMode = root()
-      .findByType(KeyProfileEditor)
-      .find((node) => node.type === 'button' && node.props['data-mode'] === 'shared');
-    await act(async () => sharedMode.props.onClick());
-    await act(async () => editorSave().props.onClick());
-    expect(keyProfiles.saveKeyProfile).toHaveBeenCalledWith(RAW_BETA, null);
+    expect(resetButtons()[0].props.disabled).toBe(true);
   });
 
   test('only one editor is open at a time', async () => {
@@ -479,12 +518,6 @@ describe('key profiles modal states and errors', () => {
     };
     check();
     await expandRow(0);
-    await act(async () =>
-      root()
-        .findByType(KeyProfileEditor)
-        .find((node) => node.type === 'button' && node.props['data-mode'] === 'own')
-        .props.onClick()
-    );
     expect(root().findAllByType(FallbackSettingsEditor)).toHaveLength(1);
     check();
     await expandRow(1);

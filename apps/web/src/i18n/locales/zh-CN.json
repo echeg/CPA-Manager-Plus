@@ -5704,6 +5704,7 @@
       "shared_hint": "在工具栏中编辑。所有没有独立配置的密钥都使用共享设置。",
       "badge_shared": "共享设置",
       "badge_own": "独立配置",
+      "reset": "恢复为共享设置",
       "edit": "编辑",
       "collapse": "收起",
       "edit_label": "编辑 {{label}} 的路由",

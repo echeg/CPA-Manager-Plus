@@ -66,15 +66,16 @@ async function mount(props: Partial<KeyProfileEditorProps> = {}) {
   await act(async () => {
     renderer = create(
       createElement(KeyProfileEditor, {
-        profile: null,
-        shared,
+        initial: copyOfShared(shared),
+        isNew: false,
+        variant: 'key',
+        ttl: '1h',
         files,
         showEmails: true,
         selectionOptions,
         models: { claude: ['claude-opus-5'], codex: ['gpt-6-astra'] },
         saving: false,
         readOnly: false,
-        sessionAffinityTTL: '1h',
         onSave,
         onCancel,
         ...props,
@@ -85,8 +86,6 @@ async function mount(props: Partial<KeyProfileEditorProps> = {}) {
 }
 
 const root = () => renderer!.root;
-const modeButton = (mode: 'shared' | 'own') =>
-  root().find((node) => node.type === 'button' && node.props['data-mode'] === mode);
 const saveButton = () =>
   root()
     .findAllByType(Button)
@@ -104,6 +103,9 @@ const slotSelects = () => selects().filter((select) => select.props.ariaLabelled
 const summaryText = () =>
   textOf(root().find((node) => node.props['data-key-profile-summary'] === true));
 const sticky = () => root().findAllByType(ToggleSwitch)[0];
+const ttlInputs = () =>
+  root().findAll((node) => node.type === 'input' && node.props['data-key-profile-ttl']);
+const typeTTL = (value: string) => act(() => ttlInputs()[0].props.onChange({ target: { value } }));
 
 function textOf(node: ReactTestInstance | string): string {
   if (typeof node === 'string') return node;
@@ -113,27 +115,74 @@ function textOf(node: ReactTestInstance | string): string {
 const click = (node: ReactTestInstance) => act(() => node.props.onClick());
 
 describe('KeyProfileEditor', () => {
-  test('a key without a profile starts on the shared settings and seeds its own copy', async () => {
-    const { onSave } = await mount();
-    expect(modeButton('shared').props['aria-checked']).toBe(true);
-    expect(root().findAllByType(ToggleSwitch)).toHaveLength(0);
-    expect(saveButton().props.disabled).toBe(true);
-    expect(summaryText()).toContain('Sticky session');
-
-    click(modeButton('own'));
-    expect(modeButton('own').props['aria-checked']).toBe(true);
+  test('renders the profile stages without a shared/own mode switch', async () => {
+    await mount();
+    expect(root().findAll((node) => node.props.role === 'radiogroup')).toHaveLength(0);
+    expect(root().findAll((node) => node.props['data-mode'] !== undefined)).toHaveLength(0);
     expect(sticky().props.checked).toBe(true);
     expect(accountSelect('Claude').props.value).toBe('claude-a');
     expect(accountSelect('Codex').props.value).toBe('');
     expect(slotSelects().map((select) => select.props.value)).toEqual(['reserves', 'round-robin']);
     expect(root().findByType(FallbackSettingsEditor).props.value).toEqual(shared.claudeFallback);
-    expect(textOf(root())).toContain('TTL 1h is global');
+    expect(summaryText()).toContain('Sticky session');
+  });
 
-    // A new profile is a change even when it still equals the shared settings.
+  test('a new profile counts as a change and saves a copy of the initial profile', async () => {
+    const initial = copyOfShared(shared);
+    const { onSave } = await mount({ initial, isNew: true });
     expect(saveButton().props.disabled).toBe(false);
     click(saveButton());
     expect(onSave).toHaveBeenCalledWith(copyOfShared(shared));
-    expect(onSave.mock.calls[0][0]).not.toBe(shared);
+    expect(onSave.mock.calls[0]).toHaveLength(1);
+    expect(onSave.mock.calls[0][0]).not.toBe(initial);
+  });
+
+  test('the key variant shows the global TTL as text', async () => {
+    await mount({ variant: 'key', ttl: '2h' });
+    expect(ttlInputs()).toHaveLength(0);
+    expect(textOf(root())).toContain('TTL 2h is global');
+  });
+
+  test('the key variant hides the TTL text when it is empty', async () => {
+    await mount({ variant: 'key', ttl: '' });
+    expect(textOf(root())).not.toContain('is global');
+  });
+
+  test('the default variant edits the TTL and passes it only when it changed', async () => {
+    const { onSave } = await mount({ variant: 'default', ttl: '1h' });
+    expect(ttlInputs()).toHaveLength(1);
+    expect(ttlInputs()[0].props.value).toBe('1h');
+    expect(textOf(root())).not.toContain('is global');
+    expect(saveButton().props.disabled).toBe(true);
+
+    // The TTL alone is a change.
+    typeTTL(' 30m ');
+    expect(saveButton().props.disabled).toBe(false);
+    click(saveButton());
+    expect(onSave).toHaveBeenLastCalledWith(copyOfShared(shared), '30m');
+
+    // Back to the stored TTL: only the profile edit is saved.
+    typeTTL('1h');
+    expect(saveButton().props.disabled).toBe(true);
+    act(() => sticky().props.onChange(false));
+    click(saveButton());
+    expect(onSave.mock.calls[1]).toEqual([{ ...copyOfShared(shared), sessionAffinity: false }]);
+  });
+
+  test('an invalid TTL disables Save and explains the format', async () => {
+    const { onSave } = await mount({ variant: 'default', ttl: '1h' });
+    for (const value of ['', '0s', 'soon']) {
+      typeTTL(value);
+      expect(ttlInputs()[0].props['aria-invalid']).toBe(true);
+      expect(textOf(root())).toContain('Enter a positive duration');
+      expect(saveButton().props.disabled).toBe(true);
+      click(saveButton());
+    }
+    expect(onSave).not.toHaveBeenCalled();
+
+    typeTTL('24h');
+    expect(ttlInputs()[0].props['aria-invalid']).toBe(false);
+    expect(saveButton().props.disabled).toBe(false);
   });
 
   test('a stored profile without mappings opens clean and saves the suggested ones', async () => {
@@ -141,7 +190,7 @@ describe('KeyProfileEditor', () => {
       ...copyOfShared(shared),
       claudeFallback: { enabled: false, mode: 'auto' as const, mappings: [] },
     };
-    const { onSave } = await mount({ profile: stored });
+    const { onSave } = await mount({ initial: stored });
     // The fallback editor shows suggestions for an empty list; that alone is no edit.
     expect(saveButton().props.disabled).toBe(true);
     act(() => sticky().props.onChange(false));
@@ -150,17 +199,17 @@ describe('KeyProfileEditor', () => {
     expect(onSave.mock.calls[0][0].claudeFallback.mappings).toEqual(suggestedFallbackMappings());
   });
 
-  test('edits never touch the shared profile', async () => {
-    const snapshot = JSON.stringify(shared);
-    await mount();
-    click(modeButton('own'));
+  test('edits never touch the initial profile', async () => {
+    const initial = copyOfShared(shared);
+    const snapshot = JSON.stringify(initial);
+    await mount({ initial, isNew: true });
     act(() => sticky().props.onChange(false));
     act(() => accountSelect('Claude').props.onChange(''));
-    expect(JSON.stringify(shared)).toBe(snapshot);
+    expect(JSON.stringify(initial)).toBe(snapshot);
   });
 
   test('a picker primary disables the tiebreak and saves without it', async () => {
-    const { onSave } = await mount({ profile: copyOfShared(shared) });
+    const { onSave } = await mount();
     expect(slotSelects()[1].props.disabled).toBe(false);
 
     act(() => slotSelects()[0].props.onChange('fill-first'));
@@ -176,7 +225,7 @@ describe('KeyProfileEditor', () => {
 
   test('a preferred account that no longer exists is labeled as missing', async () => {
     await mount({
-      profile: { ...copyOfShared(shared), preferredAccounts: { claude: 'gone' } },
+      initial: { ...copyOfShared(shared), preferredAccounts: { claude: 'gone' } },
     });
     const claude = accountSelect('Claude');
     expect(claude.props.value).toBe('gone');
@@ -188,7 +237,7 @@ describe('KeyProfileEditor', () => {
   });
 
   test('account names are masked when emails are hidden', async () => {
-    await mount({ profile: copyOfShared(shared), showEmails: false });
+    await mount({ showEmails: false });
     const labels = accountSelect('Claude').props.options.map(
       (option: { label: string }) => option.label
     );
@@ -197,7 +246,7 @@ describe('KeyProfileEditor', () => {
   });
 
   test('Save is disabled while the profile is clean or invalid', async () => {
-    await mount({ profile: copyOfShared(shared) });
+    await mount();
     expect(saveButton().props.disabled).toBe(true);
 
     act(() => sticky().props.onChange(false));
@@ -215,7 +264,7 @@ describe('KeyProfileEditor', () => {
   });
 
   test('Save sends the full draft', async () => {
-    const { onSave } = await mount({ profile: copyOfShared(shared) });
+    const { onSave } = await mount();
     act(() => sticky().props.onChange(false));
     act(() => accountSelect('Claude').props.onChange(''));
     act(() => accountSelect('Codex').props.onChange('codex-a'));
@@ -235,42 +284,22 @@ describe('KeyProfileEditor', () => {
     });
   });
 
-  test('choosing the shared settings for a key with a profile saves null', async () => {
-    const { onSave } = await mount({ profile: copyOfShared(shared) });
-    click(modeButton('shared'));
-    expect(textOf(root())).toContain('This key follows the shared settings');
-    expect(root().findAllByType(ToggleSwitch)).toHaveLength(0);
-    click(saveButton());
-    expect(onSave).toHaveBeenCalledWith(null);
-  });
-
-  test('switching back to the own profile keeps the unsaved edits', async () => {
-    await mount({ profile: copyOfShared(shared) });
-    act(() => sticky().props.onChange(false));
-    click(modeButton('shared'));
-    click(modeButton('own'));
-    expect(sticky().props.checked).toBe(false);
-  });
-
   test('Cancel calls onCancel', async () => {
-    const { onCancel, onSave } = await mount({ profile: copyOfShared(shared) });
+    const { onCancel, onSave } = await mount();
     click(cancelButton());
     expect(onCancel).toHaveBeenCalledTimes(1);
     expect(onSave).not.toHaveBeenCalled();
   });
 
   test('read-only disables every control and explains why', async () => {
-    const { onSave, onCancel } = await mount({ profile: copyOfShared(shared), readOnly: true });
+    const { onSave, onCancel } = await mount({ readOnly: true, isNew: true, variant: 'default' });
     expect(textOf(root())).toContain('Per-key profiles need native CPA routing');
-    expect(modeButton('shared').props.disabled).toBe(true);
-    expect(modeButton('own').props.disabled).toBe(true);
     expect(sticky().props.disabled).toBe(true);
+    expect(ttlInputs()[0].props.disabled).toBe(true);
     expect(selects().every((select) => select.props.disabled === true)).toBe(true);
     expect(root().findByType(FallbackSettingsEditor).props.disabled).toBe(true);
     expect(saveButton().props.disabled).toBe(true);
 
-    click(modeButton('shared'));
-    expect(modeButton('own').props['aria-checked']).toBe(true);
     click(saveButton());
     expect(onSave).not.toHaveBeenCalled();
 
@@ -280,9 +309,11 @@ describe('KeyProfileEditor', () => {
   });
 
   test('while saving the controls are locked and Save shows progress', async () => {
-    await mount({ profile: copyOfShared(shared), saving: true });
+    const { onSave } = await mount({ saving: true, isNew: true, variant: 'default' });
     expect(sticky().props.disabled).toBe(true);
-    expect(modeButton('shared').props.disabled).toBe(true);
+    expect(ttlInputs()[0].props.disabled).toBe(true);
     expect(saveButton().props.loading).toBe(true);
+    click(saveButton());
+    expect(onSave).not.toHaveBeenCalled();
   });
 });
