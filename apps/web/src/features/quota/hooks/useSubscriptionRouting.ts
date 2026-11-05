@@ -9,21 +9,12 @@ import {
 import { useConfigStore } from '@/features/personal-quota-support/stores';
 import { errorText, routingFormState, routingStrategyOptions } from '../routingModel';
 
-/** What the legacy toolbar needs from the `/routing/profiles` load owned by `useKeyProfiles`. */
-export interface RoutingProfilesSource {
-  /**
-   * The profiles failed to load for a reason other than a 404, so it is unknown
-   * whether the backend routes by `routing.selection` or by the legacy strategy.
-   */
-  failed?: boolean;
-}
-
 /**
  * Loads and saves the legacy routing settings of a backend without `/routing/profiles`;
  * saving is explicit and guarded by the connection revision. On a backend that serves
  * `/routing/profiles` the shared profile is written by `useKeyProfiles` instead.
  */
-export function useSubscriptionRouting(disabled: boolean, profiles?: RoutingProfilesSource) {
+export function useSubscriptionRouting(disabled: boolean) {
   const { t } = useTranslation();
   const [values, setValues] = useState<SubscriptionRoutingSettings | null>(null);
   const [baseline, setBaseline] = useState<SubscriptionRoutingSettings | null>(null);
@@ -67,15 +58,8 @@ export function useSubscriptionRouting(disabled: boolean, profiles?: RoutingProf
     };
   }, [disabled, fetchConfig, loadRevision, t]);
 
-  // A backend with an explicit routing.selection ignores routing.strategy, so the
-  // legacy select stays locked while it is unknown which of the two is in use.
-  const strategyLocked = !!profiles?.failed;
-
   const change = (patch: Partial<SubscriptionRoutingSettings>) => {
-    const rest = { ...patch };
-    if (strategyLocked) delete rest.strategy;
-    if (Object.keys(rest).length)
-      setValues((current) => (current ? { ...current, ...rest } : current));
+    setValues((current) => (current ? { ...current, ...patch } : current));
     setSaved(false);
   };
   const { dirty, invalidTTL } = routingFormState(values, baseline);
@@ -117,7 +101,6 @@ export function useSubscriptionRouting(disabled: boolean, profiles?: RoutingProf
     invalidTTL,
     blocked,
     options,
-    strategyLocked,
     strategyLabel: values ? options.find((option) => option.value === values.strategy)?.label : '',
     change,
     save,

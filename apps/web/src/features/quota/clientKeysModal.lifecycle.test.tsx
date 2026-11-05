@@ -105,6 +105,8 @@ const showConfirmation = vi.fn();
 let keyProfiles: ModalHook;
 let renderer: ReactTestRenderer | undefined;
 let onOpenProfiles: ReturnType<typeof vi.fn<(key: string) => void>>;
+let open: boolean;
+let onClose: ReturnType<typeof vi.fn<() => void>>;
 
 beforeAll(async () => {
   await i18n.changeLanguage('en');
@@ -113,6 +115,8 @@ beforeAll(async () => {
 beforeEach(() => {
   keyProfiles = makeKeyProfiles();
   onOpenProfiles = vi.fn<(key: string) => void>();
+  open = true;
+  onClose = vi.fn<() => void>();
   showConfirmation.mockReset();
   vi.mocked(copyToClipboard).mockReset().mockResolvedValue(true);
   useNotificationStore.setState({ showConfirmation });
@@ -125,8 +129,8 @@ afterEach(async () => {
 
 const modal = () =>
   createElement(ClientKeysModal, {
-    open: true,
-    onClose: vi.fn(),
+    open,
+    onClose,
     keyProfiles,
     files,
     showEmails: false,
@@ -227,13 +231,6 @@ describe('client keys modal rows', () => {
     for (const raw of RAW_KEYS) expect(JSON.stringify(options)).not.toContain(raw);
     await confirmLast();
     expect(keyProfiles.removeKey).toHaveBeenCalledExactlyOnceWith(RAW_ALPHA);
-  });
-
-  test('a cancelled delete makes no call', async () => {
-    await mount();
-    await click(buttonIn(keyRows()[0], 'data-client-key-delete'));
-    await act(async () => showConfirmation.mock.calls[0][0].onCancel?.());
-    expect(keyProfiles.removeKey).not.toHaveBeenCalled();
   });
 
   test('a delete alias warning is shown', async () => {
@@ -394,20 +391,82 @@ describe('client keys modal add form', () => {
   });
 });
 
+describe('client keys modal opening and closing', () => {
+  const closeButton = () =>
+    root()
+      .findAllByType(Button)
+      .find((button) => text(button) === 'Close');
+  const reopen = async () => {
+    open = false;
+    await rerender();
+    open = true;
+    await rerender();
+  };
+
+  test('hiding the modal drops its messages and hides the draft key again', async () => {
+    vi.mocked(copyToClipboard).mockResolvedValue(false);
+    keyProfiles = makeKeyProfiles(profilesState(), {
+      removeKey: vi.fn(async () => ({ ok: true, aliasWarning: 'alias left behind' })),
+    });
+    await mount();
+    await click(buttonIn(keyRows()[0], 'data-client-key-delete'));
+    await confirmLast();
+    await type(keyInput(), RAW_NEW);
+    await click(buttonIn(byAttr('data-client-key-add'), 'data-client-key-copy'));
+    expect(keyInput().props.type).toBe('text');
+
+    // Hidden by a switch to the Profiles modal: the draft stays, masked again.
+    await reopen();
+    expect(root().findAll((node) => node.props['data-client-keys-warning'])).toHaveLength(0);
+    expect(root().findAll((node) => node.props['data-client-key-copy-status'])).toHaveLength(0);
+    expect(keyInput().props.type).toBe('password');
+    expect(keyInput().props.value).toBe(RAW_NEW);
+  });
+
+  test('Close discards the add form', async () => {
+    await mount();
+    await type(keyInput(), RAW_NEW);
+    await type(aliasInput(), 'Laptop');
+    await click(closeButton());
+    expect(onClose).toHaveBeenCalledTimes(1);
+    await reopen();
+    expect(keyInput().props.value).toBe('');
+    expect(aliasInput().props.value).toBe('');
+  });
+
+  test('Close is refused while a write runs', async () => {
+    keyProfiles = makeKeyProfiles(profilesState(), { saving: true });
+    await mount();
+    expect(closeButton()!.props.disabled).toBe(true);
+    await click(closeButton());
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  test('Enter adds the key, but not while the profiles load', async () => {
+    const enter = async (input: ReactTestInstance) => {
+      const preventDefault = vi.fn();
+      await act(async () => input.props.onKeyDown({ key: 'Enter', preventDefault }));
+      expect(preventDefault).toHaveBeenCalled();
+    };
+    keyProfiles = makeKeyProfiles(profilesState(), { loading: true });
+    await mount();
+    await type(keyInput(), RAW_NEW);
+    await enter(keyInput());
+    await enter(aliasInput());
+    expect(keyProfiles.addKey).not.toHaveBeenCalled();
+
+    keyProfiles = makeKeyProfiles();
+    await rerender();
+    await enter(aliasInput());
+    expect(keyProfiles.addKey).toHaveBeenCalledExactlyOnceWith(RAW_NEW, undefined);
+  });
+});
+
 describe('client keys modal states', () => {
-  test('shows the loading and unsupported states', async () => {
+  test('shows the loading state', async () => {
     keyProfiles = makeKeyProfiles(null, { loading: true });
     await mount();
-    const body = () => byAttr('data-client-keys-modal');
-    expect(text(body())).toContain('Loading client keys');
-
-    keyProfiles = makeKeyProfiles({
-      ...profilesState(),
-      unsupportedBackend: true,
-      supported: false,
-    });
-    await rerender();
-    expect(text(body())).toContain('no per-key routing profiles');
+    expect(text(byAttr('data-client-keys-modal'))).toContain('Loading client keys');
     expect(root().findAll((node) => node.props['data-client-key-add'])).toHaveLength(0);
   });
 

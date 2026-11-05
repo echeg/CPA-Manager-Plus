@@ -114,10 +114,12 @@ client cancellation. It adds no response/idle timeout: a connection that stays o
 without returning an error still depends on existing transport or client timeouts.
 Home and scheduler plugins retain ownership of their routing.
 
-This requires updating both this panel and the custom CPA backend. Older backends
-leave the control disabled. Capability and model suggestions come from
-`GET /v8/management/routing/claude-fallback`; settings are saved only under
-`routing.claude-fallback` through the v8 configuration API. The default is disabled.
+This requires updating both this panel and the custom CPA backend. On an older
+backend without the fallback endpoint the legacy toolbar control stays disabled.
+Capability and model suggestions come from `GET /v8/management/routing/claude-fallback`.
+Settings are saved through the v8 configuration API: the default profile's under
+`routing.claude-fallback`, and a key profile's under
+`routing.key-profiles.<key>.claude-fallback`. The default is disabled.
 
 ```yaml
 routing:
@@ -147,12 +149,12 @@ provider (the provider, the time of the latest selection, and the account in its
 tooltip), and two buttons:
 
 ```text
-[Codex Fast mode] [Claude ● 10:53] [Codex ● 10:52] [Profiles] [Keys · 2]
+[Codex Fast mode] [Codex ● 10:52] [Claude ● 10:53] [Profiles] [Keys · 2]
 ```
 
 **Profiles** opens the routing profiles modal. **Keys · N** opens the client keys
-modal, where N is the number of client keys in `access.api-keys` (or the legacy
-top-level `api-keys`). The shared-profile controls (selection slots, session
+modal, where N is the number of client keys in `access.api-keys`. The
+shared-profile controls (selection slots, session
 affinity, TTL, preferred subscriptions, fallback switch and Save) are no longer in
 the toolbar; the default profile is edited only in the Profiles modal, so it has a
 single writer. Both buttons are disabled until the first profiles load finishes. If
@@ -167,8 +169,14 @@ at a time.
   is shown, read-only, in the key editors. An empty or invalid TTL is rejected before
   any request. **Save** sends one `PATCH /v8/management/config` with
   `routing.selection`, `session-affinity`, `preferred-accounts` and
-  `claude-fallback`, plus `session-affinity-ttl` only when it changed, then reads the
-  config back and reports an error if CPA did not keep the same values.
+  `claude-fallback`, plus `session-affinity-ttl` only when it changed. It then reads
+  `GET /v8/management/routing/profiles` back and compares the default profile, and
+  when the TTL was sent also checks it in the config; it reports an error if CPA did
+  not keep the same values. Every Save writes the complete `routing.selection`, even
+  when only the TTL or sticky session changed. On a configuration with only the legacy
+  `routing.strategy`, the first Save stores the derived selection (for example
+  Reserves → Round-robin); `routing.strategy` stays in the file but is ignored from
+  then on.
 - One row per key with its own profile: its label, a one-line chain summary such as
   `Sticky session · Claude: work@example.com · Codex: Automatic · reserves →
   round-robin · Fallback: automatic`, **Edit**, and **Reset to default**. Reset asks
@@ -201,8 +209,9 @@ select, the chain summary, **Configure…** for a key with its own profile, and
   default** does.
 - **Delete** asks for confirmation, reads a fresh key list, and writes the list
   without the key. CPA then drops the key's profile, and the panel deletes its
-  alias. The last client key cannot be deleted. On a panel served by the Manager
-  Server, a key is not deleted while its alias state cannot be confirmed.
+  alias. The last client key cannot be deleted. A key is not deleted while the
+  panel host is still being checked or cannot be confirmed, or, on a panel served by
+  the Manager Server, while the alias list is loading or did not load.
 - The **Add a key** form at the bottom has a key field (hidden by default, with a
   show toggle), **Generate**, **Copy**, an optional **Alias**, and **Add**. A key may
   contain only visible ASCII characters without spaces, and a key already in the
@@ -214,9 +223,12 @@ select, the chain summary, **Configure…** for a key with its own profile, and
   without it the alias field is unavailable.
 
 Keys are written through the v8 configuration API: `GET /v8/management/config`,
-then `PATCH /v8/management/config` with `{"access": {"api-keys": [...]}}`, or with
-the legacy top-level `{"api-keys": [...]}` when that is where the config keeps them.
-After each key operation the panel reloads the config, the profiles and the aliases.
+then `PATCH /v8/management/config` with the complete `{"access": {"api-keys": [...]}}`
+list. CPA's v8 API moves a legacy top-level list there and rejects the legacy field in
+writes. The write starts from the stored entries, so an entry the panel cannot show
+(an unquoted numeric key reads back as a number) is kept as it was. After each key
+operation the panel reloads the config and the profiles, and updates the alias list
+from the alias service's response.
 
 **Errors.** If a key was removed on the Config page in the meantime (`400
 unknown_api_key`), the panel says so and reloads the list. A rejected write (`422
@@ -235,10 +247,11 @@ paths to its log. Account names in the summaries follow the email privacy toggle
 **Read-only mode and older backends.** In Home mode or with a scheduler plugin, CPA
 reports `supported: false`: per-key profiles are inactive. The toolbar is still the
 slim one. In the Profiles modal the key rows are read-only and **Reset to default**
-and **+ Profile for a key** are hidden, but the Default row stays editable. In the
+and **+ Profile for a key** are hidden. The Default row stays editable except its
+fallback stage, which CPA ignores in this mode; a Save keeps the stored fallback. In the
 Keys modal the profile select is read-only, while adding and deleting keys stay
 available. A backend without `GET /v8/management/routing/profiles` (404) keeps
-today's legacy toolbar unchanged: the legacy strategy select, sticky-session
+the legacy toolbar: the legacy strategy select, sticky-session
 settings, preferred subscriptions, the fallback control and Save, with no
 Profiles or Keys button. Keys on such a backend are managed on the Config page.
 

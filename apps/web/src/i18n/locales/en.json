@@ -5702,7 +5702,6 @@
       "edit_label": "Edit routing for {{label}}",
       "collapse_label": "Collapse routing for {{label}}",
       "loading": "Loading routing profiles…",
-      "unsupported": "This CPA version has no per-key routing profiles.",
       "profiles": {
         "title": "Routing profiles",
         "default": "Default",

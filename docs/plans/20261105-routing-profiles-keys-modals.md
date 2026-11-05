@@ -254,6 +254,7 @@ Run from the repository root:
   - an error message containing the key comes back masked;
   - a connection change between read and write aborts the write;
   - no request URL contains the raw key
+- ➕ review: the legacy top-level path is dropped. CPA's v8 `GET /config` moves a legacy top-level list into `access.api-keys` (`NormalizeConfigLayout(data, true)`), and a v8 write rejects that field (`ValidateV8Config`), so keys are always written to `access.api-keys`. A write starts from the stored entries, so an entry the panel cannot show (an unquoted numeric key decodes as a number) is written back instead of being dropped
 - [x] run `npm run type-check` and `npm run test:web`; both must pass before Task 3
 
 ### Task 3: Shared profile writer
@@ -353,6 +354,7 @@ Run from the repository root:
   - Edit is disabled during a reload;
   - no raw key in the output, titles or aria labels
 - ➕ the modal takes the `useKeyProfiles` result as its `keyProfiles` prop, as `KeyProfilesModal` did, so the tests pass a stand-in object for the hook. Locale keys live under `quota_management.key_profiles.profiles.*`. The focus is applied during render once the profiles are loaded (the React Compiler lint rejects setState in an effect), and a focus on a key on the default is ignored when `supported: false`
+- ➕ review: with `supported: false` the default editor locks only its fallback stage (`fallbackReadOnly`, hint `quota_management.fallback.unsupported`) and a save keeps the stored fallback block, because CPA ignores the fallback in Home or scheduler-plugin mode, as the old toolbar's `ClaudeFallbackControl` did. The modals no longer carry an `unsupportedBackend` branch (they render only on the slim toolbar), and `key_profiles.unsupported` is removed from all four locales
 - [x] run `npm run type-check` and `npm run test:web`; both must pass before Task 7
 
 ### Task 7: ClientKeysModal
@@ -422,6 +424,7 @@ Run from the repository root:
   - assert that on a capable backend the bar renders no `[data-routing-save]` and no `ClaudeFallbackControl`, and that `useClaudeFallback` gets no `onSaved`;
   - the legacy 404 save path still sends `routing.strategy`
 - ➕ the legacy `SubscriptionRoutingSettings.selection` and the selection branch of `subscriptionRoutingPatch` are removed too, so the legacy save can only send `routing.strategy`. `RoutingProfilesSource` is now `{failed?}`. `useClaudeFallback` loses its `onSaved` parameter (the bar was its only caller). `ClaudeFallbackControl` keeps its `fallback` prop, because the legacy 404 toolbar still renders it. The toolbar-only `quota_management.routing.selection_hint` locale key is removed from all four locales
+- ➕ review: `failed`, `strategyLocked` and `RoutingProfilesSource` are removed. Task 8 renders the slim toolbar before the first load and after a failed one, so the legacy toolbar shows only for a loaded 404 state and the lock could never apply
 - [x] run `npm run type-check` and `npm run test:web`; both must pass before Task 10
 
 ### Task 10: Locale cleanup and parity
@@ -460,7 +463,7 @@ Run from the repository root:
   - the backend prunes the profile of a removed key.
 - **Alias save**: `PUT <manager>/api-key-aliases` through `usageServiceApi.saveApiKeyAliases(base, [{apiKeyHash, alias}], managementKey, activeHashes)`. Delete through `deleteApiKeyAlias(base, hash, managementKey)`.
 - **Navigation state**: `{open: 'keys' | 'profiles' | null, focus?: string, fromKeys: boolean}`.
-- **Toolbar on a capable backend**: `[Codex Fast mode] [Claude ● 10:53] [Codex ● 10:52] [Профили] [Ключи · 2]`.
+- **Toolbar on a capable backend**: `[Codex Fast mode] [Codex ● 10:52] [Claude ● 10:53] [Профили] [Ключи · 2]`.
 
 ## Post-Completion
 **Deploy** (panel only, per the local CPAMP deploy procedure):

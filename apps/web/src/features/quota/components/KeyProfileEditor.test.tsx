@@ -132,8 +132,7 @@ describe('KeyProfileEditor', () => {
     const { onSave } = await mount({ initial, isNew: true });
     expect(saveButton().props.disabled).toBe(false);
     click(saveButton());
-    expect(onSave).toHaveBeenCalledWith(copyOfShared(shared));
-    expect(onSave.mock.calls[0]).toHaveLength(1);
+    expect(onSave).toHaveBeenCalledWith(copyOfShared(shared), undefined);
     expect(onSave.mock.calls[0][0]).not.toBe(initial);
   });
 
@@ -166,7 +165,10 @@ describe('KeyProfileEditor', () => {
     expect(saveButton().props.disabled).toBe(true);
     act(() => sticky().props.onChange(false));
     click(saveButton());
-    expect(onSave.mock.calls[1]).toEqual([{ ...copyOfShared(shared), sessionAffinity: false }]);
+    expect(onSave.mock.calls[1]).toEqual([
+      { ...copyOfShared(shared), sessionAffinity: false },
+      undefined,
+    ]);
   });
 
   test('an invalid TTL disables Save and explains the format', async () => {
@@ -276,12 +278,15 @@ describe('KeyProfileEditor', () => {
         .props.onChange({ ...shared.claudeFallback, mode: 'always' })
     );
     click(saveButton());
-    expect(onSave).toHaveBeenCalledWith({
-      sessionAffinity: false,
-      preferredAccounts: { codex: 'codex-a' },
-      selection: { primary: 'priority' },
-      claudeFallback: { ...shared.claudeFallback, mode: 'always' },
-    });
+    expect(onSave).toHaveBeenCalledWith(
+      {
+        sessionAffinity: false,
+        preferredAccounts: { codex: 'codex-a' },
+        selection: { primary: 'priority' },
+        claudeFallback: { ...shared.claudeFallback, mode: 'always' },
+      },
+      undefined
+    );
   });
 
   test('Cancel calls onCancel', async () => {
@@ -306,6 +311,25 @@ describe('KeyProfileEditor', () => {
     expect(cancelButton().props.disabled).toBeFalsy();
     click(cancelButton());
     expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  test('fallbackReadOnly locks only the fallback and saves the stored block', async () => {
+    // An empty mapping list is filled with suggestions on screen; a save must not store them.
+    const stored: RoutingProfile = {
+      ...shared,
+      claudeFallback: { enabled: false, mode: 'auto', mappings: [] },
+    };
+    const { onSave } = await mount({ initial: stored, variant: 'default', fallbackReadOnly: true });
+    expect(textOf(root())).toContain('Requires an updated CPA backend with native routing');
+    expect(textOf(root())).not.toContain('Per-key profiles need native CPA routing');
+    expect(root().findByType(FallbackSettingsEditor).props.disabled).toBe(true);
+    expect(sticky().props.disabled).toBe(false);
+    expect(ttlInputs()[0].props.disabled).toBe(false);
+
+    act(() => sticky().props.onChange(false));
+    click(saveButton());
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave.mock.calls[0][0]).toEqual({ ...stored, sessionAffinity: false });
   });
 
   test('while saving the controls are locked and Save shows progress', async () => {

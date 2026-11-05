@@ -40,7 +40,6 @@ const hash = (key: string) => sha256Hex(key).toLowerCase();
 const BASE = 'http://manager.local';
 
 const accessConfig = (keys: unknown[] = [KEY_A, KEY_B]) => ({ access: { 'api-keys': keys } });
-const legacyConfig = (keys: unknown[] = [KEY_A, KEY_B]) => ({ 'api-keys': keys });
 const ctx = (overrides: Partial<ClientKeyAliasContext> = {}): ClientKeyAliasContext => ({
   serviceBase: BASE,
   managementKey: 'mgmt',
@@ -76,11 +75,23 @@ describe('clientKeysApi', () => {
       expect(mocks.saveAliases).not.toHaveBeenCalled();
     });
 
-    it('writes the legacy top-level list where it was found', async () => {
-      mocks.get.mockResolvedValue(legacyConfig());
+    it('writes back stored entries the panel cannot show, unchanged', async () => {
+      // An unquoted numeric key reads back as a number; dropping it would revoke it.
+      mocks.get.mockResolvedValue(accessConfig([KEY_A, 12345, '', KEY_A]));
       await clientKeysApi.addClientKey(NEW_KEY);
       expect(mocks.patch).toHaveBeenCalledWith('/config', {
-        'api-keys': [KEY_A, KEY_B, NEW_KEY],
+        access: { 'api-keys': [KEY_A, 12345, '', KEY_A, NEW_KEY] },
+      });
+    });
+
+    it('ignores the v8 top-level api-keys groups and writes access.api-keys', async () => {
+      mocks.get.mockResolvedValue({
+        'api-keys': { openai: [{ 'api-key': 'sk-upstream' }] },
+        access: { 'api-keys': [KEY_A] },
+      });
+      await clientKeysApi.addClientKey(NEW_KEY);
+      expect(mocks.patch).toHaveBeenCalledWith('/config', {
+        access: { 'api-keys': [KEY_A, NEW_KEY] },
       });
     });
 
@@ -248,10 +259,24 @@ describe('clientKeysApi', () => {
       expect(mocks.deleteAlias).not.toHaveBeenCalled();
     });
 
-    it('writes the legacy top-level list where it was found', async () => {
-      mocks.get.mockResolvedValue(legacyConfig());
+    it('writes back stored entries the panel cannot show, unchanged', async () => {
+      mocks.get.mockResolvedValue(accessConfig([KEY_A, 12345, KEY_B]));
       await clientKeysApi.removeClientKey(KEY_A);
-      expect(mocks.patch).toHaveBeenCalledWith('/config', { 'api-keys': [KEY_B] });
+      expect(mocks.patch).toHaveBeenCalledWith('/config', {
+        access: { 'api-keys': [12345, KEY_B] },
+      });
+    });
+
+    it('counts a non-string entry as a remaining key', async () => {
+      mocks.get.mockResolvedValue(accessConfig([KEY_A, 12345]));
+      await clientKeysApi.removeClientKey(KEY_A);
+      expect(mocks.patch).toHaveBeenCalledWith('/config', { access: { 'api-keys': [12345] } });
+    });
+
+    it('refuses to remove the last key when only blank entries would remain', async () => {
+      mocks.get.mockResolvedValue(accessConfig([KEY_A, '', null]));
+      await expect(clientKeysApi.removeClientKey(KEY_A)).rejects.toBeInstanceOf(LastClientKeyError);
+      expect(mocks.patch).not.toHaveBeenCalled();
     });
 
     it('refuses to remove the last key', async () => {

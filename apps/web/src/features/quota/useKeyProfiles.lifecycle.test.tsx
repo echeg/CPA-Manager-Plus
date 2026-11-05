@@ -74,6 +74,8 @@ const initialConfigState = useConfigStore.getState();
 let renderer: ReactTestRenderer | undefined;
 let revision = 0;
 let hook!: KeyProfilesState;
+/** Keys with their own profile among the hook's rows. */
+const ownProfiles = () => hook.rows.filter((row) => row.profile !== null).length;
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -155,13 +157,13 @@ afterEach(async () => {
 });
 
 describe('useKeyProfiles', () => {
-  test('loads every client key with its profile and the N/M counts', async () => {
+  test('loads every client key with its profile and the key count', async () => {
     aliasState.aliases = [{ apiKeyHash: sha256Hex(KEY_A).toLowerCase(), alias: 'Laptop' }];
     await mount();
     expect(hook.loading).toBe(false);
     expect(hook.error).toBe('');
     expect(hook.state?.supported).toBe(true);
-    expect(hook.count).toBe(1);
+    expect(ownProfiles()).toBe(1);
     expect(hook.total).toBe(2);
     expect(hook.rows.map((row) => [row.key, row.profile !== null, row.hasAlias])).toEqual([
       [KEY_A, false, true],
@@ -201,7 +203,7 @@ describe('useKeyProfiles', () => {
       profilesState().selectionOptions
     );
     expect(hook.state).toBe(saved);
-    expect(hook.count).toBe(2);
+    expect(ownProfiles()).toBe(2);
     expect(hook.saving).toBe(false);
     expect(clearCache).toHaveBeenCalled();
     expect(routingProfilesApi.get).toHaveBeenCalledTimes(1);
@@ -216,7 +218,7 @@ describe('useKeyProfiles', () => {
       await hook.saveKeyProfile(KEY_B, null);
     });
     expect(save).toHaveBeenCalledExactlyOnceWith(KEY_B, null, profilesState().selectionOptions);
-    expect(hook.count).toBe(0);
+    expect(ownProfiles()).toBe(0);
     expect(hook.rows[1].profile).toBeNull();
   });
 
@@ -239,6 +241,57 @@ describe('useKeyProfiles', () => {
     expect(save).toHaveBeenCalledTimes(1);
     expect(hook.saving).toBe(false);
   });
+
+  test('refuses every write while the profiles reload', async () => {
+    const saveKey = vi.spyOn(routingProfilesApi, 'saveKeyProfile');
+    const saveShared = vi.spyOn(routingProfilesApi, 'saveSharedProfile');
+    const add = vi.spyOn(clientKeysApi, 'addClientKey');
+    const remove = vi.spyOn(clientKeysApi, 'removeClientKey');
+    await mount();
+    const pending = deferred<RoutingProfilesState>();
+    vi.mocked(routingProfilesApi.get).mockReturnValueOnce(pending.promise);
+    await act(async () => hook.reload());
+    expect(hook.loading).toBe(true);
+
+    const results: unknown[] = [];
+    await act(async () => {
+      results.push(await hook.saveKeyProfile(KEY_A, ownProfile()));
+      results.push(await hook.saveShared(sharedProfile()));
+      results.push(await hook.addKey(KEY_C));
+      results.push(await hook.removeKey(KEY_A));
+    });
+    expect(results).toEqual([false, false, { ok: false }, { ok: false }]);
+    for (const spy of [saveKey, saveShared, add, remove]) expect(spy).not.toHaveBeenCalled();
+    expect(hook.saving).toBe(false);
+
+    await act(async () => pending.resolve(profilesState()));
+    expect(hook.loading).toBe(false);
+  });
+
+  test('a running shared save blocks key writes until it settles', async () => {
+    const pending = deferred<RoutingProfilesState>();
+    vi.spyOn(routingProfilesApi, 'saveSharedProfile').mockReturnValue(pending.promise);
+    const add = vi.spyOn(clientKeysApi, 'addClientKey').mockResolvedValue({});
+    const remove = vi.spyOn(clientKeysApi, 'removeClientKey');
+    await mount();
+    let first!: Promise<boolean>;
+    const blocked: unknown[] = [];
+    await act(async () => {
+      first = hook.saveShared(sharedProfile());
+      blocked.push(await hook.addKey(KEY_C));
+      blocked.push(await hook.removeKey(KEY_A));
+    });
+    expect(blocked).toEqual([{ ok: false }, { ok: false }]);
+    expect(add).not.toHaveBeenCalled();
+    expect(remove).not.toHaveBeenCalled();
+    expect(hook.saving).toBe(true);
+
+    await act(async () => {
+      pending.resolve(profilesState());
+      await first;
+    });
+    expect(hook.saving).toBe(false);
+  });
 });
 
 describe('useKeyProfiles errors', () => {
@@ -248,7 +301,7 @@ describe('useKeyProfiles errors', () => {
     await mount();
     expect(hook.state).toMatchObject({ supported: false, unsupportedBackend: true });
     expect(hook.error).toBe('');
-    expect(hook.count).toBe(0);
+    expect(ownProfiles()).toBe(0);
     expect(hook.total).toBe(2);
     let result = true;
     await act(async () => {
@@ -284,12 +337,12 @@ describe('useKeyProfiles errors', () => {
     await act(async () => hook.reload());
     expect(hook.loading).toBe(true);
     expect(hook.state).toBe(loaded);
-    expect([hook.count, hook.total]).toEqual([1, 2]);
+    expect([ownProfiles(), hook.total]).toEqual([1, 2]);
     await act(async () => pending.reject(new Error('offline')));
     expect(hook.loading).toBe(false);
     expect(hook.error).toBe('offline');
     expect(hook.state).toBe(loaded);
-    expect([hook.count, hook.total]).toEqual([1, 2]);
+    expect([ownProfiles(), hook.total]).toEqual([1, 2]);
   });
 
   test('a connection change drops the previous connection state', async () => {
@@ -299,7 +352,7 @@ describe('useKeyProfiles errors', () => {
     revision += 1;
     await act(async () => hook.reload());
     expect(hook.state).toBeNull();
-    expect([hook.count, hook.total]).toEqual([0, 0]);
+    expect([ownProfiles(), hook.total]).toEqual([0, 0]);
     expect(hook.error).toBe('offline');
   });
 
@@ -365,7 +418,7 @@ describe('useKeyProfiles errors', () => {
     });
     expect(routingProfilesApi.get).toHaveBeenCalledTimes(2);
     expect(hook.state).toBe(fresh);
-    expect(hook.count).toBe(0);
+    expect(ownProfiles()).toBe(0);
     expect(hook.error).toBe('');
   });
 
@@ -402,7 +455,7 @@ describe('useKeyProfiles errors', () => {
     });
     await expect(result).resolves.toBe(false);
     expect(hook.state).not.toBe(stale);
-    expect(hook.count).toBe(1);
+    expect(ownProfiles()).toBe(1);
     expect(clearCache).not.toHaveBeenCalled();
     expect(hook.error).toBe('');
     expect(hook.saving).toBe(false);
@@ -553,7 +606,7 @@ describe('useKeyProfiles client keys', () => {
       .mockResolvedValue(profilesState([]))
       .mockResolvedValueOnce(profilesState([{ key: KEY_B, profile: ownProfile() }]));
     await mount();
-    expect(hook.count).toBe(1);
+    expect(ownProfiles()).toBe(1);
     let result!: Awaited<ReturnType<KeyProfilesState['removeKey']>>;
     await act(async () => {
       result = await hook.removeKey(KEY_B);
@@ -566,7 +619,7 @@ describe('useKeyProfiles client keys', () => {
     expect(aliasState.removed).toEqual([hashOf(KEY_B)]);
     expect(fetchConfig).toHaveBeenLastCalledWith(true);
     expect(hook.rows.map((row) => row.key)).toEqual([KEY_A]);
-    expect(hook.count).toBe(0);
+    expect(ownProfiles()).toBe(0);
   });
 
   test('add and remove work while per-key profiles are inert', async () => {

@@ -3,12 +3,7 @@ import { sha256Hex } from '@/utils/apiKeyHash';
 import { isValidApiKeyCharset } from '@/utils/validation';
 import { apiClient } from './client';
 import { guardConfigConnection } from './configValue';
-import {
-  clientApiKeys,
-  scrubKey,
-  translateWriteError,
-  UnknownApiKeyError,
-} from './routingProfiles';
+import { scrubKey, translateWriteError, UnknownApiKeyError } from './routingProfiles';
 
 /**
  * Alias state of the panel, as the caller's `useApiKeyAliases` instance sees it.
@@ -94,19 +89,26 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const keyHash = (key: string) => sha256Hex(key).toLowerCase();
 const normalizeAlias = (alias: string) => alias.trim().toLowerCase();
 
-type KeyListPath = 'access' | 'legacy';
+/** A stored entry that names a key: anything but a missing value or a blank string. */
+const isKeyEntry = (entry: unknown) =>
+  entry !== null && entry !== undefined && (typeof entry !== 'string' || entry.trim() !== '');
 
-/** The client key list of a fresh config, and where it was found. */
-async function readClientKeys(): Promise<{ keys: string[]; path: KeyListPath }> {
+/**
+ * The stored `access.api-keys` entries of a fresh config, and the string keys among
+ * them. CPA's v8 GET moves a legacy top-level list here and a v8 write rejects that
+ * legacy field, so the list is always read and written at `access.api-keys`. A write
+ * starts from the stored entries, so one the panel cannot show (an unquoted numeric
+ * key reads back as a number) is written back unchanged instead of being dropped.
+ */
+async function readClientKeys(): Promise<{ entries: unknown[]; keys: string[] }> {
   const raw = await apiClient.get('/config');
-  const access = isRecord(raw) && isRecord(raw.access) ? raw.access : null;
-  const inAccess = !!access && Object.prototype.hasOwnProperty.call(access, 'api-keys');
-  const legacy = !inAccess && isRecord(raw) && Array.isArray(raw['api-keys']);
-  return { keys: clientApiKeys(raw), path: legacy ? 'legacy' : 'access' };
+  const list = isRecord(raw) && isRecord(raw.access) ? raw.access['api-keys'] : undefined;
+  const entries: unknown[] = Array.isArray(list) ? list : [];
+  const keys = entries.filter(
+    (entry): entry is string => typeof entry === 'string' && entry.trim() !== ''
+  );
+  return { entries, keys };
 }
-
-const keyListPatch = (keys: string[], path: KeyListPath) =>
-  path === 'legacy' ? { 'api-keys': keys } : { access: { 'api-keys': keys } };
 
 /** Map a key-list write error and keep the raw key out of every message. */
 function translateKeyWriteError(error: unknown, key: string): unknown {
@@ -143,15 +145,10 @@ function validateAlias(
   if (taken) throw new DuplicateAliasError();
 }
 
-async function patchKeyList(
-  keys: string[],
-  path: KeyListPath,
-  key: string,
-  assertCurrent: () => void
-) {
+async function patchKeyList(entries: unknown[], key: string, assertCurrent: () => void) {
   assertCurrent();
   try {
-    await apiClient.patch('/config', keyListPatch(keys, path));
+    await apiClient.patch('/config', { access: { 'api-keys': entries } });
   } catch (error) {
     assertCurrent();
     throw translateKeyWriteError(error, key);
@@ -173,13 +170,12 @@ export const clientKeysApi = {
     const key = rawKey.trim();
     if (!isValidApiKeyCharset(key)) throw new InvalidClientKeyError();
     const assertCurrent = guardConfigConnection();
-    const { keys, path } = await readClientKeys();
+    const { entries, keys } = await readClientKeys();
     assertCurrent();
     if (keys.some((entry) => entry.trim() === key)) throw new DuplicateClientKeyError();
 
-    const nextKeys = [...keys, key];
     const hash = keyHash(key);
-    const activeHashes = [...new Set(nextKeys.map(keyHash).filter(Boolean))];
+    const activeHashes = [...new Set([...keys, key].map(keyHash).filter(Boolean))];
     const trimmedAlias = alias === undefined ? undefined : alias.trim();
     if (trimmedAlias !== undefined) {
       if (!aliasContext?.serviceBase || !aliasContext.aliasStateKnown)
@@ -187,7 +183,7 @@ export const clientKeysApi = {
       validateAlias(trimmedAlias, hash, activeHashes, aliasContext);
     }
 
-    await patchKeyList(nextKeys, path, key, assertCurrent);
+    await patchKeyList([...entries, key], key, assertCurrent);
     if (trimmedAlias === undefined || !aliasContext) return {};
     try {
       const response = await usageServiceApi.saveApiKeyAliases(
@@ -212,14 +208,16 @@ export const clientKeysApi = {
   ): Promise<RemoveClientKeyResult> {
     const key = rawKey.trim();
     const assertCurrent = guardConfigConnection();
-    const { keys, path } = await readClientKeys();
+    const { entries } = await readClientKeys();
     assertCurrent();
-    const nextKeys = keys.filter((entry) => entry.trim() !== key);
-    if (!key || nextKeys.length === keys.length) throw new UnknownApiKeyError();
-    if (nextKeys.length === 0) throw new LastClientKeyError();
+    const nextEntries = entries.filter(
+      (entry) => typeof entry !== 'string' || entry.trim() !== key
+    );
+    if (!key || nextEntries.length === entries.length) throw new UnknownApiKeyError();
+    if (!nextEntries.some(isKeyEntry)) throw new LastClientKeyError();
     if (aliasContext && !aliasContext.aliasStateKnown) throw new AliasStateUnknownError();
 
-    await patchKeyList(nextKeys, path, key, assertCurrent);
+    await patchKeyList(nextEntries, key, assertCurrent);
     const hash = keyHash(key);
     const hasAlias =
       !!aliasContext?.serviceBase &&

@@ -93,11 +93,13 @@ export function useApiKeyAliases() {
   }, []);
 
   // A key write can orphan or lose an alias unless the host is confirmed and, on a
-  // manager-hosted panel, the alias list loaded (ApiKeysCardEditor's delete rule).
+  // manager-hosted panel, the alias list loaded (ApiKeysCardEditor's rule). While a
+  // load runs, for example after a connection change, the list may be the old one's.
   const stateKnown =
     !featureAvailability.checking &&
     featureAvailability.panelHostConfirmed &&
-    (featureAvailability.panelHostMode !== 'manager_embedded' || (!!serviceBase && available));
+    (featureAvailability.panelHostMode !== 'manager_embedded' ||
+      (!!serviceBase && available && !loading));
 
   return {
     aliases,

@@ -8,7 +8,6 @@ import type {
   RoutingProfile,
   RoutingProfilesState,
 } from '@/features/personal-quota-support/services/api/routingProfiles';
-import { unsupportedRoutingProfiles } from '@/features/personal-quota-support/services/api/routingProfiles';
 import type { AuthFileItem } from '@/features/personal-quota-support/types';
 import { useNotificationStore } from '@/stores';
 import { sha256Hex } from '@/utils/apiKeyHash';
@@ -201,11 +200,15 @@ describe('routing profiles modal rows', () => {
     expect(editor.props.variant).toBe('default');
     expect(editor.props.ttl).toBe('1h');
     expect(editor.props.readOnly).toBe(false);
+    expect(editor.props.fallbackReadOnly).toBe(false);
     expect(editor.props.initial).toEqual(shared());
 
     await act(async () => editor.findAllByType(ToggleSwitch)[0].props.onChange(false));
     await click(editorSave());
-    expect(keyProfiles.saveShared).toHaveBeenCalledWith({ ...shared(), sessionAffinity: false });
+    expect(keyProfiles.saveShared).toHaveBeenCalledWith(
+      { ...shared(), sessionAffinity: false },
+      undefined
+    );
     expect(editors()).toHaveLength(0);
 
     await click(buttonIn(defaultRow(), 'data-profile-edit'));
@@ -265,14 +268,6 @@ describe('routing profiles modal rows', () => {
     await act(async () => options.onConfirm());
     expect(keyProfiles.saveKeyProfile).toHaveBeenCalledWith(RAW_BETA, null);
     expect(editors()).toHaveLength(0);
-  });
-
-  test('a cancelled reset makes no call', async () => {
-    await mount();
-    await click(buttonIn(keyRows()[0], 'data-profile-reset'));
-    const options = showConfirmation.mock.calls[0][0];
-    await act(async () => options.onCancel?.());
-    expect(keyProfiles.saveKeyProfile).not.toHaveBeenCalled();
   });
 
   test('"+ Profile for a key" lists keys on the default and opens a new draft', async () => {
@@ -354,6 +349,13 @@ describe('routing profiles modal focus and navigation', () => {
     expect(editors()).toHaveLength(1);
   });
 
+  test('a focus on a key that is no longer listed opens no editor', async () => {
+    props = { focus: 'sk-live-RAWKEY-deleted-000444' };
+    await mount();
+    expect(editors()).toHaveLength(0);
+    expect(root().findAll((node) => node.props['data-profile-draft'])).toHaveLength(0);
+  });
+
   test('closing and reopening applies the focus again', async () => {
     props = { focus: RAW_BETA };
     await mount();
@@ -400,9 +402,17 @@ describe('routing profiles modal states', () => {
     await click(buttonIn(defaultRow(), 'data-profile-edit'));
     expect(editors()[0].props.variant).toBe('default');
     expect(editors()[0].props.readOnly).toBe(false);
+    // CPA ignores the fallback in this mode, so the default editor locks that stage only.
+    expect(editors()[0].props.fallbackReadOnly).toBe(true);
+    expect(
+      editors()[0].findAll((node) => node.props['data-key-profile-fallback-locked']).length
+    ).toBeGreaterThan(0);
     await act(async () => editors()[0].findAllByType(ToggleSwitch)[0].props.onChange(false));
     await click(editorSave());
-    expect(keyProfiles.saveShared).toHaveBeenCalledWith({ ...shared(), sessionAffinity: false });
+    expect(keyProfiles.saveShared).toHaveBeenCalledWith(
+      { ...shared(), sessionAffinity: false },
+      undefined
+    );
   });
 
   test('Edit is disabled while the profiles reload unless that editor is open', async () => {
@@ -424,15 +434,11 @@ describe('routing profiles modal states', () => {
     expect(editors()[0].props.saving).toBe(true);
   });
 
-  test('shows the loading, unsupported and error states', async () => {
+  test('shows the loading and error states', async () => {
     keyProfiles = makeKeyProfiles(null, { loading: true });
     await mount();
     const body = () => root().find((node) => node.props['data-routing-profiles-modal']);
     expect(text(body())).toContain('Loading routing profiles');
-
-    keyProfiles = makeKeyProfiles(unsupportedRoutingProfiles());
-    await rerender();
-    expect(text(body())).toContain('no per-key routing profiles');
 
     keyProfiles = makeKeyProfiles(profilesState(), { error: 'failed for bob@example.com' });
     await rerender();

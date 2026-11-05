@@ -5697,7 +5697,6 @@
       "edit_label": "編輯 {{label}} 的路由",
       "collapse_label": "收合 {{label}} 的路由",
       "loading": "正在載入路由設定…",
-      "unsupported": "此 CPA 版本不支援依金鑰的路由設定。",
       "profiles": {
         "title": "路由設定檔",
         "default": "預設",

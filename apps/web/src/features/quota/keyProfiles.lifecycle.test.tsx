@@ -126,7 +126,6 @@ function makeKeyProfiles(
   return {
     state,
     rows,
-    count: rows.filter((row) => row.profile).length,
     total: rows.length,
     ttl: '1h',
     aliasesEditable: true,
@@ -394,7 +393,7 @@ describe('quota settings bar on a backend without /routing/profiles', () => {
     expect(root().findAllByType(ClaudeFallbackControl)).toHaveLength(1);
     expect(root().findAllByType(RoutingProfilesModal)).toHaveLength(0);
     expect(root().findAllByType(ClientKeysModal)).toHaveLength(0);
-    expect(useSubscriptionRouting).toHaveBeenLastCalledWith(false, { failed: false });
+    expect(useSubscriptionRouting).toHaveBeenLastCalledWith(false);
   });
 
   test('a legacy fallback toggle saves without reloading the key profiles', async () => {
@@ -407,11 +406,5 @@ describe('quota settings bar on a backend without /routing/profiles', () => {
     expect(claudeFallbackApi.save).toHaveBeenCalledTimes(1);
     expect(keyProfiles.reload).not.toHaveBeenCalled();
     expect(vi.mocked(useClaudeFallback).mock.calls.every((args) => args.length === 1)).toBe(true);
-  });
-
-  test('a failed first load locks the legacy strategy select', async () => {
-    keyProfiles = makeKeyProfiles(null, { error: 'offline' });
-    await mount();
-    expect(useSubscriptionRouting).toHaveBeenLastCalledWith(false, { failed: true });
   });
 });

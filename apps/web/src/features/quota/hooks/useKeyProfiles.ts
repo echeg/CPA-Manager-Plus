@@ -268,14 +268,12 @@ export function useKeyProfiles(disabled: boolean) {
       state ? buildKeyRows(mergeKeyRows(apiKeys, state.keys), aliasesAvailable ? aliases : []) : [],
     [state, apiKeys, aliases, aliasesAvailable]
   );
-  const count = rows.filter((row) => row.profile !== null).length;
   // `addKey` refuses an alias unless the service is reachable and its state is known.
   const aliasesEditable = Boolean(aliasServiceBase) && aliasStateKnown;
 
   return {
     state,
     rows,
-    count,
     total: rows.length,
     ttl,
     aliasesEditable,

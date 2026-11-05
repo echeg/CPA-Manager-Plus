@@ -62,6 +62,7 @@ export function ClientKeysModal({
   const [showKey, setShowKey] = useState(false);
   const [copyStatus, setCopyStatus] = useState<CopyStatus>('');
   const [warning, setWarning] = useState('');
+  const [wasOpen, setWasOpen] = useState(open);
   const { state, rows, total, aliasesEditable, loading, saving, error } = keyProfiles;
   const mask = (value: string) => (showEmails ? value : maskQuotaText(value));
   const message = mask(error);
@@ -69,8 +70,22 @@ export function ClientKeysModal({
   const busy = saving || loading;
   const lastKey = total <= 1;
 
+  // The modal stays mounted while hidden. Hiding it drops its messages and hides the
+  // draft key again, so a reopened modal shows no stale warning and no key in clear text.
+  if (wasOpen !== open) {
+    setWasOpen(open);
+    if (!open) {
+      setShowKey(false);
+      setCopyStatus('');
+      setWarning('');
+    }
+  }
+
   const close = () => {
     if (saving) return;
+    // Closing discards the add form; switching to the Profiles modal keeps it.
+    setDraftKey('');
+    setDraftAlias('');
     onClose();
   };
 
@@ -282,12 +297,9 @@ export function ClientKeysModal({
           </p>
         )}
 
+        {/* The toolbar renders this modal only on a backend that serves /routing/profiles. */}
         {!state ? (
           loading && <p className={styles.hint}>{t(`${prefix}.loading`)}</p>
-        ) : state.unsupportedBackend ? (
-          <p className={styles.notice} role="note">
-            {t('quota_management.key_profiles.unsupported')}
-          </p>
         ) : (
           <>
             {readOnly && rows.length > 0 && (

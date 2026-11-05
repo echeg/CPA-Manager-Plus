@@ -46,6 +46,12 @@ export interface KeyProfileEditorProps {
   saving: boolean;
   /** Nothing can be changed, for example a key profile when the backend reports `supported: false`. */
   readOnly: boolean;
+  /**
+   * Only the fallback stage is locked: CPA ignores it in Home or scheduler-plugin mode
+   * (`supported: false`), where the default profile stays editable. A save keeps the
+   * stored fallback block.
+   */
+  fallbackReadOnly?: boolean;
   /** Saves the complete profile; the TTL is passed only when the default variant changed it. */
   onSave: (profile: RoutingProfile, ttl?: string) => void;
   onCancel: () => void;
@@ -69,6 +75,7 @@ export function KeyProfileEditor({
   models,
   saving,
   readOnly,
+  fallbackReadOnly = false,
   onSave,
   onCancel,
 }: KeyProfileEditorProps) {
@@ -104,9 +111,12 @@ export function KeyProfileEditor({
 
   const save = () => {
     if (readOnly || saving || !dirty || invalid) return;
-    const profile = { ...draft, selection: withPickerRule(draft.selection, selectionOptions) };
-    if (ttlChanged) onSave(profile, ttlDraft.trim());
-    else onSave(profile);
+    const profile = {
+      ...draft,
+      selection: withPickerRule(draft.selection, selectionOptions),
+      claudeFallback: fallbackReadOnly ? initial.claudeFallback : draft.claudeFallback,
+    };
+    onSave(profile, ttlChanged ? ttlDraft.trim() : undefined);
   };
 
   const slots = selectionSlotOptions(t, selectionOptions, draft.selection);
@@ -233,10 +243,15 @@ export function KeyProfileEditor({
 
       <section className={styles.stage} aria-labelledby={`${id}-fallback`}>
         <h4 id={`${id}-fallback`}>{t('quota_management.fallback.title')}</h4>
+        {fallbackReadOnly && (
+          <p className={styles.hint} data-key-profile-fallback-locked>
+            {t('quota_management.fallback.unsupported')}
+          </p>
+        )}
         <FallbackSettingsEditor
           value={draft.claudeFallback}
           models={models}
-          disabled={locked}
+          disabled={locked || fallbackReadOnly}
           onChange={(claudeFallback) => update({ claudeFallback })}
         />
       </section>

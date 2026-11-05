@@ -69,7 +69,6 @@ export function RoutingProfilesModal({
   const { state, rows, ttl, loading, saving, error } = keyProfiles;
   const message = showEmails ? error : maskQuotaText(error);
   const readOnly = state ? !state.supported : true;
-  const ready = Boolean(state && !state.unsupportedBackend);
 
   const own = rows.filter((row) => row.profile !== null);
   const onDefault = rows.filter((row) => row.profile === null);
@@ -83,7 +82,7 @@ export function RoutingProfilesModal({
     }
   }
   // An editor copies its profile once, so the focus waits for a finished load.
-  if (open && focus && ready && !loading && appliedFocus !== focus) {
+  if (open && focus && state && !loading && appliedFocus !== focus) {
     setAppliedFocus(focus);
     const row = rows.find((item) => item.key.trim() === focus.trim());
     if (row && !(row.profile === null && readOnly)) setEditing({ kind: 'key', key: row.key });
@@ -106,10 +105,7 @@ export function RoutingProfilesModal({
   };
 
   const saveDefault = async (profile: RoutingProfile, nextTTL?: string) => {
-    const saved =
-      nextTTL === undefined
-        ? await keyProfiles.saveShared(profile)
-        : await keyProfiles.saveShared(profile, nextTTL);
+    const saved = await keyProfiles.saveShared(profile, nextTTL);
     if (saved) setEditing((current) => (current?.kind === 'default' ? null : current));
   };
 
@@ -198,12 +194,9 @@ export function RoutingProfilesModal({
           </div>
         )}
 
+        {/* The toolbar renders this modal only on a backend that serves /routing/profiles. */}
         {!state ? (
           loading && <p className={styles.hint}>{t('quota_management.key_profiles.loading')}</p>
-        ) : state.unsupportedBackend ? (
-          <p className={styles.notice} role="note">
-            {t('quota_management.key_profiles.unsupported')}
-          </p>
         ) : (
           <>
             {readOnly && (
@@ -250,8 +243,10 @@ export function RoutingProfilesModal({
                   selectionOptions={state.selectionOptions}
                   models={models}
                   saving={saving || loading}
-                  // The shared values stay editable in Home or scheduler-plugin mode.
+                  // The shared values stay editable in Home or scheduler-plugin mode,
+                  // except the fallback, which CPA ignores there.
                   readOnly={false}
+                  fallbackReadOnly={readOnly}
                   onSave={(profile, nextTTL) => void saveDefault(profile, nextTTL)}
                   onCancel={() => setEditing(null)}
                 />

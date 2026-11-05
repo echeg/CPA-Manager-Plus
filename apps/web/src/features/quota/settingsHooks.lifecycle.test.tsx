@@ -12,7 +12,6 @@ import type { Config } from '@/features/personal-quota-support/types';
 import { useCodexFastMode, type CodexFastModeState } from './hooks/useCodexFastMode';
 import {
   useSubscriptionRouting,
-  type RoutingProfilesSource,
   type SubscriptionRoutingState,
 } from './hooks/useSubscriptionRouting';
 import { useSubscriptionActivity } from './hooks/useSubscriptionActivity';
@@ -223,52 +222,17 @@ describe('personal quota settings session lifecycle', () => {
     const onState = (next: SubscriptionRoutingState) => {
       state = next;
     };
-    function Harness(props: {
-      profiles?: RoutingProfilesSource;
-      onState: (state: SubscriptionRoutingState) => void;
-    }) {
-      props.onState(useSubscriptionRouting(false, props.profiles));
+    function Harness(props: { onState: (state: SubscriptionRoutingState) => void }) {
+      props.onState(useSubscriptionRouting(false));
       return null;
     }
-    async function mountWith(profiles?: RoutingProfilesSource) {
-      await act(async () => {
-        renderer = create(createElement(Harness, { profiles, onState }));
-      });
-    }
-    async function rerender(profiles?: RoutingProfilesSource) {
-      await act(async () => {
-        renderer?.update(createElement(Harness, { profiles, onState }));
-      });
-    }
 
-    test('a failed profiles load locks the legacy strategy but not the other settings', async () => {
+    test('writes routing.strategy and never a selection', async () => {
       const patch = vi.spyOn(apiClient, 'patch').mockResolvedValue(undefined);
       useConfigStore.setState({ fetchConfig: vi.fn(async () => config), clearCache: vi.fn() });
-      await mountWith({ failed: true });
-      expect(state.strategyLocked).toBe(true);
       await act(async () => {
-        state.change({ strategy: 'round-robin', sessionAffinity: true });
+        renderer = create(createElement(Harness, { onState }));
       });
-      expect(state.values?.strategy).toBe('fill-first');
-      await act(async () => {
-        await state.save();
-      });
-      expect(patch).toHaveBeenCalledExactlyOnceWith('/config', {
-        routing: { 'session-affinity': true },
-      });
-
-      // Once the profiles load, the lock lifts.
-      await rerender({ failed: false });
-      expect(state.strategyLocked).toBe(false);
-    });
-
-    test.each([
-      ['no profiles source', undefined],
-      ['a loaded 404 backend', { failed: false }],
-    ])('writes routing.strategy and never a selection with %s', async (_name, profiles) => {
-      const patch = vi.spyOn(apiClient, 'patch').mockResolvedValue(undefined);
-      useConfigStore.setState({ fetchConfig: vi.fn(async () => config), clearCache: vi.fn() });
-      await mountWith(profiles);
       expect(state).not.toHaveProperty('slots');
       expect(state.values).not.toHaveProperty('selection');
       await act(async () => {

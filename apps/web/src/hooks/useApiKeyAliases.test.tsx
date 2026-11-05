@@ -221,6 +221,37 @@ describe('useApiKeyAliases alias state', () => {
     expect(current().stateKnown).toBe(false);
   });
 
+  it('is unknown on a manager-hosted panel while the aliases reload', async () => {
+    mocks.getApiKeyAliases.mockResolvedValueOnce({
+      items: [{ apiKeyHash: 'AA', alias: 'Old host' }],
+    });
+    await mount();
+    expect(current().stateKnown).toBe(true);
+
+    let resolveNext: (value: { items: unknown[] }) => void = () => {};
+    mocks.getApiKeyAliases.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveNext = resolve;
+      })
+    );
+    changeConnection();
+    await flush();
+    // The old connection's list is still in place, so it must not count as known.
+    expect(current().aliases).toEqual([{ apiKeyHash: 'aa', alias: 'Old host' }]);
+    expect(current().stateKnown).toBe(false);
+
+    await act(async () => resolveNext({ items: [] }));
+    await flush();
+    expect(current()).toMatchObject({ stateKnown: true, aliases: [] });
+  });
+
+  it('is unknown on a manager-hosted panel whose manager service is unavailable', async () => {
+    mocks.featureAvailability = { ...managerHosted(), managerServiceAvailable: false };
+    await mount();
+    expect(current()).toMatchObject({ stateKnown: false, serviceBase: '' });
+    expect(mocks.getApiKeyAliases).not.toHaveBeenCalled();
+  });
+
   it('is unknown while the host is checked or unconfirmed', async () => {
     mocks.featureAvailability = { ...managerHosted(), checking: true };
     await mount();

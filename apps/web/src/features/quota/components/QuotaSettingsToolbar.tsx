@@ -40,7 +40,6 @@ type RoutingProps = Pick<
   | 'invalidTTL'
   | 'blocked'
   | 'options'
-  | 'strategyLocked'
   | 'change'
   | 'save'
   | 'reload'
@@ -244,7 +243,7 @@ export function QuotaSettingsToolbar({
           value={values?.strategy ?? 'round-robin'}
           options={routing.options}
           ariaLabelledBy={`${id}-strategy`}
-          disabled={blocked || !!routing.strategyLocked}
+          disabled={blocked}
           onChange={(strategy) => routing.change({ strategy })}
         />
       </div>
@@ -384,9 +383,7 @@ export function QuotaSettingsBar({
   const profilesState = keyProfiles.state;
   // The legacy routing form; on a backend with /routing/profiles the Profiles modal
   // is the only writer of the shared profile, so this form is not rendered there.
-  const routing = useSubscriptionRouting(disabled, {
-    failed: !profilesState && !keyProfiles.loading && !!keyProfiles.error,
-  });
+  const routing = useSubscriptionRouting(disabled);
   // The fallback control of the legacy toolbar, and the model lists of the editors.
   const fallback = useClaudeFallback(disabled);
   const fastMode = useCodexFastMode(disabled);
