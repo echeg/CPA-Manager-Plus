@@ -783,6 +783,7 @@
     "cpa_logs_loading": "Loading log size…",
     "cpa_logs_unsupported": "Update CPA to show log size",
     "cpa_logs_error": "Could not load log size: {{message}}",
+    "cpa_logs_refresh_error": "Could not refresh log size: {{message}}",
     "cpa_logs_warning_unbounded": "Request logging is on without a total size limit; logs can fill the disk.",
     "cpa_logs_warning_near_limit": "Logs use {{used}} of the {{limit}} limit; old files will be removed soon."
   },

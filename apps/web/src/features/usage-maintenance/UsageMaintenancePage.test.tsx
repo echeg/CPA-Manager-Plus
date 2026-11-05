@@ -9,7 +9,7 @@ import type {
 } from '@/services/api/usageService';
 import en from '@/i18n/locales/en.json';
 import { Drawer } from '@/components/ui/Drawer';
-import { formatFileSize } from '@/utils/format';
+import { formatDateTime, formatFileSize } from '@/utils/format';
 import type { CpaLogStorage, CpaLogStorageResult } from './cpaLogStorage';
 import { UsageMaintenancePage } from './UsageMaintenancePage';
 import {
@@ -3210,6 +3210,32 @@ describe('UsageMaintenancePage CPA logs card', () => {
     expect(mocks.getCpaLogStorage.mock.calls[0][0]).toBeInstanceOf(AbortSignal);
   });
 
+  it('fills every placeholder of the summary, retention and warning lines', async () => {
+    const storage = cpaLogStorage({ limitMb: 190, requestLog: true });
+    mocks.getCpaLogStorage.mockResolvedValue({
+      supported: true,
+      storage,
+    } satisfies CpaLogStorageResult);
+
+    const renderer = await renderOverviewPage();
+
+    const cardText = getText(findCpaLogsCard(renderer));
+    const spanDays =
+      (storage.newestModifiedAt!.getTime() - storage.oldestModifiedAt!.getTime()) / 86_400_000;
+    expect(cardText).toContain(
+      `Files: 15 · limit ${formatFileSize(190 * 1024 * 1024)} · request log on`
+    );
+    expect(cardText).toContain(
+      `Since ${formatDateTime(storage.oldestModifiedAt!, 'en')} (29 d) · ≈ ${formatFileSize(
+        Math.round(storage.totalBytes / spanDays)
+      )}/day`
+    );
+    expect(cardText).toContain(
+      `Logs use ${formatFileSize(storage.cappedBytes)} of the ${formatFileSize(190 * 1024 * 1024)} limit`
+    );
+    expect(cardText).not.toContain('{{');
+  });
+
   it('keeps the page usable when CPA does not support the storage route', async () => {
     const renderer = await renderOverviewPage();
 
@@ -3239,16 +3265,7 @@ describe('UsageMaintenancePage CPA logs card', () => {
     expect(findButtons(renderer, 'New archive')).toHaveLength(1);
   });
 
-  it('reports a missing management connection as a card error', async () => {
-    mocks.getCpaLogStorage.mockRejectedValue(new Error('The management connection is unavailable'));
-
-    const renderer = await renderOverviewPage();
-
-    expect(findCpaLogsCard(renderer).props['data-status']).toBe('error');
-    expect(getText(renderer.root)).toContain('Archive records');
-  });
-
-  it('aborts the storage request on unmount and ignores its late result', async () => {
+  it('aborts the storage request on unmount', async () => {
     const pending = deferred<CpaLogStorageResult>();
     mocks.getCpaLogStorage.mockReturnValue(pending.promise);
 
@@ -3260,11 +3277,6 @@ describe('UsageMaintenancePage CPA logs card', () => {
     act(() => renderer.unmount());
     renderers.delete(renderer);
     expect(signal.aborted).toBe(true);
-
-    await act(async () => {
-      pending.resolve({ supported: true, storage: cpaLogStorage() });
-      await Promise.resolve();
-    });
   });
 
   it('refetches on a user refresh and keeps only the newest result', async () => {
@@ -3287,13 +3299,122 @@ describe('UsageMaintenancePage CPA logs card', () => {
       await Promise.resolve();
     });
     await act(async () => {
-      first.resolve({ supported: false });
+      first.reject(Object.assign(new Error('canceled'), { code: 'ERR_CANCELED' }));
       await Promise.resolve();
     });
 
     const card = findCpaLogsCard(renderer);
     expect(card.props['data-status']).toBe('ready');
     expect(getText(card)).toContain(formatFileSize(2_048));
+    expect(getText(card)).not.toContain('canceled');
+  });
+
+  it('keeps the last size while a refresh is pending and after it fails', async () => {
+    const refresh = deferred<CpaLogStorageResult>();
+    mocks.getCpaLogStorage
+      .mockResolvedValueOnce({ supported: true, storage: cpaLogStorage() })
+      .mockReturnValueOnce(refresh.promise)
+      .mockResolvedValueOnce({ supported: true, storage: cpaLogStorage({ totalBytes: 4_096 }) });
+    const renderer = await renderOverviewPage();
+    const clickRefresh = () =>
+      act(async () => {
+        findButtons(renderer, 'Refresh')[0].props.onClick();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+    await clickRefresh();
+    expect(findCpaLogsCard(renderer).props['data-status']).toBe('ready');
+    expect(getText(findCpaLogsCard(renderer))).toContain(formatFileSize(185_068_097));
+
+    await act(async () => {
+      refresh.reject(new Error('scan failed'));
+      await Promise.resolve();
+    });
+    const card = findCpaLogsCard(renderer);
+    expect(card.props['data-status']).toBe('ready');
+    expect(getText(card)).toContain(formatFileSize(185_068_097));
+    expect(getText(card)).toContain('Could not refresh log size: scan failed');
+
+    await clickRefresh();
+    expect(getText(findCpaLogsCard(renderer))).toContain(formatFileSize(4_096));
+    expect(getText(findCpaLogsCard(renderer))).not.toContain('scan failed');
+  });
+
+  it('does not refetch the log size on background maintenance polling', async () => {
+    vi.useFakeTimers();
+    const activeRun = archive('archiving', 'polling-run');
+    const renderer = await renderOverviewPage(maintenance({ active_run: activeRun }), [activeRun]);
+    expect(mocks.getCpaLogStorage).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      vi.advanceTimersByTime(5_000);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mocks.getUsageMaintenance).toHaveBeenCalledTimes(2);
+    expect(mocks.getCpaLogStorage).toHaveBeenCalledTimes(1);
+    act(() => renderer.unmount());
+    renderers.delete(renderer);
+  });
+
+  it('clears the log size of the previous connection when the connection changes', async () => {
+    const next = deferred<CpaLogStorageResult>();
+    mocks.getCpaLogStorage
+      .mockResolvedValueOnce({ supported: true, storage: cpaLogStorage() })
+      .mockReturnValueOnce(next.promise);
+    const renderer = await renderOverviewPage();
+    expect(getText(findCpaLogsCard(renderer))).toContain(formatFileSize(185_068_097));
+
+    mocks.availability.managerServiceBase = 'http://manager-b.local:18317';
+    mocks.managementKey = 'management-key-b';
+    await act(async () => {
+      renderer.update(<UsageMaintenancePage />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mocks.getCpaLogStorage).toHaveBeenCalledTimes(2);
+    expect(findCpaLogsCard(renderer).props['data-status']).toBe('loading');
+    expect(getText(findCpaLogsCard(renderer))).not.toContain(formatFileSize(185_068_097));
+
+    await act(async () => {
+      next.resolve({ supported: true, storage: cpaLogStorage({ totalBytes: 8_192 }) });
+      await Promise.resolve();
+    });
+    expect(getText(findCpaLogsCard(renderer))).toContain(formatFileSize(8_192));
+  });
+
+  it('aborts and ignores the in-flight storage request of the previous connection', async () => {
+    const old = deferred<CpaLogStorageResult>();
+    const next = deferred<CpaLogStorageResult>();
+    mocks.getCpaLogStorage.mockReturnValueOnce(old.promise).mockReturnValueOnce(next.promise);
+    const renderer = await renderOverviewPage();
+    const oldSignal = mocks.getCpaLogStorage.mock.calls[0][0] as AbortSignal;
+
+    mocks.availability.managerServiceBase = 'http://manager-b.local:18317';
+    mocks.managementKey = 'management-key-b';
+    await act(async () => {
+      renderer.update(<UsageMaintenancePage />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(oldSignal.aborted).toBe(true);
+
+    await act(async () => {
+      old.resolve({ supported: true, storage: cpaLogStorage({ totalBytes: 999_999 }) });
+      await Promise.resolve();
+    });
+    expect(findCpaLogsCard(renderer).props['data-status']).toBe('loading');
+    expect(getText(findCpaLogsCard(renderer))).not.toContain(formatFileSize(999_999));
+
+    await act(async () => {
+      next.resolve({ supported: false });
+      await Promise.resolve();
+    });
+    expect(findCpaLogsCard(renderer).props['data-status']).toBe('unsupported');
   });
 
   it('opens the configuration page from the card chip', async () => {

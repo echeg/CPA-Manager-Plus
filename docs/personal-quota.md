@@ -17,7 +17,8 @@ confirmed reset; refresh on entry; and privacy masking.
 Reserve editing is available directly on the quota cards.
 
 The existing Accounts, Analytics, Monitoring, Usage Maintenance, OAuth, configuration,
-plugin and account automation screens remain available. This is one CPAMP panel with
+plugin and account automation screens remain available. Usage Maintenance also gains
+a read-only [CPA logs](#cpa-logs-storage) card. This is one CPAMP panel with
 one CPAMP database connected to the existing CPA inference server.
 
 ## Connection and compatibility
@@ -292,10 +293,11 @@ limit, or when request logging is on and there is no limit. `total_bytes` also
 counts nested and other files that the cleaner never removes.
 
 The card loads separately from the page's usage and archive requests. A failing
-call only changes the card. A CPA build without the route answers 404, and the card
-then shows "—" with a hint to update CPA. The route needs
-[echeg/CLIProxyAPI](https://github.com/echeg/CLIProxyAPI)
-`v8.0.10-personal.logs-storage.20261105` or later. Demo mode serves a fixture
+call only changes the card; a failed refresh keeps the last size with an inline
+error. A CPA build without the route answers 404, and the card then shows "—" with
+a hint to update CPA. The route needs
+[echeg/CLIProxyAPI](https://github.com/echeg/CLIProxyAPI) `main` at `84224e31`
+or later. Demo mode serves a fixture
 from `handleDemoRawRequest`, because the v8 client sends every call through
 `requestRaw`.
 

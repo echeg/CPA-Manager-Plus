@@ -68,9 +68,9 @@ export function maskSensitiveText(value: string): string {
 export function formatFileSize(bytes: number): string {
   if (bytes === 0) return '0 B';
 
-  const units = ['B', 'KB', 'MB', 'GB'];
+  const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
   const k = 1024;
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  const i = Math.min(Math.max(Math.floor(Math.log(bytes) / Math.log(k)), 0), units.length - 1);
 
   return `${(bytes / Math.pow(k, i)).toFixed(2)} ${units[i]}`;
 }
@@ -79,7 +79,7 @@ export function formatFileSize(bytes: number): string {
  * 格式化日期时间
  */
 export function formatDateTime(date: string | Date, locale?: string): string {
-  const d = typeof date === 'string' ? parseTimestamp(date) ?? new Date(date) : date;
+  const d = typeof date === 'string' ? (parseTimestamp(date) ?? new Date(date)) : date;
 
   if (isNaN(d.getTime())) {
     return 'Invalid Date';

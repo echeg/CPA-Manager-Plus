@@ -1,19 +1,39 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  cpaLogStorageApi,
   logRetention,
   logStorageWarning,
   readCpaLogStorage,
 } from '@/features/usage-maintenance/cpaLogStorage';
+import { useAuthStore } from '@/stores/useAuthStore';
 import {
   getDemoLogStorage,
   handleDemoApiRequest,
   handleDemoRawRequest,
   resetDemoConfigState,
 } from './demoApi';
+import { DEMO_API_BASE, DEMO_MANAGEMENT_KEY, setDemoMode } from './demoMode';
 
 describe('demo CPA log storage', () => {
   afterEach(() => {
     resetDemoConfigState();
+    setDemoMode(false);
+    vi.restoreAllMocks();
+  });
+
+  it('reaches the fixture through the card API client in demo mode', async () => {
+    setDemoMode(true);
+    // The demo page logs in with these placeholders; the persisted store needs no browser storage here.
+    const getState = useAuthStore.getState;
+    vi.spyOn(useAuthStore, 'getState').mockImplementation(() => ({
+      ...getState(),
+      apiBase: DEMO_API_BASE,
+      managementKey: DEMO_MANAGEMENT_KEY,
+    }));
+
+    const result = await cpaLogStorageApi.get();
+
+    expect(result).toMatchObject({ supported: true, storage: { limitMb: 512, requestLog: true } });
   });
 
   it('serves a payload the card reader accepts through the raw request path', async () => {
@@ -54,5 +74,18 @@ describe('demo CPA log storage', () => {
     expect(storage.requestLog).toBe(false);
     expect(storage.loggingToFile).toBe(false);
     expect(storage.limitMb).toBe(512);
+  });
+
+  it('follows the edited limit and warns when request logging has no limit', async () => {
+    await handleDemoApiRequest(
+      'put',
+      '/config.yaml',
+      ['request-log: true', 'logs-max-total-size-mb: 0'].join('\n')
+    );
+
+    const storage = readCpaLogStorage(getDemoLogStorage());
+
+    expect(storage.limitMb).toBe(0);
+    expect(logStorageWarning(storage)).toBe('unbounded');
   });
 });

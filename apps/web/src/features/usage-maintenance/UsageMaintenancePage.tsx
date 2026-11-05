@@ -581,10 +581,13 @@ export function UsageMaintenancePage() {
       );
     } catch (cause) {
       if (!isCurrent()) return;
-      setLogStorage({
-        status: 'error',
-        message: cause instanceof Error ? cause.message : String(cause),
-      });
+      const message = cause instanceof Error ? cause.message : String(cause);
+      // A failed refresh keeps the last snapshot (data-loading-and-refresh.md); only a first load shows the error.
+      setLogStorage((previous) =>
+        previous.status === 'ready'
+          ? { status: 'ready', storage: previous.storage, refreshError: message }
+          : { status: 'error', message }
+      );
     } finally {
       if (generation === logStorageGenerationRef.current) logStorageControllerRef.current = null;
     }
@@ -698,6 +701,10 @@ export function UsageMaintenancePage() {
     setPreview(null);
     setPreviewLoading(false);
     setPreviewError(null);
+    logStorageGenerationRef.current += 1;
+    logStorageControllerRef.current?.abort();
+    logStorageControllerRef.current = null;
+    setLogStorage({ status: 'loading' });
     setGuidedArchiveStage('idle');
     setGuidedArchiveRunId(null);
     setPostDeleteNoticeVisible(false);

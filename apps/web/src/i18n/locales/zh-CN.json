@@ -781,6 +781,7 @@
     "cpa_logs_loading": "正在加载日志大小…",
     "cpa_logs_unsupported": "请更新 CPA 以显示日志大小",
     "cpa_logs_error": "无法获取日志大小：{{message}}",
+    "cpa_logs_refresh_error": "无法刷新日志大小：{{message}}",
     "cpa_logs_warning_unbounded": "请求日志已开启但未设置总大小限制，日志可能占满磁盘。",
     "cpa_logs_warning_near_limit": "日志已使用 {{used}}，限制为 {{limit}}；旧文件即将被删除。"
   },

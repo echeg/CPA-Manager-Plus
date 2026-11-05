@@ -117,6 +117,12 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+
+  /* Multi-fact lines (CPA logs card) wrap instead of hiding facts at five columns. */
+  &.cardSubWrap {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
 }
 
 .actionChip {

@@ -20,7 +20,7 @@ Operate providers, credentials, OAuth, plugins, and configuration while keeping 
 
 </div>
 
-> **Personal fork:** This repository adds the Agent Proxy Console quota workbench to CPAMP. It retains CPAMP analytics, database maintenance, and account automation, and requires the custom CPA v8 backend for the new Quota page. See [personal fork setup and maintenance](docs/personal-quota.md). The upstream installation links below install stock CPAMP.
+> **Personal fork:** This repository adds the Agent Proxy Console quota workbench to CPAMP. It retains CPAMP analytics, database maintenance, and account automation, and requires the custom CPA v8 backend for the new Quota page and the Usage Maintenance CPA logs card. See [personal fork setup and maintenance](docs/personal-quota.md). The upstream installation links below install stock CPAMP.
 
 ## What Can CPAMP Help You Answer?
 

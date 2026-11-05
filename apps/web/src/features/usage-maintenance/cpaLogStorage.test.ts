@@ -193,6 +193,14 @@ describe('logRetention', () => {
     ).toEqual({ spanDays: 0.5, bytesPerDay: null });
   });
 
+  it('reports a zero span without growth for a single log file', () => {
+    const only = new Date('2026-11-05T12:00:00Z');
+    expect(logRetention(storage({ oldestModifiedAt: only, newestModifiedAt: only }))).toEqual({
+      spanDays: 0,
+      bytesPerDay: null,
+    });
+  });
+
   it('averages total bytes over a multi-day span', () => {
     expect(
       logRetention(

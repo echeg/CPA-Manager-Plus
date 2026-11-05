@@ -115,7 +115,8 @@ export type CpaLogStorageState =
   | { status: 'loading' }
   | { status: 'unsupported' }
   | { status: 'error'; message: string }
-  | { status: 'ready'; storage: CpaLogStorage };
+  /** `refreshError` keeps the last snapshot visible when a later refresh fails. */
+  | { status: 'ready'; storage: CpaLogStorage; refreshError?: string };
 
 const BYTES_PER_MB = 1024 * 1024;
 
@@ -128,6 +129,7 @@ export function CpaLogsSummaryCard({
 }) {
   const { t, i18n } = useTranslation();
   const storage = state.status === 'ready' ? state.storage : null;
+  const refreshError = state.status === 'ready' ? state.refreshError : undefined;
   const retention = storage ? logRetention(storage) : null;
   const warning = storage ? logStorageWarning(storage) : null;
   const limit =
@@ -185,15 +187,13 @@ export function CpaLogsSummaryCard({
       </div>
       <div className={styles.cardBody}>
         <dd className={styles.cardValue}>{storage ? formatFileSize(storage.totalBytes) : '—'}</dd>
-        <small
-          className={styles.cardSub}
-          title={state.status === 'error' ? state.message : summary}
-        >
-          {summary}
-        </small>
+        <small className={`${styles.cardSub} ${styles.cardSubWrap}`}>{summary}</small>
         {retentionText ? (
-          <small className={styles.cardSub} title={retentionText}>
-            {retentionText}
+          <small className={`${styles.cardSub} ${styles.cardSubWrap}`}>{retentionText}</small>
+        ) : null}
+        {refreshError ? (
+          <small className={`${styles.cardSub} ${styles.cardSubWrap}`} role="status">
+            {t('usage_maintenance.cpa_logs_refresh_error', { message: refreshError })}
           </small>
         ) : null}
         {storage && warning ? (
@@ -225,11 +225,10 @@ export function UsageMaintenanceOverviewView({
   maintenance: UsageMaintenanceStatus;
   archives: UsageArchiveRunSummary[];
   stale?: boolean;
-  /** CPA logs card state; the card is omitted until the page provides it. */
-  logStorage?: CpaLogStorageState;
+  logStorage: CpaLogStorageState;
   onNavigate: Navigate;
   onOpenRun: (run: UsageArchiveRunSummary) => void;
-  onOpenConfig?: () => void;
+  onOpenConfig: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const pending = [maintenance.active_run, ...archives].filter(
@@ -348,9 +347,7 @@ export function UsageMaintenanceOverviewView({
             ) : null}
           </div>
         </div>
-        {logStorage && onOpenConfig ? (
-          <CpaLogsSummaryCard state={logStorage} onOpenConfig={onOpenConfig} />
-        ) : null}
+        <CpaLogsSummaryCard state={logStorage} onOpenConfig={onOpenConfig} />
       </dl>
       {active ? (
         <section

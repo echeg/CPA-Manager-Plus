@@ -172,6 +172,28 @@ describe('CpaLogsSummaryCard', () => {
     ]);
   });
 
+  it('keeps the last snapshot and adds the refresh error when a refresh fails', () => {
+    const { root } = renderCard({
+      status: 'ready',
+      storage: storage(),
+      refreshError: 'scan failed',
+    });
+
+    expect(value(root)).toBe(formatFileSize(185_068_097));
+    const lines = subLines(root);
+    expect(lines).toHaveLength(3);
+    expect(lines[0]).toContain('usage_maintenance.cpa_logs_files(count=15)');
+    expect(lines[2]).toBe('usage_maintenance.cpa_logs_refresh_error(message=scan failed)');
+  });
+
+  it('lets the multi-fact sub-lines wrap instead of truncating them', () => {
+    const { root } = renderCard({ status: 'ready', storage: storage() });
+
+    const lines = root.findAllByType('small');
+    expect(lines).toHaveLength(2);
+    for (const line of lines) expect(line.props.className).toMatch(/cardSubWrap/);
+  });
+
   it.each([
     [{ status: 'loading' } as const, 'usage_maintenance.cpa_logs_loading'],
     [{ status: 'unsupported' } as const, 'usage_maintenance.cpa_logs_unsupported'],
@@ -212,8 +234,10 @@ describe('UsageMaintenanceOverviewView CPA logs card', () => {
         <UsageMaintenanceOverviewView
           maintenance={maintenance}
           archives={[]}
+          logStorage={{ status: 'loading' }}
           onNavigate={vi.fn()}
           onOpenRun={vi.fn()}
+          onOpenConfig={vi.fn()}
           {...props}
         />
       );
@@ -222,16 +246,10 @@ describe('UsageMaintenanceOverviewView CPA logs card', () => {
   };
 
   it('renders the CPA logs card as the fifth summary card', () => {
-    const root = renderOverview({ logStorage: { status: 'loading' }, onOpenConfig: vi.fn() });
+    const root = renderOverview({});
 
     const titles = root.findByType('dl').findAllByType('dt').map(textOf);
     expect(titles).toHaveLength(5);
     expect(titles[4]).toBe('usage_maintenance.cpa_logs');
-  });
-
-  it('omits the card when no log storage state is provided', () => {
-    const root = renderOverview({});
-
-    expect(root.findByType('dl').findAllByType('dt')).toHaveLength(4);
   });
 });

@@ -29,7 +29,7 @@
 | `/usage-service/*`                           | CPAMP `:18317`   | Manager Server 模式探测和配置接口。                                                                                                               |
 | `/v0/management/*`                           | CPAMP `:18317`   | CPAMP 先处理用量、模型价格、别名、仪表盘、请求监控、Codex 账号巡检；其他管理接口再由 CPAMP 代理到 CPA。                                           |
 | `/v0/resource/plugins/*`                     | CPAMP `:18317`   | CPAMP 面板中的插件页面资源；CPAMP 会按需代理到 CPA。                                                                                              |
-| `/v8/management/*`                           | CPAMP `:18317`   | 个人额度工作台和插件页面（例如 provider Key 分组）使用的 CPA v8 管理接口。CPAMP 只接受管理员密钥，并使用已保存的 CPA 管理密钥转发。 |
+| `/v8/management/*`                           | CPAMP `:18317`   | 个人额度工作台、用量维护页的 CPA 日志卡片和插件页面（例如 provider Key 分组）使用的 CPA v8 管理接口。CPAMP 只接受管理员密钥，并使用已保存的 CPA 管理密钥转发。 |
 | `/models`                                    | CPAMP `:18317`   | setup 后由 CPAMP 兼容代理到 CPA。                                                                                                                 |
 | `/v1/*`、`/v1beta/*`、`/backend-api/codex/*` | CPA `:8317`      | 实际模型 API、Codex API 和提供商请求。                                                                                                            |
 | OAuth 回调                                   | CPA `:8317`      | 例如 `/anthropic/callback`、`/codex/callback`。                                                                                                   |
@@ -206,7 +206,7 @@ server {
     # CPAMP 插件页面资源。缺少此规则时，插件页面可能打开空白或资源 404。
     location ^~ /v0/resource/plugins/ { proxy_pass http://cpamp; }
 
-    # CPA v8 管理接口（个人额度工作台、插件 Key 分组视图）。
+    # CPA v8 管理接口（个人额度工作台、CPA 日志卡片、插件 Key 分组视图）。
     # CPAMP 只接受管理员密钥，并替换为已保存的 CPA 管理密钥。
     location ^~ /v8/management/ { proxy_pass http://cpamp; }
 

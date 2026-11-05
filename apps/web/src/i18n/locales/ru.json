@@ -787,6 +787,7 @@
     "cpa_logs_loading": "Загрузка размера логов…",
     "cpa_logs_unsupported": "Обновите CPA, чтобы видеть размер логов",
     "cpa_logs_error": "Не удалось получить размер логов: {{message}}",
+    "cpa_logs_refresh_error": "Не удалось обновить размер логов: {{message}}",
     "cpa_logs_warning_unbounded": "Лог запросов включён без общего лимита размера — логи могут заполнить диск.",
     "cpa_logs_warning_near_limit": "Логи занимают {{used}} из лимита {{limit}}; старые файлы скоро будут удалены."
   },
