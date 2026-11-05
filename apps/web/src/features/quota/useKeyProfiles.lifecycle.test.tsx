@@ -30,6 +30,8 @@ import { useKeyProfiles, type KeyProfilesState } from './hooks/useKeyProfiles';
 const aliasState = vi.hoisted(() => ({
   aliases: [] as ApiKeyAlias[],
   available: true,
+  serviceBase: 'http://manager.local',
+  stateKnown: true,
   replaced: [] as unknown[],
   removed: [] as string[],
 }));
@@ -43,9 +45,9 @@ vi.mock('@/hooks/useApiKeyAliases', async () => {
         aliases,
         available: aliasState.available,
         loading: false,
-        serviceBase: 'http://manager.local',
+        serviceBase: aliasState.serviceBase,
         managementKey: 'management-key',
-        stateKnown: true,
+        stateKnown: aliasState.stateKnown,
         reload: () => undefined,
         replaceAliases: (items: ApiKeyAlias[]) => {
           aliasState.replaced.push(items);
@@ -134,6 +136,8 @@ beforeEach(() => {
   revision = 0;
   aliasState.aliases = [];
   aliasState.available = true;
+  aliasState.serviceBase = 'http://manager.local';
+  aliasState.stateKnown = true;
   aliasState.replaced = [];
   aliasState.removed = [];
   vi.spyOn(apiClient, 'getConnectionRevision').mockImplementation(() => revision);
@@ -488,6 +492,22 @@ describe('useKeyProfiles shared profile', () => {
 });
 
 describe('useKeyProfiles client keys', () => {
+  test('aliases are editable only with a known alias state on a reachable service', async () => {
+    await mount();
+    expect(hook.aliasesEditable).toBe(true);
+    await act(async () => renderer!.unmount());
+
+    aliasState.stateKnown = false;
+    await mount();
+    expect(hook.aliasesEditable).toBe(false);
+    await act(async () => renderer!.unmount());
+
+    aliasState.stateKnown = true;
+    aliasState.serviceBase = '';
+    await mount();
+    expect(hook.aliasesEditable).toBe(false);
+  });
+
   test('adding a key reloads config and profiles and shows its alias on the new row', async () => {
     const add = vi
       .spyOn(clientKeysApi, 'addClientKey')

@@ -356,17 +356,17 @@ Run from the repository root:
 - [x] run `npm run type-check` and `npm run test:web`; both must pass before Task 7
 
 ### Task 7: ClientKeysModal
-- [ ] create `features/quota/components/ClientKeysModal.tsx` and its SCSS module on `Modal`. Each row has:
+- [x] create `features/quota/components/ClientKeysModal.tsx` and its SCSS module on `Modal`. Each row has:
   - the alias or mask;
   - a `Select` with По умолчанию / Свой профиль, disabled with a hint when `supported: false`;
   - the chain summary;
   - Настроить… when the key has its own profile;
   - Удалить, which asks for confirmation and is disabled with a hint when it is the only key
-- [ ] select behavior:
+- [x] select behavior:
   - choosing "Свой профиль" for a key on the default calls `onOpenProfiles(key)` and makes no request;
   - choosing "По умолчанию" for a key with its own profile asks for confirmation, then calls `saveKeyProfile(key, null)`;
   - Настроить… calls `onOpenProfiles(key)`
-- [ ] add form:
+- [x] add form:
   - a key input (type `password`, with a show toggle);
   - Сгенерировать fills it with `generateClientKey()`;
   - Копировать calls `copyToClipboard`; `false` shows a fallback message;
@@ -374,8 +374,8 @@ Run from the repository root:
   - Добавить calls `addKey`. When it returns `ok`, both inputs clear, and an `aliasWarning` is shown separately.
   
   The raw key appears only in this input
-- [ ] with no client keys, the modal shows the add form and a hint. Errors from the hook appear in a `role="alert"` block, masked as the current modal does. Add this task's locale keys (title, По умолчанию / Свой профиль, Настроить…, the add form labels, the generate, copy and copied messages, the delete confirmation, the last-key hint) to all four locales
-- [ ] write tests in `clientKeysModal.lifecycle.test.tsx` with a mocked `useKeyProfiles`, a stubbed `showConfirmation` and a mocked `copyToClipboard`:
+- [x] with no client keys, the modal shows the add form and a hint. Errors from the hook appear in a `role="alert"` block, masked as the current modal does. Add this task's locale keys (title, По умолчанию / Свой профиль, Настроить…, the add form labels, the generate, copy and copied messages, the delete confirmation, the last-key hint) to all four locales
+- [x] write tests in `clientKeysModal.lifecycle.test.tsx` with a mocked `useKeyProfiles`, a stubbed `showConfirmation` and a mocked `copyToClipboard`:
   - rows render with alias or mask;
   - Добавить calls `addKey(raw, alias)` and clears the inputs on `ok`;
   - an alias warning keeps the key cleared and shows the warning;
@@ -388,7 +388,8 @@ Run from the repository root:
   - "По умолчанию" after confirm calls `saveKeyProfile(key, null)`;
   - `supported: false` disables the select;
   - no raw key in the output, titles or aria labels once the input is cleared
-- [ ] run `npm run type-check` and `npm run test:web`; both must pass before Task 8
+- ➕ `useKeyProfiles` also returns `aliasesEditable` (the alias service is reachable and its state is known, the condition `addClientKey` needs for an alias), which disables the alias input; covered in `useKeyProfiles.lifecycle.test.tsx`. A failed copy also reveals the key, so it can be copied by hand. Locale keys live under `quota_management.client_keys.*`; the reset confirmation reuses `key_profiles.profiles.reset_confirm*`
+- [x] run `npm run type-check` and `npm run test:web`; both must pass before Task 8
 
 ### Task 8: Slim toolbar and modal navigation
 - [ ] in `QuotaSettingsToolbar.tsx`, when `state && !state.unsupportedBackend`, or before the first profiles load, render only:

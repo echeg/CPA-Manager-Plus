@@ -269,6 +269,8 @@ export function useKeyProfiles(disabled: boolean) {
     [state, apiKeys, aliases, aliasesAvailable]
   );
   const count = rows.filter((row) => row.profile !== null).length;
+  // `addKey` refuses an alias unless the service is reachable and its state is known.
+  const aliasesEditable = Boolean(aliasServiceBase) && aliasStateKnown;
 
   return {
     state,
@@ -276,6 +278,7 @@ export function useKeyProfiles(disabled: boolean) {
     count,
     total: rows.length,
     ttl,
+    aliasesEditable,
     loading,
     saving,
     error: saveError || loadError,

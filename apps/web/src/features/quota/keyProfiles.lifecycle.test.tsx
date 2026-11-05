@@ -122,6 +122,7 @@ function makeKeyProfiles(
     count: rows.filter((row) => row.profile).length,
     total: rows.length,
     ttl: '1h',
+    aliasesEditable: true,
     loading: false,
     saving: false,
     error: '',
