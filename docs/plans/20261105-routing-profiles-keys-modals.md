@@ -425,9 +425,10 @@ Run from the repository root:
 - [x] run `npm run type-check` and `npm run test:web`; both must pass before Task 10
 
 ### Task 10: Locale cleanup and parity
-- [ ] remove the keys that are no longer used from all four locales (`key_profiles.button` and `button_hint` with `{{count}}/{{total}}`, `editor.mode*`, `editor.shared_hint`, `badge_shared`, if unused). Grep `apps/web/src` to confirm that none are still referenced
-- [ ] create `features/quota/keyProfiles.locale.test.ts`, modelled on `features/accounts/components/QuotaWindowCard.locale.test.ts`. It asserts that the `quota_management.key_profiles` and `client_keys` subtrees have the same key set in en, ru, zh-CN and zh-TW, and that the removed keys are absent
-- [ ] run `npm run type-check` and `npm run test:web`; both must pass before Task 11
+- [x] remove the keys that are no longer used from all four locales (`key_profiles.button` and `button_hint` with `{{count}}/{{total}}`, `editor.mode*`, `editor.shared_hint`, `badge_shared`, if unused). Grep `apps/web/src` to confirm that none are still referenced
+- [x] create `features/quota/keyProfiles.locale.test.ts`, modelled on `features/accounts/components/QuotaWindowCard.locale.test.ts`. It asserts that the `quota_management.key_profiles` and `client_keys` subtrees have the same key set in en, ru, zh-CN and zh-TW, and that the removed keys are absent
+- [x] run `npm run type-check` and `npm run test:web`; both must pass before Task 11
+- ➕ removed 13 keys from `quota_management.key_profiles` in all four locales: `button`, `button_hint`, `title`, `shared_title`, `shared_hint`, `badge_shared`, `badge_own`, `reset`, `empty`, `editor.mode`, `editor.mode_shared`, `editor.mode_own`, `editor.shared_hint`. The grep covered the literal keys and the `${prefix}` lookups in `ClientKeysModal` and `useKeyProfiles`, which only use `client_keys`. The locale test also checks that every value is a non-empty string
 
 ### Task 11: Verify acceptance criteria
 - [ ] verify the Overview requirements:

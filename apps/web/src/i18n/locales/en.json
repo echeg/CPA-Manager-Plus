@@ -5689,13 +5689,7 @@
       "errors": {
         "unknown_key": "This key was removed on the Config page. The key list was reloaded."
       },
-      "button": "Keys {{count}}/{{total}}",
-      "button_hint": "Routing profiles per client API key: {{count}} of {{total}} keys have their own profile.",
       "editor": {
-        "mode": "Routing for this key",
-        "mode_shared": "Shared settings",
-        "mode_own": "Own profile",
-        "shared_hint": "This key follows the shared settings from the toolbar. Choose “Own profile” to start from a copy of them.",
         "sticky": "Sticky session",
         "ttl": "TTL {{ttl}} is global and set in the Default profile.",
         "accounts": "Preferred subscription",
@@ -5703,18 +5697,11 @@
         "summary": "Chain:",
         "read_only": "Per-key profiles need native CPA routing. Home mode and scheduler plugins manage their own routing, so this profile is read-only."
       },
-      "title": "Routing profiles per API key",
-      "shared_title": "Shared settings",
-      "shared_hint": "Edited in the toolbar. Every key without its own profile uses them.",
-      "badge_shared": "Shared settings",
-      "badge_own": "Own profile",
-      "reset": "Back to shared settings",
       "edit": "Edit",
       "collapse": "Collapse",
       "edit_label": "Edit routing for {{label}}",
       "collapse_label": "Collapse routing for {{label}}",
       "loading": "Loading routing profiles…",
-      "empty": "The configuration has no client API keys. Add them on the Config page.",
       "unsupported": "This CPA version has no per-key routing profiles.",
       "profiles": {
         "title": "Routing profiles",

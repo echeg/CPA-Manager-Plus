@@ -5684,13 +5684,7 @@
       "errors": {
         "unknown_key": "此金鑰已在設定頁面中刪除，金鑰清單已重新載入。"
       },
-      "button": "金鑰 {{count}}/{{total}}",
-      "button_hint": "依用戶端 API 金鑰的路由設定：{{total}} 個金鑰中有 {{count}} 個使用獨立設定。",
       "editor": {
-        "mode": "此金鑰的路由",
-        "mode_shared": "共用設定",
-        "mode_own": "獨立設定檔",
-        "shared_hint": "此金鑰使用工具列中的共用設定。選擇「獨立設定檔」可從共用設定的副本開始。",
         "sticky": "工作階段黏著",
         "ttl": "TTL {{ttl}} 為全域設定，於預設設定中設定。",
         "accounts": "偏好訂閱",
@@ -5698,18 +5692,11 @@
         "summary": "路由鏈：",
         "read_only": "依金鑰設定需要 CPA 原生路由。Home 模式與排程外掛會自行管理路由，因此此設定檔為唯讀。"
       },
-      "title": "依 API 金鑰的路由設定",
-      "shared_title": "共用設定",
-      "shared_hint": "於工具列中編輯。所有沒有獨立設定檔的金鑰都使用共用設定。",
-      "badge_shared": "共用設定",
-      "badge_own": "獨立設定檔",
-      "reset": "恢復為共用設定",
       "edit": "編輯",
       "collapse": "收合",
       "edit_label": "編輯 {{label}} 的路由",
       "collapse_label": "收合 {{label}} 的路由",
       "loading": "正在載入路由設定…",
-      "empty": "設定中沒有用戶端 API 金鑰。請於設定頁面中新增。",
       "unsupported": "此 CPA 版本不支援依金鑰的路由設定。",
       "profiles": {
         "title": "路由設定檔",

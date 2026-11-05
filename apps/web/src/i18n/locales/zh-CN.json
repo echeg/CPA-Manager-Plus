@@ -5684,13 +5684,7 @@
       "errors": {
         "unknown_key": "此密钥已在配置页面中删除，密钥列表已重新加载。"
       },
-      "button": "密钥 {{count}}/{{total}}",
-      "button_hint": "按客户端 API 密钥的路由配置：{{total}} 个密钥中有 {{count}} 个使用独立配置。",
       "editor": {
-        "mode": "此密钥的路由",
-        "mode_shared": "共享设置",
-        "mode_own": "独立配置",
-        "shared_hint": "此密钥使用工具栏中的共享设置。选择“独立配置”可从共享设置的副本开始。",
         "sticky": "会话粘性",
         "ttl": "TTL {{ttl}} 为全局设置，在默认配置中设置。",
         "accounts": "首选订阅",
@@ -5698,18 +5692,11 @@
         "summary": "路由链：",
         "read_only": "按密钥配置需要 CPA 原生路由。Home 模式和调度插件自行管理路由，因此此配置为只读。"
       },
-      "title": "按 API 密钥的路由配置",
-      "shared_title": "共享设置",
-      "shared_hint": "在工具栏中编辑。所有没有独立配置的密钥都使用共享设置。",
-      "badge_shared": "共享设置",
-      "badge_own": "独立配置",
-      "reset": "恢复为共享设置",
       "edit": "编辑",
       "collapse": "收起",
       "edit_label": "编辑 {{label}} 的路由",
       "collapse_label": "收起 {{label}} 的路由",
       "loading": "正在加载路由配置…",
-      "empty": "配置中没有客户端 API 密钥。请在配置页面中添加。",
       "unsupported": "此 CPA 版本不支持按密钥的路由配置。",
       "profiles": {
         "title": "路由配置档",
