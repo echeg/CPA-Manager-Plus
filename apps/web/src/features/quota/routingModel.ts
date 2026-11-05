@@ -27,16 +27,23 @@ export function latestSubscriptionActivity(
     .sort((a, b) => Date.parse(b.lastSelectedAt) - Date.parse(a.lastSelectedAt))[0];
 }
 
+/** A sticky TTL must be a positive Go duration; empty, zero, negative and garbage are invalid. */
+export function invalidTTL(ttl: string): boolean {
+  const trimmed = ttl.trim();
+  if (!trimmed) return true;
+  const ttlSeconds = goDurationSeconds(trimmed);
+  return ttlSeconds === undefined || ttlSeconds <= 0;
+}
+
 /** Dirty and TTL validity for the routing form; unloaded settings are clean and valid. */
 export function routingFormState(
   values: SubscriptionRoutingSettings | null,
   baseline: SubscriptionRoutingSettings | null
 ) {
   if (!values || !baseline) return { dirty: false, invalidTTL: false };
-  const ttlSeconds = goDurationSeconds(values.sessionAffinityTTL.trim());
   return {
     dirty: Object.keys(subscriptionRoutingPatch(baseline, values)).length > 0,
-    invalidTTL: ttlSeconds === undefined || ttlSeconds <= 0,
+    invalidTTL: invalidTTL(values.sessionAffinityTTL),
   };
 }
 

@@ -6,6 +6,7 @@ import { usageServiceApi, type ApiKeyAlias } from '@/services/api/usageService';
 import { useAuthStore, useNotificationStore } from '@/stores';
 import { usePanelFeatureAvailability } from '@/hooks/usePanelFeatureAvailability';
 import { resolveAliasServiceBase, useApiKeyAliases } from '@/hooks/useApiKeyAliases';
+import { generateClientKey } from '@/utils/apiKeyGenerator';
 import { copyToClipboard } from '@/utils/clipboard';
 import { maskApiKey } from '@/utils/format';
 import { sha256Hex } from '@/utils/apiKeyHash';
@@ -109,13 +110,6 @@ export const ApiKeysCardEditor = memo(function ApiKeysCardEditor({
     featureAvailability.managerServiceAvailable &&
     featureAvailability.managerServiceBase
   );
-
-  function generateSecureApiKey(): string {
-    const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    const array = new Uint8Array(64);
-    crypto.getRandomValues(array);
-    return 'sk-' + Array.from(array, (b) => charset[b % charset.length]).join('');
-  }
 
   const getApiKeyHash = (apiKey: string) => sha256Hex(apiKey).toLowerCase();
 
@@ -719,7 +713,7 @@ export const ApiKeysCardEditor = memo(function ApiKeysCardEditor({
   };
 
   const handleGenerate = () => {
-    setInputValue(generateSecureApiKey());
+    setInputValue(generateClientKey());
     setFormError('');
   };
 

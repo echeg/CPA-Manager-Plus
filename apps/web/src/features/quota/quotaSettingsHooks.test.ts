@@ -9,6 +9,7 @@ import {
 import {
   activityStatusKey,
   errorText,
+  invalidTTL,
   isPickerSlot,
   routingFormState,
   routingStrategyOptions,
@@ -25,6 +26,16 @@ beforeAll(async () => {
 });
 
 const t = ((key: string) => key) as TFunction;
+
+describe('invalidTTL', () => {
+  test.each(['', '   ', '0s', '0', '-5m', 'garbage', '1 hour'])('rejects %j', (ttl) => {
+    expect(invalidTTL(ttl)).toBe(true);
+  });
+
+  test.each(['30m', '24h', ' 1h30m '])('accepts %j', (ttl) => {
+    expect(invalidTTL(ttl)).toBe(false);
+  });
+});
 
 describe('routing form state', () => {
   const baseline = readSubscriptionRouting({

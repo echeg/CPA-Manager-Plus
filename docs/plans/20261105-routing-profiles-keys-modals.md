@@ -214,13 +214,13 @@ Run from the repository root:
 ## Implementation Steps
 
 ### Task 1: Shared key generator and TTL validator
-- [ ] move `generateSecureApiKey` out of `components/config/ApiKeysCardEditor.tsx:113-118` into `utils/apiKeyGenerator.ts` as `generateClientKey()`, with the same format, and point `ApiKeysCardEditor` at it
-- [ ] extract `invalidTTL(ttl: string): boolean` from `routingFormState` (`features/quota/routingModel.ts:31-41`). It rejects an empty value and any value with `goDurationSeconds <= 0`. Make `routingFormState` use it
-- [ ] write tests:
+- [x] move `generateSecureApiKey` out of `components/config/ApiKeysCardEditor.tsx:113-118` into `utils/apiKeyGenerator.ts` as `generateClientKey()`, with the same format, and point `ApiKeysCardEditor` at it
+- [x] extract `invalidTTL(ttl: string): boolean` from `routingFormState` (`features/quota/routingModel.ts:31-41`). It rejects an empty value and any value with `goDurationSeconds <= 0`. Make `routingFormState` use it
+- [x] write tests:
   - `generateClientKey` with a stubbed `crypto.getRandomValues`: prefix, length and charset accepted by `isValidApiKeyCharset`;
   - `invalidTTL`: empty, `0s`, garbage, `30m`, `24h`;
   - existing `ApiKeysCardEditor` and `routingModel` tests stay green
-- [ ] run `npm run type-check` and `npm run test:web`; both must pass before Task 2
+- [x] run `npm run type-check` and `npm run test:web`; both must pass before Task 2
 
 ### Task 2: Client key service on the v8 config API
 - [ ] create `features/personal-quota-support/services/api/clientKeys.ts`. It uses the quota `apiClient` only, captures `guardConfigConnection()` before the read and checks it before every write. Reading: `GET /config`, then `clientApiKeys(raw)` with a record of whether the list came from `access.api-keys` or the legacy top-level `api-keys`
