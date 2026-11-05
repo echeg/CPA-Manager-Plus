@@ -243,112 +243,114 @@ export function UsageMaintenanceOverviewView({
   const active = pending[0];
   return (
     <div className={styles.view}>
-      <dl className={styles.summary}>
-        <div className={styles.summaryCard}>
-          <div className={styles.cardHeader}>
-            <div className={`${styles.iconWrap} ${styles.iconBlue}`} aria-hidden="true">
-              <IconDatabaseZap size={18} />
-            </div>
-            <dt className={styles.cardTitle}>{t('usage_maintenance.raw_events')}</dt>
-            <button
-              type="button"
-              className={styles.infoButton}
-              onClick={() => onNavigate('overview')}
-              aria-label={t('usage_maintenance.online_range_title')}
-              title={t('usage_maintenance.online_range_title')}
-            >
-              <IconInfo size={14} />
-            </button>
-          </div>
-          <div className={styles.cardBody}>
-            <dd className={styles.cardValue}>
-              {stale ? '—' : maintenance.raw_event_count.toLocaleString(i18n.language)}
-            </dd>
-            <small className={styles.cardSub}>
-              {t('usage_maintenance.workspace_archived_subset', {
-                count: stale
-                  ? '—'
-                  : (maintenance.raw_archived_event_count?.toLocaleString(i18n.language) ?? '—'),
-              })}
-            </small>
-          </div>
-        </div>
-        <div className={styles.summaryCard}>
-          <div className={styles.cardHeader}>
-            <div className={`${styles.iconWrap} ${styles.iconPurple}`} aria-hidden="true">
-              <IconArchive size={18} />
-            </div>
-            <dt className={styles.cardTitle}>{t('usage_maintenance.deleted_events')}</dt>
-          </div>
-          <div className={styles.cardBody}>
-            <dd className={styles.cardValue}>
-              {stale ? '—' : maintenance.raw_deleted_event_count.toLocaleString(i18n.language)}
-            </dd>
-            <small className={styles.cardSub}>
-              {t('usage_maintenance.workspace_deleted_hint')}
-            </small>
-          </div>
-        </div>
-        <div className={styles.summaryCard}>
-          <div className={styles.cardHeader}>
-            <div className={`${styles.iconWrap} ${styles.iconCyan}`} aria-hidden="true">
-              <IconHardDrive size={18} />
-            </div>
-            <dt className={styles.cardTitle}>{t('usage_maintenance.sqlite_total')}</dt>
-          </div>
-          <div className={styles.cardBody}>
-            <dd className={styles.cardValue}>
-              {stale ? '—' : formatFileSize(maintenance.storage.total_bytes)}
-            </dd>
-            <small className={styles.cardSub}>{t('usage_maintenance.sqlite_total_hint')}</small>
-          </div>
-        </div>
-        <div className={styles.summaryCard}>
-          <div className={styles.cardHeader}>
-            <div className={`${styles.iconWrap} ${styles.iconGreen}`} aria-hidden="true">
-              <IconSparkles size={18} />
-            </div>
-            <dt className={styles.cardTitle}>{t('usage_maintenance.reclaimable')}</dt>
-            <button
-              type="button"
-              className={styles.actionChip}
-              onClick={() => onNavigate('advanced')}
-            >
-              {t('usage_maintenance.offline_reclaim')}
-            </button>
-          </div>
-          <div className={styles.cardBody}>
-            <dd className={styles.cardValue}>
-              {stale ? '—' : formatFileSize(maintenance.storage.reclaimable_bytes)}
-            </dd>
-            <small className={styles.cardSub}>
-              {t('usage_maintenance.advanced_sqlite_note_short', {
-                defaultValue: '离线收缩可释放磁盘空间',
-              })}
-            </small>
-            {!stale &&
-            maintenance.storage.reclaimable_bytes > 50 * 1024 * 1024 &&
-            maintenance.storage.total_bytes > 0 ? (
-              <div className={styles.reclaimHighlight}>
-                <span>
-                  {t('usage_maintenance.reclaim_estimated_benefit', {
-                    defaultValue:
-                      'Compaction recommended: expected to shrink from {{total}} to ~{{compacted}}',
-                    total: formatFileSize(maintenance.storage.total_bytes),
-                    compacted: formatFileSize(
-                      Math.max(
-                        0,
-                        maintenance.storage.total_bytes - maintenance.storage.reclaimable_bytes
-                      )
-                    ),
-                  })}
-                </span>
+      <div className={styles.summaryContainer}>
+        <dl className={styles.summary}>
+          <div className={styles.summaryCard}>
+            <div className={styles.cardHeader}>
+              <div className={`${styles.iconWrap} ${styles.iconBlue}`} aria-hidden="true">
+                <IconDatabaseZap size={18} />
               </div>
-            ) : null}
+              <dt className={styles.cardTitle}>{t('usage_maintenance.raw_events')}</dt>
+              <button
+                type="button"
+                className={styles.infoButton}
+                onClick={() => onNavigate('overview')}
+                aria-label={t('usage_maintenance.online_range_title')}
+                title={t('usage_maintenance.online_range_title')}
+              >
+                <IconInfo size={14} />
+              </button>
+            </div>
+            <div className={styles.cardBody}>
+              <dd className={styles.cardValue}>
+                {stale ? '—' : maintenance.raw_event_count.toLocaleString(i18n.language)}
+              </dd>
+              <small className={styles.cardSub}>
+                {t('usage_maintenance.workspace_archived_subset', {
+                  count: stale
+                    ? '—'
+                    : (maintenance.raw_archived_event_count?.toLocaleString(i18n.language) ?? '—'),
+                })}
+              </small>
+            </div>
           </div>
-        </div>
-        <CpaLogsSummaryCard state={logStorage} onOpenConfig={onOpenConfig} />
-      </dl>
+          <div className={styles.summaryCard}>
+            <div className={styles.cardHeader}>
+              <div className={`${styles.iconWrap} ${styles.iconPurple}`} aria-hidden="true">
+                <IconArchive size={18} />
+              </div>
+              <dt className={styles.cardTitle}>{t('usage_maintenance.deleted_events')}</dt>
+            </div>
+            <div className={styles.cardBody}>
+              <dd className={styles.cardValue}>
+                {stale ? '—' : maintenance.raw_deleted_event_count.toLocaleString(i18n.language)}
+              </dd>
+              <small className={styles.cardSub}>
+                {t('usage_maintenance.workspace_deleted_hint')}
+              </small>
+            </div>
+          </div>
+          <div className={styles.summaryCard}>
+            <div className={styles.cardHeader}>
+              <div className={`${styles.iconWrap} ${styles.iconCyan}`} aria-hidden="true">
+                <IconHardDrive size={18} />
+              </div>
+              <dt className={styles.cardTitle}>{t('usage_maintenance.sqlite_total')}</dt>
+            </div>
+            <div className={styles.cardBody}>
+              <dd className={styles.cardValue}>
+                {stale ? '—' : formatFileSize(maintenance.storage.total_bytes)}
+              </dd>
+              <small className={styles.cardSub}>{t('usage_maintenance.sqlite_total_hint')}</small>
+            </div>
+          </div>
+          <div className={styles.summaryCard}>
+            <div className={styles.cardHeader}>
+              <div className={`${styles.iconWrap} ${styles.iconGreen}`} aria-hidden="true">
+                <IconSparkles size={18} />
+              </div>
+              <dt className={styles.cardTitle}>{t('usage_maintenance.reclaimable')}</dt>
+              <button
+                type="button"
+                className={styles.actionChip}
+                onClick={() => onNavigate('advanced')}
+              >
+                {t('usage_maintenance.offline_reclaim')}
+              </button>
+            </div>
+            <div className={styles.cardBody}>
+              <dd className={styles.cardValue}>
+                {stale ? '—' : formatFileSize(maintenance.storage.reclaimable_bytes)}
+              </dd>
+              <small className={styles.cardSub}>
+                {t('usage_maintenance.advanced_sqlite_note_short', {
+                  defaultValue: '离线收缩可释放磁盘空间',
+                })}
+              </small>
+              {!stale &&
+              maintenance.storage.reclaimable_bytes > 50 * 1024 * 1024 &&
+              maintenance.storage.total_bytes > 0 ? (
+                <div className={styles.reclaimHighlight}>
+                  <span>
+                    {t('usage_maintenance.reclaim_estimated_benefit', {
+                      defaultValue:
+                        'Compaction recommended: expected to shrink from {{total}} to ~{{compacted}}',
+                      total: formatFileSize(maintenance.storage.total_bytes),
+                      compacted: formatFileSize(
+                        Math.max(
+                          0,
+                          maintenance.storage.total_bytes - maintenance.storage.reclaimable_bytes
+                        )
+                      ),
+                    })}
+                  </span>
+                </div>
+              ) : null}
+            </div>
+          </div>
+          <CpaLogsSummaryCard state={logStorage} onOpenConfig={onOpenConfig} />
+        </dl>
+      </div>
       {active ? (
         <section
           className={styles.continuation}

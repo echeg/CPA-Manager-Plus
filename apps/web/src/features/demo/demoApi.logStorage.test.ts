@@ -88,4 +88,51 @@ describe('demo CPA log storage', () => {
     expect(storage.limitMb).toBe(0);
     expect(logStorageWarning(storage)).toBe('unbounded');
   });
+
+  it('reads the canonical v8 observability.logs settings', async () => {
+    await handleDemoApiRequest(
+      'put',
+      '/config.yaml',
+      [
+        'observability:',
+        '  logs:',
+        '    request-log: false',
+        '    logging-to-file: false',
+        '    logs-max-total-size-mb: 0',
+      ].join('\n')
+    );
+
+    const storage = readCpaLogStorage(getDemoLogStorage());
+
+    expect(storage).toMatchObject({ limitMb: 0, requestLog: false, loggingToFile: false });
+    expect(logStorageWarning(storage)).toBeNull();
+  });
+
+  it('prefers the canonical v8 setting over the legacy root key', async () => {
+    await handleDemoApiRequest(
+      'put',
+      '/config.yaml',
+      [
+        'request-log: false',
+        'logs-max-total-size-mb: 512',
+        'observability:',
+        '  logs:',
+        '    request-log: true',
+        '    logs-max-total-size-mb: 2048',
+      ].join('\n')
+    );
+
+    const storage = readCpaLogStorage(getDemoLogStorage());
+
+    expect(storage).toMatchObject({ limitMb: 2048, requestLog: true, loggingToFile: true });
+  });
+
+  it('normalizes a negative limit to no limit, as CPA does', async () => {
+    await handleDemoApiRequest('put', '/config.yaml', 'logs-max-total-size-mb: -1');
+
+    const storage = readCpaLogStorage(getDemoLogStorage());
+
+    expect(storage.limitMb).toBe(0);
+    expect(logStorageWarning(storage)).toBe('unbounded');
+  });
 });

@@ -681,12 +681,24 @@ export async function handleDemoApiRequest<T = unknown>(
 const DEMO_MB = 1024 * 1024;
 const DEMO_DAY_MS = 86_400_000;
 
+/** Like CPA, the v8 `observability.logs.<key>` wins by presence; otherwise the legacy root key applies. */
+const readDemoLogsSetting = (rawConfig: Record<string, unknown>, key: string): unknown => {
+  const observability = rawConfig.observability;
+  const logs = isDemoConfigurationRecord(observability) ? observability.logs : undefined;
+  if (isDemoConfigurationRecord(logs) && Object.prototype.hasOwnProperty.call(logs, key)) {
+    return logs[key];
+  }
+  return rawConfig[key];
+};
+
 /**
  * `GET /v8/management/observability/logs/storage`: ~470 MB capped of the 512 MB demo limit (≥ 90%), so the
- * near-limit warning shows. Flags and the limit pass through from the current demo config.
+ * near-limit warning shows. Flags and the limit follow the current demo config, normalized as CPA does
+ * (a negative or missing limit means 0, no limit).
  */
 export const getDemoLogStorage = (now: number = Date.now()) => {
   const rawConfig = getCurrentDemoRawConfig();
+  const limitMb = Number(readDemoLogsSetting(rawConfig, 'logs-max-total-size-mb'));
   const cappedBytes = 470 * DEMO_MB + 412_331;
   return {
     total_bytes: cappedBytes + 6 * DEMO_MB + 87_204,
@@ -695,9 +707,9 @@ export const getDemoLogStorage = (now: number = Date.now()) => {
     capped_files: 27,
     oldest_modified_at: new Date(now - 14 * DEMO_DAY_MS).toISOString(),
     newest_modified_at: new Date(now - 2 * 60_000).toISOString(),
-    limit_mb: rawConfig['logs-max-total-size-mb'],
-    request_log: rawConfig['request-log'],
-    logging_to_file: rawConfig['logging-to-file'],
+    limit_mb: Number.isFinite(limitMb) ? Math.max(0, Math.trunc(limitMb)) : 0,
+    request_log: readDemoLogsSetting(rawConfig, 'request-log') === true,
+    logging_to_file: readDemoLogsSetting(rawConfig, 'logging-to-file') === true,
   };
 };
 

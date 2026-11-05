@@ -9,6 +9,13 @@
 }
 
 /* 概览指标卡片区 */
+/* Columns follow the width the cards get (the sidebar takes 280px), not the viewport; see the
+   usage-summary container queries at the end of the file. */
+.summaryContainer {
+  container: usage-summary / inline-size;
+  min-width: 0;
+}
+
 .summary {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -43,6 +50,8 @@
 
 .cardHeader {
   display: flex;
+  /* An action chip that does not fit next to the title drops below it instead of hiding the title. */
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
 }
@@ -86,8 +95,11 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--text-secondary);
-  flex: 1;
+  /* Basis auto (the full title) wraps the chip before the title is cut; the cap (iconWrap 34px +
+     gap 10px) keeps the title beside the icon, so a long title gets an ellipsis instead. */
+  flex: 1 1 auto;
   min-width: 0;
+  max-width: calc(100% - 44px);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -135,6 +147,9 @@
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   transition: all 0.15s ease;
 
   &:hover {
@@ -1439,12 +1454,28 @@
   white-space: nowrap;
 }
 
-@media (max-width: 1100px) {
+/* A card needs ~192px of inner width for its icon and the longest title (ru "Размер файлов SQLite",
+   148px); five cards reach that at 1240px. Below it, 3 / 2 / 1 columns keep each card at least that wide. */
+@container usage-summary (max-width: 1239px) {
   .summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 12px;
   }
+}
 
+@container usage-summary (max-width: 759px) {
+  .summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container usage-summary (max-width: 479px) {
+  .summary {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1100px) {
   .recordTable th,
   .recordTable td {
     padding: 12px 10px;
@@ -1452,10 +1483,6 @@
 }
 
 @media (max-width: 768px) {
-  .summary {
-    grid-template-columns: 1fr;
-  }
-
   .sectionHeader {
     padding: 14px;
   }
