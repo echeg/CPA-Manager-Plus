@@ -110,9 +110,10 @@ Run from the repository root:
 - ➕ the existing `usage_maintenance` parity test only compares key sets against `en`; added `usageMaintenanceWiring.test.ts` checks that every `cpa_logs*` key the card source uses exists in all four locales with the same `{{placeholders}}`, plus a label test. Page tests resolve real `en` strings, so two Task 3 assertions were updated to the translated text.
 
 ### Task 5: Demo mode fixture
-- [ ] in `features/demo/demoApi.ts`, serve `/observability/logs/storage` from the request path the v8 quota client uses in demo mode (`handleDemoRawRequest`, and `handleDemoApiRequest` too if `apiClient.get` goes there), returning a plausible payload consistent with the demo config (`request-log: true`, `logging-to-file: true`, `logs-max-total-size-mb: 512`), e.g. ~380 MB capped of a 512 MB limit so the near-limit warning is visible in the demo
-- [ ] write a demo test (`demoApi.logStorage.test.ts` or the closest existing `demoApi.*.test.ts`) asserting the payload passes `readCpaLogStorage`
-- [ ] run `npm run check:demo-isolation` and `npm run test:web` - must pass before task 6
+- [x] in `features/demo/demoApi.ts`, serve `/observability/logs/storage` from the request path the v8 quota client uses in demo mode (`handleDemoRawRequest`, and `handleDemoApiRequest` too if `apiClient.get` goes there), returning a plausible payload consistent with the demo config (`request-log: true`, `logging-to-file: true`, `logs-max-total-size-mb: 512`), e.g. ~380 MB capped of a 512 MB limit so the near-limit warning is visible in the demo
+- [x] write a demo test (`demoApi.logStorage.test.ts` or the closest existing `demoApi.*.test.ts`) asserting the payload passes `readCpaLogStorage`
+- [x] run `npm run check:demo-isolation` and `npm run test:web` - must pass before task 6
+- ➕ the v8 quota client sends every call through `requestRaw`, so only `handleDemoRawRequest` serves the route (`handleDemoApiRequest` is never reached). ⚠️ 380 MB of 512 MB is 74%, under the 90% threshold, so the fixture uses ~470 MB capped (≈92%) to actually show the near-limit warning; `request_log`/`logging_to_file`/`limit_mb` follow the current demo config. `check:demo-isolation` needs a built bundle, so run `npm run build` first.
 
 ### Task 6: Verify acceptance criteria
 - [ ] verify all requirements from Overview are implemented (card, warning rules, 404 → "—", independent fetch, `/config` chip, label fix, demo)

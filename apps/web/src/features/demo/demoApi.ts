@@ -678,11 +678,49 @@ export async function handleDemoApiRequest<T = unknown>(
   return ok as T;
 }
 
+const DEMO_MB = 1024 * 1024;
+const DEMO_DAY_MS = 86_400_000;
+const DEMO_LOG_LIMIT_MB = 512;
+
+const readDemoConfigFlag = (config: Record<string, unknown>, key: string, fallback: boolean) =>
+  typeof config[key] === 'boolean' ? (config[key] as boolean) : fallback;
+
+/**
+ * `GET /v8/management/observability/logs/storage`: ~470 MB capped of the 512 MB demo limit (≥ 90%), so the
+ * near-limit warning shows. Flags and the limit follow the current demo config.
+ */
+export const getDemoLogStorage = (now: number = Date.now()) => {
+  const rawConfig = getCurrentDemoRawConfig();
+  const configuredLimit = rawConfig['logs-max-total-size-mb'];
+  const limitMb =
+    typeof configuredLimit === 'number' && Number.isFinite(configuredLimit) && configuredLimit >= 0
+      ? configuredLimit
+      : DEMO_LOG_LIMIT_MB;
+  const cappedBytes = 470 * DEMO_MB + 412_331;
+  return {
+    total_bytes: cappedBytes + 6 * DEMO_MB + 87_204,
+    total_files: 31,
+    capped_bytes: cappedBytes,
+    capped_files: 27,
+    oldest_modified_at: new Date(now - 14 * DEMO_DAY_MS).toISOString().replace(/\.\d+Z$/, 'Z'),
+    newest_modified_at: new Date(now - 2 * 60_000).toISOString().replace(/\.\d+Z$/, 'Z'),
+    limit_mb: limitMb,
+    request_log: readDemoConfigFlag(rawConfig, 'request-log', true),
+    logging_to_file: readDemoConfigFlag(rawConfig, 'logging-to-file', true),
+  };
+};
+
 export async function handleDemoRawRequest(
   url: string,
   config?: AxiosRequestConfig
 ): Promise<AxiosResponse> {
   const { pathname, params } = normalizeDemoUrl(url, config);
+  // The v8 quota client (`features/personal-quota-support`) sends every request through requestRaw.
+  if (pathname === '/observability/logs/storage') {
+    return createAxiosResponse(getDemoLogStorage(), config, {
+      'content-type': 'application/json',
+    });
+  }
   if (pathname === '/config.yaml') {
     return createAxiosResponse(getCurrentDemoConfigYaml(), config, {
       'content-type': 'text/yaml',
