@@ -3215,6 +3215,7 @@ describe('UsageMaintenancePage CPA logs card', () => {
 
     expect(findCpaLogsCard(renderer).props['data-status']).toBe('unsupported');
     expect(getText(findCpaLogsCard(renderer))).toContain('—');
+    expect(getText(findCpaLogsCard(renderer))).toContain(en.usage_maintenance.cpa_logs_unsupported);
     const text = getText(renderer.root);
     expect(text).toContain('Archive management');
     expect(text).toContain('Archive records');
@@ -3228,11 +3229,13 @@ describe('UsageMaintenancePage CPA logs card', () => {
 
     const card = findCpaLogsCard(renderer);
     expect(card.props['data-status']).toBe('error');
-    expect(getText(card)).toContain('—');
+    const cardText = getText(card);
+    expect(cardText).toContain('—');
+    expect(cardText).toContain('Could not load log size: log scan exploded');
     const text = getText(renderer.root);
     expect(text).toContain('Archive management');
     expect(text).toContain('Archive records');
-    expect(text).not.toContain('log scan exploded');
+    expect(text.replace(cardText, '')).not.toContain('log scan exploded');
     expect(findButtons(renderer, 'New archive')).toHaveLength(1);
   });
 
@@ -3298,7 +3301,7 @@ describe('UsageMaintenancePage CPA logs card', () => {
 
     const chip = findCpaLogsCard(renderer)
       .findAllByType('button')
-      .find((button) => getText(button).includes('usage_maintenance.cpa_logs_open_config'));
+      .find((button) => getText(button) === en.usage_maintenance.cpa_logs_open_config);
     expect(chip).toBeDefined();
     act(() => chip!.props.onClick());
 

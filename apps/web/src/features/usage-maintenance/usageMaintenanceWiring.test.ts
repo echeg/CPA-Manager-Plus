@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import layoutSource from '@/components/layout/MainLayout.tsx?raw';
 import routesSource from '@/router/MainRoutes.tsx?raw';
+import archiveViewsSource from './UsageMaintenanceArchiveViews.tsx?raw';
 import en from '@/i18n/locales/en.json';
 import ru from '@/i18n/locales/ru.json';
 import zhCN from '@/i18n/locales/zh-CN.json';
@@ -78,6 +79,40 @@ describe('usage maintenance app wiring', () => {
       expect(locale.nav.usage_maintenance).toBeTruthy();
       expect(locale.nav.usage_maintenance_short).toBeTruthy();
     }
+  });
+
+  it('defines every CPA logs card key with the same placeholders in all locales', () => {
+    const usedKeys = [
+      ...new Set(
+        [...archiveViewsSource.matchAll(/'usage_maintenance\.(cpa_logs\w*)'/g)].map((m) => m[1])
+      ),
+    ].sort();
+    expect(usedKeys.length).toBeGreaterThanOrEqual(14);
+    const placeholders = (text: string) =>
+      [...text.matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1]).sort();
+
+    for (const locale of [en, ru, zhCN, zhTW]) {
+      const section = locale.usage_maintenance as Record<string, string>;
+      for (const key of usedKeys) {
+        expect(section[key], key).toBeTruthy();
+        expect(placeholders(section[key]), key).toEqual(
+          placeholders((en.usage_maintenance as Record<string, string>)[key])
+        );
+      }
+    }
+  });
+
+  it('labels the CPA log size setting as a total directory limit', () => {
+    expect(en.config_management.visual.sections.system.logs_max_size).toBe(
+      'Total Log Size Limit (MB)'
+    );
+    expect(ru.config_management.visual.sections.system.logs_max_size).toBe(
+      'Общий лимит размера логов (МБ)'
+    );
+    expect(zhCN.config_management.visual.sections.system.logs_max_size).toBe('日志总大小限制 (MB)');
+    expect(zhTW.config_management.visual.sections.system.logs_max_size).toBe(
+      '記錄檔總大小限制（MB）'
+    );
   });
 
   it('keeps demo archive responses on the sanitized public contract', () => {

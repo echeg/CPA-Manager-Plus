@@ -103,10 +103,11 @@ Run from the repository root:
 - ➕ while a refresh is in flight the card keeps its previous state (no flash back to loading); `logStorage`/`onOpenConfig` stay optional on the overview view so other callers and the view tests need no change
 
 ### Task 4: Locale keys and the total-size limit label
-- [ ] add the new `usage_maintenance.cpa_logs*` keys to `en.json`, `ru.json`, `zh-CN.json`, `zh-TW.json` (title, open-config chip, files/limit/no-limit/request-log on/off sub-line, retention span, per-day growth, loading, unsupported hint "update CPA to show log size", error, both warnings)
-- [ ] fix `config_management.visual.sections.system.logs_max_size` to total wording in all four: en "Total Log Size Limit (MB)", ru "Общий лимит размера логов (МБ)", zh-CN "日志总大小限制 (MB)", zh-TW "記錄檔總大小限制（MB）"; update any test or snapshot asserting the old text
-- [ ] run the existing locale parity tests; add a test that the four locales define every `usage_maintenance.cpa_logs*` key if the existing parity tests do not already cover new keys
-- [ ] run `npm run test:web` - must pass before task 5
+- [x] add the new `usage_maintenance.cpa_logs*` keys to `en.json`, `ru.json`, `zh-CN.json`, `zh-TW.json` (title, open-config chip, files/limit/no-limit/request-log on/off sub-line, retention span, per-day growth, loading, unsupported hint "update CPA to show log size", error, both warnings)
+- [x] fix `config_management.visual.sections.system.logs_max_size` to total wording in all four: en "Total Log Size Limit (MB)", ru "Общий лимит размера логов (МБ)", zh-CN "日志总大小限制 (MB)", zh-TW "記錄檔總大小限制（MB）"; update any test or snapshot asserting the old text
+- [x] run the existing locale parity tests; add a test that the four locales define every `usage_maintenance.cpa_logs*` key if the existing parity tests do not already cover new keys
+- [x] run `npm run test:web` - must pass before task 5
+- ➕ the existing `usage_maintenance` parity test only compares key sets against `en`; added `usageMaintenanceWiring.test.ts` checks that every `cpa_logs*` key the card source uses exists in all four locales with the same `{{placeholders}}`, plus a label test. Page tests resolve real `en` strings, so two Task 3 assertions were updated to the translated text.
 
 ### Task 5: Demo mode fixture
 - [ ] in `features/demo/demoApi.ts`, serve `/observability/logs/storage` from the request path the v8 quota client uses in demo mode (`handleDemoRawRequest`, and `handleDemoApiRequest` too if `apiClient.get` goes there), returning a plausible payload consistent with the demo config (`request-log: true`, `logging-to-file: true`, `logs-max-total-size-mb: 512`), e.g. ~380 MB capped of a 512 MB limit so the near-limit warning is visible in the demo
