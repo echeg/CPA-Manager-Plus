@@ -154,6 +154,17 @@ describe('buildKeyRows', () => {
     expect(row.label).not.toContain('plain-client-key');
     expect(row.hasAlias).toBe(false);
   });
+
+  test('labels a CP key without an alias with its instance name', () => {
+    const cpTail = 'AbCdEfGhIjKlMnOpQrStUvWxYz012345';
+    const cpKey = `sk-bx-team-a-1-${cpTail}`;
+    const [row] = buildKeyRows([{ key: cpKey, profile: null }]);
+    expect(row.label).toBe('team-a-1');
+    expect(row.label).not.toContain(cpTail);
+    expect(row.hasAlias).toBe(true);
+    expect(row.masked).not.toContain(cpKey);
+    expect(row.key).toBe(cpKey);
+  });
 });
 
 describe('preferredAccountOptions', () => {

@@ -4,11 +4,13 @@ import type { MonitoringAuthMeta } from './types';
 import type { ModelPrice, UsageDetailWithEndpoint } from '@/utils/usage';
 import { buildSourceInfoMap } from '@/utils/sourceResolver';
 import { sha256Hex } from '@/utils/apiKeyHash';
+import { buildApiKeyDisplayMap } from './apiKeys';
 import { buildEventRows } from './eventRows';
 
 const buildRows = (
   overrides: Partial<UsageDetailWithEndpoint> = {},
-  modelPrices: Record<string, ModelPrice> = {}
+  modelPrices: Record<string, ModelPrice> = {},
+  apiKeyDisplayMap: Parameters<typeof buildEventRows>[6] = new Map()
 ) =>
   buildEventRows(
     [
@@ -37,7 +39,7 @@ const buildRows = (
     { byAuthIndex: new Map(), bySource: new Map(), byIdentityKey: new Map() },
     new Map(),
     modelPrices,
-    new Map()
+    apiKeyDisplayMap
   );
 
 describe('buildEventRows', () => {
@@ -407,7 +409,14 @@ describe('buildEventRows', () => {
     });
 
     const [claudeRow] = buildEventRows(
-      [{ ...events[0], auth_label_snapshot: 'claude', auth_provider_snapshot: 'claude', provider: 'claude' }],
+      [
+        {
+          ...events[0],
+          auth_label_snapshot: 'claude',
+          auth_provider_snapshot: 'claude',
+          provider: 'claude',
+        },
+      ],
       new Map(),
       new Map(),
       sourceInfoMap,
@@ -694,5 +703,15 @@ describe('buildEventRows', () => {
     expect(display.meta).toBe('Provider: workbuddy');
     expect(row.searchText).toContain('workbuddy');
     expect(row.searchText).toContain('marscosmo');
+  });
+
+  it('labels a CP client key with its instance name', () => {
+    const cpTail = 'AbCdEfGhIjKlMnOpQrStUvWxYz012345';
+    const cpKey = `sk-bx-ecwowk-${cpTail}`;
+    const [row] = buildRows({ api_key_hash: sha256Hex(cpKey) }, {}, buildApiKeyDisplayMap([cpKey]));
+
+    expect(row.apiKeyLabel).toBe('ecwowk');
+    expect(row.apiKeyMasked).toBe('sk******45');
+    expect(row.apiKeyLabel).not.toContain(cpTail);
   });
 });

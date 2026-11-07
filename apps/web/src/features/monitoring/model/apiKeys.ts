@@ -1,5 +1,6 @@
 import type { ApiKeyAlias } from '@/services/api/usageService';
 import { sha256Hex } from '@/utils/apiKeyHash';
+import { cpInstanceNameFromKey } from '@/utils/apiKeyName';
 import { maskApiKey, maskSensitiveText } from '@/utils/format';
 import { formatApiKeyHashLabel, readString } from './base';
 
@@ -24,7 +25,9 @@ export const buildApiKeyDisplayMap = (
     const hash = sha256Hex(apiKey).toLowerCase();
     if (!hash || map.has(hash)) return;
     const masked = maskApiKey(apiKey) || formatApiKeyHashLabel(hash);
-    map.set(hash, { label: masked, masked, copyValue: apiKey });
+    // A bridex CP key carries its instance name; stored aliases below still win.
+    const label = sanitizeApiKeyDisplayText(cpInstanceNameFromKey(apiKey) ?? '') || masked;
+    map.set(hash, { label, masked, copyValue: apiKey });
   });
   apiKeyAliases.forEach((entry) => {
     const hash = readString(entry.apiKeyHash).toLowerCase();

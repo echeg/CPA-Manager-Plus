@@ -556,6 +556,46 @@ describe('buildApiKeyDisplayMap', () => {
     expect(map.get(apiKeyHash)?.label).toContain('**');
     expect(map.get(apiKeyHash)?.label).not.toContain('secret-value');
   });
+
+  const cpTail = 'AbCdEfGhIjKlMnOpQrStUvWxYz012345';
+
+  it('labels a CP key without an alias with its instance name', () => {
+    const cpKey = `sk-bx-ecwowk-${cpTail}`;
+    const apiKeyHash = sha256Hex(cpKey);
+    const info = buildApiKeyDisplayMap([cpKey]).get(apiKeyHash);
+
+    expect(info?.label).toBe('ecwowk');
+    expect(info?.label).not.toContain(cpTail);
+    expect(info?.masked).toBe('sk******45');
+    expect(info?.masked).not.toContain(cpKey);
+    expect(info?.copyValue).toBe(cpKey);
+  });
+
+  it('lets a stored alias override the derived instance name', () => {
+    const cpKey = `sk-bx-ecwowk-${cpTail}`;
+    const apiKeyHash = sha256Hex(cpKey);
+    const map = buildApiKeyDisplayMap([cpKey], [{ apiKeyHash, alias: 'Laptop', updatedAtMs: 1 }]);
+
+    expect(map.get(apiKeyHash)?.label).toBe('Laptop');
+    expect(map.get(apiKeyHash)?.masked).toBe('sk******45');
+  });
+
+  it('keeps the masked label for keys outside the CP format', () => {
+    const apiKey = 'sk-proj-foreign-client-key';
+    const info = buildApiKeyDisplayMap([apiKey]).get(sha256Hex(apiKey));
+
+    expect(info?.label).toBe(info?.masked);
+    expect(info?.label).not.toContain(apiKey);
+  });
+
+  it('masks a CP instance name that looks like a key', () => {
+    const cpKey = `sk-bx-sk-abcdef-${cpTail}`;
+    const info = buildApiKeyDisplayMap([cpKey]).get(sha256Hex(cpKey));
+
+    expect(info?.label).toContain('**');
+    expect(info?.label).not.toContain('sk-abcdef');
+    expect(info?.label).not.toContain(cpTail);
+  });
 });
 
 describe('buildApiKeyRows', () => {

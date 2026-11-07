@@ -121,16 +121,16 @@
 - [x] run `npm --workspace apps/web run test -- src/utils/apiKeyName.test.ts` - must pass before task 2
 
 ### Task 2: Label CP keys with their instance name in buildApiKeyDisplayMap
-- [ ] in `apps/web/src/features/monitoring/model/apiKeys.ts` `buildApiKeyDisplayMap`, set the raw-key entry's `label` to `sanitizeApiKeyDisplayText(cpInstanceNameFromKey(apiKey) ?? '') || masked`; leave `masked`, `copyValue` and the alias loop unchanged
-- [ ] add cases to `describe('buildApiKeyDisplayMap')` in `apps/web/src/features/monitoring/hooks/useMonitoringData.test.ts`:
+- [x] in `apps/web/src/features/monitoring/model/apiKeys.ts` `buildApiKeyDisplayMap`, set the raw-key entry's `label` to `sanitizeApiKeyDisplayText(cpInstanceNameFromKey(apiKey) ?? '') || masked`; leave `masked`, `copyValue` and the alias loop unchanged
+- [x] add cases to `describe('buildApiKeyDisplayMap')` in `apps/web/src/features/monitoring/hooks/useMonitoringData.test.ts`:
   - a CP key without an alias gets exactly its instance name as `label`, the label does not contain the 32-character tail, and `masked` is unchanged and does not contain the key;
   - a stored alias overrides the derived name;
   - a foreign key keeps `label === masked`;
   - a CP key whose instance name looks like a key (`sk-bx-sk-abcdef-<32>`) gets a sanitized label that contains `**` and not `sk-abcdef`
-- [ ] add a case to `describe('buildKeyRows')` in `apps/web/src/features/quota/keyProfilesModel.test.ts`: a CP key without an alias gives `label` = exactly the instance name (not containing the tail), `hasAlias` = `true`, and a `masked` that does not contain the key; the existing tests still pass unchanged
-- [ ] add a case to `apps/web/src/features/monitoring/model/eventRows.test.ts`: `buildEventRows` with an event whose `api_key_hash` is a CP key's sha256 and a display map from `buildApiKeyDisplayMap([cpKey])` labels the row with the instance name
-- [ ] add a case to `apps/web/src/features/usage-analytics/usageAnalyticsModel.test.ts`: `resolveUsageApiKeyLabel(sha256Hex(cpKey), buildApiKeyDisplayMap([cpKey]))` returns the instance name
-- [ ] run `npm --workspace apps/web run test -- src/features/monitoring src/features/quota src/features/usage-analytics` - must pass before task 3
+- [x] add a case to `describe('buildKeyRows')` in `apps/web/src/features/quota/keyProfilesModel.test.ts`: a CP key without an alias gives `label` = exactly the instance name (not containing the tail), `hasAlias` = `true`, and a `masked` that does not contain the key; the existing tests still pass unchanged
+- [x] add a case to `apps/web/src/features/monitoring/model/eventRows.test.ts`: `buildEventRows` with an event whose `api_key_hash` is a CP key's sha256 and a display map from `buildApiKeyDisplayMap([cpKey])` labels the row with the instance name
+- [x] add a case to `apps/web/src/features/usage-analytics/usageAnalyticsModel.test.ts`: `resolveUsageApiKeyLabel(sha256Hex(cpKey), buildApiKeyDisplayMap([cpKey]))` returns the instance name
+- [x] run `npm --workspace apps/web run test -- src/features/monitoring src/features/quota src/features/usage-analytics` - must pass before task 3
 
 ### Task 3: Verify acceptance criteria
 - [ ] verify every success criterion in Decisions is covered by a test: CP key named in the modals, monitoring and usage analytics, alias wins, non-CP key unchanged, key-like name sanitized, label never contains the tail, mask never contains the key

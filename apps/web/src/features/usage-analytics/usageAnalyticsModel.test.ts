@@ -3,6 +3,8 @@ import type {
   MonitoringAnalyticsApiKeyStatRow,
   MonitoringAnalyticsResponse,
 } from '@/services/api/usageService';
+import { buildApiKeyDisplayMap } from '@/features/monitoring/model/apiKeys';
+import { sha256Hex } from '@/utils/apiKeyHash';
 import { buildSourceInfoMap } from '@/utils/sourceResolver';
 import type { UsageRankRow, UsageTimelinePoint } from './usageAnalyticsModel';
 import {
@@ -41,6 +43,7 @@ import {
   getUsageRangeBounds,
   getSelectableApiKeyHash,
   maskApiKeyHash,
+  resolveUsageApiKeyLabel,
   resolveUsageGranularity,
   USAGE_ANALYTICS_DEFAULT_FILTERS,
 } from './usageAnalyticsModel';
@@ -108,9 +111,9 @@ describe('usage analytics request model', () => {
     );
 
     const customFilters = { timeRange: 'custom' as const, customRange: null };
-    expect(
-      getUsagePresentationRangeScopeKey(customFilters, { fromMs: 1000, toMs: 2000 })
-    ).not.toBe(getUsagePresentationRangeScopeKey(customFilters, { fromMs: 2000, toMs: 3000 }));
+    expect(getUsagePresentationRangeScopeKey(customFilters, { fromMs: 1000, toMs: 2000 })).not.toBe(
+      getUsagePresentationRangeScopeKey(customFilters, { fromMs: 2000, toMs: 3000 })
+    );
   });
 
   it('resolves time ranges and default granularity rules', () => {
@@ -1963,5 +1966,16 @@ describe('usage anomaly drilldown', () => {
     ).toBe(
       `/monitoring?from_ms=${NOW_MS}&to_ms=${NOW_MS + HOUR_MS}&model=gpt-4o&api_key_hash=abcdef1234&provider=openai&auth_file=codex-auth.json&project_id=project-1&request_type=codex&status=failed&search=req-42&min_latency_ms=10000&cache_status=hit`
     );
+  });
+});
+
+describe('resolveUsageApiKeyLabel', () => {
+  it('labels a CP client key with its instance name', () => {
+    const cpTail = 'AbCdEfGhIjKlMnOpQrStUvWxYz012345';
+    const cpKey = `sk-bx-ecwowk-${cpTail}`;
+    const label = resolveUsageApiKeyLabel(sha256Hex(cpKey), buildApiKeyDisplayMap([cpKey]));
+
+    expect(label).toBe('ecwowk');
+    expect(label).not.toContain(cpTail);
   });
 });
