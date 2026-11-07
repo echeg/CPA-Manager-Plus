@@ -14,8 +14,8 @@
 - **Direction chosen by the user**: the panel derives the name from the key. Nothing is written anywhere.
 - **Chosen approach**:
   - New pure helper `apps/web/src/utils/apiKeyName.ts`:
-    - `cpInstanceNameFromKey(key: string): string | null` trims the key and matches `^sk-bx-([a-z0-9_-]+)-[A-Za-z0-9]{32}$`. It returns the name group, otherwise `null`.
-    - The greedy group is correct for hyphenated names, because the tail is exactly 32 base62 characters with no hyphen.
+    - `cpInstanceNameFromKey(key: string): string | null` trims the key and matches `^sk-bx-(_placeholder|[a-z0-9][a-z0-9-]{1,30})-[A-Za-z0-9]{32}$`. It returns the name group, otherwise `null`. The name alternative mirrors the CP's own instance-name rule exactly, plus its placeholder, so a malformed name group such as `-` (which the UI already uses for "no key", `rowBuilders.ts:593`) never becomes a label.
+    - Backtracking still extracts hyphenated names correctly, because the tail is exactly 32 base62 characters with no hyphen.
   - `buildApiKeyDisplayMap` (`apps/web/src/features/monitoring/model/apiKeys.ts:18-40`):
     - when it builds the entry for a raw configured key, `label = sanitizeApiKeyDisplayText(cpInstanceNameFromKey(apiKey) ?? '') || masked`;
     - `masked` and `copyValue` are unchanged;
@@ -28,7 +28,8 @@
     - the Client keys and Routing profiles modals (`keyProfilesModel.ts:79`);
     - monitoring (`apps/web/src/features/monitoring/hooks/useMonitoringData.ts:495`);
     - usage analytics (`apps/web/src/features/usage-analytics/useUsageAnalytics.ts`).
-  - **Errors**: a key that is not in the CP format keeps today's masked label. No part of the secret tail is ever displayed.
+  - **Errors**: a key that is not in the CP format keeps today's masked label. The derived label holds only the name segment; the 32-character tail is never part of the label (the mask keeps its existing behaviour of showing the key's last two characters, `format.ts:26-28`).
+  - **Key-like names**: an instance name that itself matches a key pattern of `maskSensitiveText` (`sk-` or `sess-` followed by 6+ characters, `format.ts:36`, for example `sk-abcdef`) is shown sanitized (`sk******ef`), exactly as a key-like alias is today (`useMonitoringData.test.ts:547-558`). Monitoring and usage analytics sanitize labels again anyway (`eventRows.ts:111-114`, `usageAnalyticsModel.ts:1432`).
 - **Rejected alternatives**: the user chose the panel-side option over these two and gave no further reason:
   - the CP writes an alias into the Manager Server (`PUT /v0/management/api-key-aliases`, sha256 of the key mapped to the instance name). That needs the Manager Server URL and its own admin key in the CP console, because `adminauth` `PanelUsesExternalManagementKey` is always false;
   - doing both.
@@ -43,6 +44,7 @@
   - A CP-issued key with no alias shows `<instance name>` as its label, plus the masked key, in the Client keys and Routing profiles modals, monitoring and usage analytics.
   - A stored alias still wins.
   - Non-CP keys look exactly as before.
+  - An instance name that looks like a key (`sk-…`/`sess-…`) is shown sanitized, like a key-like alias.
   - `npm test`, `npm run type-check` and `npm run lint` pass.
 - **Non-goals**:
   - changes to `bridex-cp`;
@@ -57,7 +59,9 @@
   - `apps/web/src/features/monitoring/model/apiKeys.ts`;
   - `apps/web/src/features/monitoring/hooks/useMonitoringData.test.ts` (the existing `describe('buildApiKeyDisplayMap')` at line 536);
   - `apps/web/src/features/quota/keyProfilesModel.test.ts` (the existing `describe('buildKeyRows')` at line 115);
-  - `docs/personal-quota.md` ("Routing profiles per API key", Client keys modal bullets around lines 200-230).
+  - `apps/web/src/features/monitoring/model/eventRows.test.ts` (`buildEventRows`, `eventRows.ts:32`, which labels events from the display map at `eventRows.ts:110-118`);
+  - `apps/web/src/features/usage-analytics/usageAnalyticsModel.test.ts` (`resolveUsageApiKeyLabel`, `usageAnalyticsModel.ts:1418-1434`);
+  - `docs/personal-quota.md`, the **How keys are shown** paragraph (`docs/personal-quota.md:243-249`), which today says a key without an alias shows a mask.
 - **Related patterns found**:
   - pure helpers in `apps/web/src/utils/` with a sibling `*.test.ts` (`apiKeyHash.ts`, `apiKeyGenerator.ts`);
   - display labels resolved once in `buildApiKeyDisplayMap`, then read by every screen.
@@ -102,47 +106,58 @@
 - 2026-11-07 loopai-brainstorm-v2: **accepted** - the derived name goes through `sanitizeApiKeyDisplayText`, like aliases (`apiKeys.ts:12-16`).
 - 2026-11-07 loopai-brainstorm-v2: **accepted** - the CP placeholder `sk-bx-_placeholder-…` shows as `_placeholder`, with no special case (`bridex-cp/src/provisioning/proxyKeys.ts:88-92`).
 - 2026-11-07 loopai-brainstorm-v2: **accepted** - the cross-repo format contract is pinned by tests and a paragraph in `docs/personal-quota.md` in this repository. `bridex-cp` is untouched, because the key format is produced there and stays as it is.
+- 2026-11-07 grill: **accepted** - Task 4, Context and the Decisions now rewrite the **How keys are shown** paragraph (`docs/personal-quota.md:243-249`) instead of adding a bullet to the add/delete bullets - decided by grill: that paragraph states that keys without an alias show a mask, which this change makes false.
+- 2026-11-07 grill: **accepted** - the parser pattern in Decisions, Task 1 and Technical Details is narrowed from `([a-z0-9_-]+)` to `(_placeholder|[a-z0-9][a-z0-9-]{1,30})`, with Task 1 cases for `sk-bx---<32>`, `sk-bx--x-<32>`, a 1-character and a 32-character name, and `_other` - decided by grill: the CP's own instance-name rule (`bridex-cp/src/api/admin.ts:881`) and placeholder (`proxyKeys.ts:92`) define the format, and the loose group turned `sk-bx---<32>` into the label `-`, which the UI reads as "no key" (`rowBuilders.ts:593`).
+- 2026-11-07 grill: **accepted** - Decisions and Success criteria now state that an instance name matching a `maskSensitiveText` key pattern (for example `sk-abcdef`) is shown sanitized, and Task 2 pins it with a test - decided by grill: `format.ts:36` masks `sk-`/`sess-` plus 6+ characters, the accepted sanitizing decision and the existing key-like alias test (`useMonitoringData.test.ts:547-558`) fix that behaviour, and monitoring and usage analytics sanitize labels again (`eventRows.ts:111-114`, `usageAnalyticsModel.ts:1432`), so skipping the sanitizer would not show the raw name there either.
+- 2026-11-07 grill: **accepted** - Task 2 adds label tests for monitoring (`buildEventRows` in `eventRows.test.ts`) and usage analytics (`resolveUsageApiKeyLabel` in `usageAnalyticsModel.test.ts`) and runs `src/features/usage-analytics` too - decided by grill: both are success criteria and each builds its own label from the display map (`eventRows.ts:110-118`, `usageAnalyticsModel.ts:1418-1434`), and no planned test covered them.
+- 2026-11-07 grill: **accepted** - the Errors line in Decisions now says the derived label holds only the name segment (the mask already shows the key's last two characters), and Tasks 1-2 assert an exact name and that the label never contains the 32-character tail - decided by grill: `maskApiKey` keeps the last two characters (`format.ts:26-28`), so "no part of the tail is ever displayed" was false, and no planned test caught a regex that captures the tail.
 
 ## Implementation Steps
 
 ### Task 1: Add the CP instance name parser
-- [ ] create `apps/web/src/utils/apiKeyName.ts` exporting `cpInstanceNameFromKey(key: string): string | null`: trim the key, match `^sk-bx-([a-z0-9_-]+)-[A-Za-z0-9]{32}$`, return the name group or `null`; a doc comment names `bridex-cp` as the format's owner
-- [ ] create `apps/web/src/utils/apiKeyName.test.ts` with success cases: a plain name (`sk-bx-ecwowk-<32>` gives `ecwowk`), a hyphenated name (`sk-bx-team-a-1-<32>` gives `team-a-1`), `_placeholder`, and surrounding whitespace
-- [ ] add the non-matching cases to `apiKeyName.test.ts`: a foreign `sk-…` key, a tail of 31 and of 33 characters, a non-base62 character in the tail, uppercase letters in the name part, a missing name (`sk-bx--<32>`), an empty string
+- [ ] create `apps/web/src/utils/apiKeyName.ts` exporting `cpInstanceNameFromKey(key: string): string | null`: trim the key, match `^sk-bx-(_placeholder|[a-z0-9][a-z0-9-]{1,30})-[A-Za-z0-9]{32}$`, return the name group or `null`; a doc comment names `bridex-cp` as the format's owner and its instance-name rule `^[a-z0-9][a-z0-9-]{1,30}$`
+- [ ] create `apps/web/src/utils/apiKeyName.test.ts` with success cases, each asserting the exact returned name: a plain name (`sk-bx-ecwowk-<32>` gives `ecwowk`), a hyphenated name (`sk-bx-team-a-1-<32>` gives `team-a-1`), a short name that looks like base62 (`sk-bx-abc-<32>` gives exactly `abc`, not part of the tail), a 31-character name, `_placeholder`, and surrounding whitespace
+- [ ] add the non-matching cases to `apiKeyName.test.ts`: a foreign `sk-…` key, a tail of 31 and of 33 characters, a non-base62 character in the tail, uppercase letters in the name part, a missing name (`sk-bx--<32>`), a hyphen-only name (`sk-bx---<32>`), a name starting with a hyphen (`sk-bx--x-<32>`), a 1-character name (`sk-bx-a-<32>`), a 32-character name, another underscore name (`sk-bx-_other-<32>`), an empty string
 - [ ] run `npm --workspace apps/web run test -- src/utils/apiKeyName.test.ts` - must pass before task 2
 
 ### Task 2: Label CP keys with their instance name in buildApiKeyDisplayMap
 - [ ] in `apps/web/src/features/monitoring/model/apiKeys.ts` `buildApiKeyDisplayMap`, set the raw-key entry's `label` to `sanitizeApiKeyDisplayText(cpInstanceNameFromKey(apiKey) ?? '') || masked`; leave `masked`, `copyValue` and the alias loop unchanged
 - [ ] add cases to `describe('buildApiKeyDisplayMap')` in `apps/web/src/features/monitoring/hooks/useMonitoringData.test.ts`:
-  - a CP key without an alias gets its instance name as `label`, and `masked` is unchanged and does not contain the key;
+  - a CP key without an alias gets exactly its instance name as `label`, the label does not contain the 32-character tail, and `masked` is unchanged and does not contain the key;
   - a stored alias overrides the derived name;
-  - a foreign key keeps `label === masked`
-- [ ] add a case to `describe('buildKeyRows')` in `apps/web/src/features/quota/keyProfilesModel.test.ts`: a CP key without an alias gives `label` = the instance name, `hasAlias` = `true`, and a `masked` that does not contain the key; the existing tests still pass unchanged
-- [ ] run `npm --workspace apps/web run test -- src/features/monitoring src/features/quota` - must pass before task 3
+  - a foreign key keeps `label === masked`;
+  - a CP key whose instance name looks like a key (`sk-bx-sk-abcdef-<32>`) gets a sanitized label that contains `**` and not `sk-abcdef`
+- [ ] add a case to `describe('buildKeyRows')` in `apps/web/src/features/quota/keyProfilesModel.test.ts`: a CP key without an alias gives `label` = exactly the instance name (not containing the tail), `hasAlias` = `true`, and a `masked` that does not contain the key; the existing tests still pass unchanged
+- [ ] add a case to `apps/web/src/features/monitoring/model/eventRows.test.ts`: `buildEventRows` with an event whose `api_key_hash` is a CP key's sha256 and a display map from `buildApiKeyDisplayMap([cpKey])` labels the row with the instance name
+- [ ] add a case to `apps/web/src/features/usage-analytics/usageAnalyticsModel.test.ts`: `resolveUsageApiKeyLabel(sha256Hex(cpKey), buildApiKeyDisplayMap([cpKey]))` returns the instance name
+- [ ] run `npm --workspace apps/web run test -- src/features/monitoring src/features/quota src/features/usage-analytics` - must pass before task 3
 
 ### Task 3: Verify acceptance criteria
-- [ ] verify every success criterion in Decisions is covered by a test: CP key named, alias wins, non-CP key unchanged, mask never contains the key
+- [ ] verify every success criterion in Decisions is covered by a test: CP key named in the modals, monitoring and usage analytics, alias wins, non-CP key unchanged, key-like name sanitized, label never contains the tail, mask never contains the key
 - [ ] run the full test suite: `npm test`
 - [ ] run `npm run type-check`
 - [ ] run `npm run lint` - all issues must be fixed
 
 ### Task 4: [Final] Document the CP key names
-- [ ] in `docs/personal-quota.md`, in the Client keys modal bullets of "Routing profiles per API key", add a paragraph:
-  - a key in the bridex CP format `sk-bx-<instance name>-<32 base62>` without a stored alias is labelled with its instance name, in the modals, monitoring and usage analytics;
-  - a stored alias wins;
-  - the format is produced by `bridex-cp`, and if it changes, these labels fall back to the mask
+- [ ] in `docs/personal-quota.md`, rewrite the label order in the **How keys are shown** paragraph (`:243-249`); do not add a separate bullet elsewhere:
+  - a key is labelled by its stored alias first;
+  - otherwise, a key in the bridex CP format `sk-bx-<instance name>-<32 base62>` is labelled with its instance name, in the modals, monitoring and usage analytics; a name that looks like a key (`sk-…`) is shown masked;
+  - otherwise the panel shows a mask such as `sk******yz`;
+  - the format is produced by `bridex-cp`, and if it changes, these labels fall back to the mask;
+  - keep the rest of the paragraph (raw keys never rendered, logged or placed in URLs) unchanged
 
 *Note: loopai automatically moves completed plans to `docs/plans/completed/`*
 
 ## Technical Details
-- Pattern: `^sk-bx-([a-z0-9_-]+)-[A-Za-z0-9]{32}$` on the trimmed key. Examples:
+- Pattern: `^sk-bx-(_placeholder|[a-z0-9][a-z0-9-]{1,30})-[A-Za-z0-9]{32}$` on the trimmed key. Examples:
   - `sk-bx-ecwowk-AbCdEfGhIjKlMnOpQrStUvWxYz012345` gives `ecwowk`;
   - `sk-bx-team-a-1-<32>` gives `team-a-1`;
   - `sk-bx-_placeholder-<32>` gives `_placeholder`;
+  - `sk-bx---<32>`, `sk-bx--x-<32>`, `sk-bx-a-<32>` give `null`;
   - `sk-proj-…` gives `null`.
 - Label rule in `buildApiKeyDisplayMap`, in order:
   1. the stored alias (sanitized);
-  2. the derived instance name (sanitized);
+  2. the derived instance name (sanitized: a name such as `sk-abcdef` becomes `sk******ef`, like a key-like alias);
   3. the masked key, or `sha256:` hash label when masking yields nothing.
 - `hasAlias` in `buildKeyRows` stays `label !== masked`, so the UI shows `<name>` with the mask beside it for derived names.
 
