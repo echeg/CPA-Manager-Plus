@@ -1978,4 +1978,15 @@ describe('resolveUsageApiKeyLabel', () => {
     expect(label).toBe('ecwowk');
     expect(label).not.toContain(cpTail);
   });
+
+  it('tells two keys of one CP instance apart', () => {
+    const first = 'sk-bx-ecwowk-AbCdEfGhIjKlMnOpQrStUvWxYz012345';
+    const second = 'sk-bx-ecwowk-ZyXwVuTsRqPoNmLkJiHgFeDcBa98765Q';
+    const displayMap = buildApiKeyDisplayMap([first, second]);
+    const firstLabel = resolveUsageApiKeyLabel(sha256Hex(first), displayMap);
+    const secondLabel = resolveUsageApiKeyLabel(sha256Hex(second), displayMap);
+
+    expect(firstLabel).toBe('ecwowk (sk******45)');
+    expect(secondLabel).toBe('ecwowk (sk******5Q)');
+  });
 });

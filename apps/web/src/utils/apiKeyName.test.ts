@@ -5,7 +5,7 @@ const TAIL = 'AbCdEfGhIjKlMnOpQrStUvWxYz012345';
 
 describe('cpInstanceNameFromKey', () => {
   it('pins a 32-character base62 tail in the fixtures', () => {
-    expect(TAIL).toHaveLength(32);
+    expect(TAIL).toMatch(/^[A-Za-z0-9]{32}$/);
   });
 
   it('returns the instance name of a CP-issued key', () => {

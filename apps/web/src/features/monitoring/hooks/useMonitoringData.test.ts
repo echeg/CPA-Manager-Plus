@@ -592,9 +592,46 @@ describe('buildApiKeyDisplayMap', () => {
     const cpKey = `sk-bx-sk-abcdef-${cpTail}`;
     const info = buildApiKeyDisplayMap([cpKey]).get(sha256Hex(cpKey));
 
-    expect(info?.label).toContain('**');
+    expect(info?.label).toBe('sk******ef');
+    expect(info?.label).not.toBe(info?.masked);
     expect(info?.label).not.toContain('sk-abcdef');
     expect(info?.label).not.toContain(cpTail);
+  });
+
+  const otherTail = 'ZyXwVuTsRqPoNmLkJiHgFeDcBa98765Q';
+
+  it('adds the mask to two keys of one CP instance so their labels differ', () => {
+    const first = `sk-bx-ecwowk-${cpTail}`;
+    const second = `sk-bx-ecwowk-${otherTail}`;
+    const map = buildApiKeyDisplayMap([first, second]);
+
+    expect(map.get(sha256Hex(first))?.label).toBe('ecwowk (sk******45)');
+    expect(map.get(sha256Hex(second))?.label).toBe('ecwowk (sk******5Q)');
+    expect(map.get(sha256Hex(first))?.label).not.toContain(cpTail);
+  });
+
+  it('keeps the plain name when the other key of the instance has an alias', () => {
+    const first = `sk-bx-ecwowk-${cpTail}`;
+    const second = `sk-bx-ecwowk-${otherTail}`;
+    const map = buildApiKeyDisplayMap(
+      [first, second],
+      [{ apiKeyHash: sha256Hex(second), alias: 'Old key', updatedAtMs: 1 }]
+    );
+
+    expect(map.get(sha256Hex(first))?.label).toBe('ecwowk');
+    expect(map.get(sha256Hex(second))?.label).toBe('Old key');
+  });
+
+  it('adds the mask to a CP name that another key uses as its alias', () => {
+    const cpKey = `sk-bx-ecwowk-${cpTail}`;
+    const foreignKey = 'sk-proj-foreign-client-key';
+    const map = buildApiKeyDisplayMap(
+      [cpKey, foreignKey],
+      [{ apiKeyHash: sha256Hex(foreignKey), alias: 'ecwowk', updatedAtMs: 1 }]
+    );
+
+    expect(map.get(sha256Hex(foreignKey))?.label).toBe('ecwowk');
+    expect(map.get(sha256Hex(cpKey))?.label).toBe('ecwowk (sk******45)');
   });
 });
 

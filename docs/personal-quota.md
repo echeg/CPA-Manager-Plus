@@ -242,11 +242,16 @@ profiles and key list.
 
 **How keys are shown.** A key is labeled by its alias from the Manager Server's
 API key aliases, matched by SHA-256, when the panel is served by the Manager
-Server. Otherwise, a key in the bridex CP format `sk-bx-<instance name>-<32 base62>`
-is labeled with its instance name, with the mask beside it, in the Keys and Profiles
-modals, monitoring and usage analytics; a name that looks like a key (`sk-…`) is
-shown masked. Otherwise the panel shows a mask such as `sk******yz`. The CP format
-is produced by `bridex-cp`; if it changes, these labels fall back to the mask. Raw keys stay in memory and in request bodies; they are never
+Server. A key without an alias that is in the bridex CP format
+`sk-bx-<instance name>-<32 base62>` is labeled with its instance name, whether or
+not the Manager Server serves the panel. The name is the label in the Keys and
+Profiles modals, monitoring and usage analytics; the modals and monitoring also show
+the mask, while usage analytics shows the name alone. Every key of one instance has
+the same name, so a name that another key's label also uses gets the key's mask, as
+in `ecwowk (sk******yz)`. A name that looks like a key (`sk-…` or `sess-…`) is shown
+masked. Any other key is shown as a mask such as `sk******yz`. The CP format is
+produced by `bridex-cp`; if it changes, these labels fall back to the mask. Raw keys
+stay in memory and in request bodies; they are never
 rendered (except in the add form's key field before the key is added), logged,
 placed in an error message, or placed in a request URL, because CPA writes request
 paths to its log. Account names in the summaries follow the email privacy toggle.

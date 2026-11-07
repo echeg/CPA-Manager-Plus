@@ -69,9 +69,10 @@ export function copyOfShared(shared: RoutingProfile): RoutingProfile {
 
 /** A key row ready for display. `key` is raw and only for saving; never render it. */
 export interface KeyDisplayRow extends KeyProfileRow {
-  /** The alias, or the masked key when there is none. */
+  /** The stored alias, else the CP instance name (`utils/apiKeyName.ts`), else the masked key. */
   label: string;
   masked: string;
+  /** `label` is a name (a stored alias or a CP instance name), so the mask is shown beside it. */
   hasAlias: boolean;
 }
 

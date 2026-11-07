@@ -44,8 +44,9 @@ const keyHash = (key: string) => sha256Hex(key).toLowerCase();
 const prefix = 'quota_management.client_keys';
 
 /**
- * Client keys with their profile choice, plus an add form. Rows show the alias or
- * the masked key only; the raw key appears solely in the add input before it is saved.
+ * Client keys with their profile choice, plus an add form. Rows show the alias, the CP
+ * instance name or the masked key only; the raw key appears solely in the add input
+ * before it is saved.
  */
 export function ClientKeysModal({
   open,

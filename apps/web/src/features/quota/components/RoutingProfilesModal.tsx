@@ -48,7 +48,8 @@ const keyHash = (key: string) => sha256Hex(key).toLowerCase();
 
 /**
  * The default (shared) profile with the global TTL, and every key that has its own
- * profile. One editor is open at a time. Rows show the alias or the masked key only.
+ * profile. One editor is open at a time. Rows show the alias, the CP instance name or
+ * the masked key only.
  */
 export function RoutingProfilesModal({
   open,
