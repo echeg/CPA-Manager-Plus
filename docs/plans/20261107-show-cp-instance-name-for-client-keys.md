@@ -115,10 +115,10 @@
 ## Implementation Steps
 
 ### Task 1: Add the CP instance name parser
-- [ ] create `apps/web/src/utils/apiKeyName.ts` exporting `cpInstanceNameFromKey(key: string): string | null`: trim the key, match `^sk-bx-(_placeholder|[a-z0-9][a-z0-9-]{1,30})-[A-Za-z0-9]{32}$`, return the name group or `null`; a doc comment names `bridex-cp` as the format's owner and its instance-name rule `^[a-z0-9][a-z0-9-]{1,30}$`
-- [ ] create `apps/web/src/utils/apiKeyName.test.ts` with success cases, each asserting the exact returned name: a plain name (`sk-bx-ecwowk-<32>` gives `ecwowk`), a hyphenated name (`sk-bx-team-a-1-<32>` gives `team-a-1`), a short name that looks like base62 (`sk-bx-abc-<32>` gives exactly `abc`, not part of the tail), a 31-character name, `_placeholder`, and surrounding whitespace
-- [ ] add the non-matching cases to `apiKeyName.test.ts`: a foreign `sk-…` key, a tail of 31 and of 33 characters, a non-base62 character in the tail, uppercase letters in the name part, a missing name (`sk-bx--<32>`), a hyphen-only name (`sk-bx---<32>`), a name starting with a hyphen (`sk-bx--x-<32>`), a 1-character name (`sk-bx-a-<32>`), a 32-character name, another underscore name (`sk-bx-_other-<32>`), an empty string
-- [ ] run `npm --workspace apps/web run test -- src/utils/apiKeyName.test.ts` - must pass before task 2
+- [x] create `apps/web/src/utils/apiKeyName.ts` exporting `cpInstanceNameFromKey(key: string): string | null`: trim the key, match `^sk-bx-(_placeholder|[a-z0-9][a-z0-9-]{1,30})-[A-Za-z0-9]{32}$`, return the name group or `null`; a doc comment names `bridex-cp` as the format's owner and its instance-name rule `^[a-z0-9][a-z0-9-]{1,30}$`
+- [x] create `apps/web/src/utils/apiKeyName.test.ts` with success cases, each asserting the exact returned name: a plain name (`sk-bx-ecwowk-<32>` gives `ecwowk`), a hyphenated name (`sk-bx-team-a-1-<32>` gives `team-a-1`), a short name that looks like base62 (`sk-bx-abc-<32>` gives exactly `abc`, not part of the tail), a 31-character name, `_placeholder`, and surrounding whitespace
+- [x] add the non-matching cases to `apiKeyName.test.ts`: a foreign `sk-…` key, a tail of 31 and of 33 characters, a non-base62 character in the tail, uppercase letters in the name part, a missing name (`sk-bx--<32>`), a hyphen-only name (`sk-bx---<32>`), a name starting with a hyphen (`sk-bx--x-<32>`), a 1-character name (`sk-bx-a-<32>`), a 32-character name, another underscore name (`sk-bx-_other-<32>`), an empty string
+- [x] run `npm --workspace apps/web run test -- src/utils/apiKeyName.test.ts` - must pass before task 2
 
 ### Task 2: Label CP keys with their instance name in buildApiKeyDisplayMap
 - [ ] in `apps/web/src/features/monitoring/model/apiKeys.ts` `buildApiKeyDisplayMap`, set the raw-key entry's `label` to `sanitizeApiKeyDisplayText(cpInstanceNameFromKey(apiKey) ?? '') || masked`; leave `masked`, `copyValue` and the alias loop unchanged
