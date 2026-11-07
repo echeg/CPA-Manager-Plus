@@ -99,4 +99,17 @@ describe('ApiKeySummaryPanel', () => {
       renderer.root.findAllByType('button').some((node) => node.props['aria-label'] === 'Copy')
     ).toBe(false);
   });
+
+  const secondaryText = (renderer: ReactTestRenderer) =>
+    renderer.root.findAllByType('small').map((node) => node.children.join(''));
+
+  it('shows the mask under a name', () => {
+    expect(secondaryText(renderPanel(createRow()))).toEqual(['sk********aa']);
+  });
+
+  it('does not repeat the mask under a shared name that already holds it', () => {
+    const renderer = renderPanel(createRow({ apiKeyLabel: 'ecwowk (sk********aa)' }));
+
+    expect(secondaryText(renderer)).toEqual(['sha256:hash-a']);
+  });
 });

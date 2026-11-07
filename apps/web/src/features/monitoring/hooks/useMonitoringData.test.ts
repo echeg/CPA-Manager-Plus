@@ -20,6 +20,7 @@ import {
   buildAccountRowsFromAnalytics,
   buildApiKeyRowsFromAnalytics,
 } from '../model/analyticsAdapters';
+import { labelShowsMask } from '../model/apiKeys';
 import { buildMonitoringCenterAnalyticsInclude } from '../model/monitoringAnalyticsModel';
 import { buildMonitoringAccountRowId } from '../model/accountIdentity';
 import type { MonitoringAnalyticsEventRow } from '@/services/api/usageService';
@@ -632,6 +633,19 @@ describe('buildApiKeyDisplayMap', () => {
 
     expect(map.get(sha256Hex(foreignKey))?.label).toBe('ecwowk');
     expect(map.get(sha256Hex(cpKey))?.label).toBe('ecwowk (sk******45)');
+  });
+});
+
+describe('labelShowsMask', () => {
+  it('is true for the mask itself and for a shared name with the mask appended', () => {
+    expect(labelShowsMask('sk******45', 'sk******45')).toBe(true);
+    expect(labelShowsMask('ecwowk (sk******45)', 'sk******45')).toBe(true);
+  });
+
+  it('is false for a plain name or a name with another mask', () => {
+    expect(labelShowsMask('ecwowk', 'sk******45')).toBe(false);
+    expect(labelShowsMask('ecwowk (sk******5Q)', 'sk******45')).toBe(false);
+    expect(labelShowsMask('ecwowk', '')).toBe(false);
   });
 });
 

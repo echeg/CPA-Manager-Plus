@@ -165,6 +165,20 @@ describe('buildKeyRows', () => {
     expect(row.masked).not.toContain(cpKey);
     expect(row.key).toBe(cpKey);
   });
+
+  test('shows the mask once for two keys of one CP instance', () => {
+    const first = 'sk-bx-ecwowk-AbCdEfGhIjKlMnOpQrStUvWxYz012345';
+    const second = 'sk-bx-ecwowk-ZyXwVuTsRqPoNmLkJiHgFeDcBa98765Q';
+    const rows = buildKeyRows([
+      { key: first, profile: null },
+      { key: second, profile: null },
+    ]);
+    expect(rows.map((row) => row.label)).toEqual(['ecwowk (sk******45)', 'ecwowk (sk******5Q)']);
+    for (const row of rows) {
+      expect(row.label).toContain(row.masked);
+      expect(row.hasAlias).toBe(false);
+    }
+  });
 });
 
 describe('preferredAccountOptions', () => {

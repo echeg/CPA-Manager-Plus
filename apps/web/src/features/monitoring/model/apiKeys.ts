@@ -16,6 +16,8 @@ export const sanitizeApiKeyDisplayText = (value: string, fallback = '') => {
   return maskSensitiveText(trimmed) || fallback;
 };
 
+const maskSuffix = (masked: string) => ` (${masked})`;
+
 export const buildApiKeyDisplayMap = (
   apiKeys: string[] = [],
   apiKeyAliases: ApiKeyAlias[] = []
@@ -52,11 +54,18 @@ export const buildApiKeyDisplayMap = (
   named.forEach((hash) => {
     const info = map.get(hash);
     if (info && (labelCounts.get(info.label) ?? 0) > 1) {
-      map.set(hash, { ...info, label: `${info.label} (${info.masked})` });
+      map.set(hash, { ...info, label: `${info.label}${maskSuffix(info.masked)}` });
     }
   });
   return map;
 };
+
+/**
+ * The label already shows the mask: it is the mask, or a shared name with the mask
+ * appended by `buildApiKeyDisplayMap`. Screens that put the mask beside a name skip it then.
+ */
+export const labelShowsMask = (label: string, masked: string) =>
+  label === masked || (Boolean(masked) && label.endsWith(maskSuffix(masked)));
 
 export const shouldPreferApiKeyAlias = (label: string, masked: string) =>
   Boolean(label) && label !== masked && !label.startsWith('sha256:');

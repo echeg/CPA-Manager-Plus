@@ -132,6 +132,7 @@
 - [x] add a case to `apps/web/src/features/usage-analytics/usageAnalyticsModel.test.ts`: `resolveUsageApiKeyLabel(sha256Hex(cpKey), buildApiKeyDisplayMap([cpKey]))` returns the instance name
 - [x] run `npm --workspace apps/web run test -- src/features/monitoring src/features/quota src/features/usage-analytics` - must pass before task 3
 - [x] ➕ (code review) a derived name that another label in the map also uses (a second key of the same instance, or another key's alias) gets the key's mask appended, `ecwowk (sk******45)`, so label-only surfaces (the Routing profiles add select, monitoring and usage analytics filters and ranks) still tell the keys apart; tests in `useMonitoringData.test.ts` and `usageAnalyticsModel.test.ts`
+- [x] ➕ (code review) screens that put the mask beside a name (the modal rows via `buildKeyRows` `hasAlias`, the monitoring key summary) skip it when the label already ends with the mask (`labelShowsMask` in `apiKeys.ts`), so a shared name does not show the mask twice; tests in `keyProfilesModel.test.ts`, `ApiKeySummaryPanel.test.tsx` and `useMonitoringData.test.ts`
 
 ### Task 3: Verify acceptance criteria
 - [x] verify every success criterion in Decisions is covered by a test: CP key named in the modals, monitoring and usage analytics, alias wins, non-CP key unchanged, key-like name sanitized, label never contains the tail, mask never contains the key

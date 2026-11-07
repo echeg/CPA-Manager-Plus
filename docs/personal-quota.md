@@ -248,8 +248,10 @@ not the Manager Server serves the panel. The name is the label in the Keys and
 Profiles modals, monitoring and usage analytics; the modals and monitoring also show
 the mask, while usage analytics shows the name alone. Every key of one instance has
 the same name, so a name that another key's label also uses gets the key's mask, as
-in `ecwowk (sk******yz)`. A name that looks like a key (`sk-…` or `sess-…`) is shown
-masked. Any other key is shown as a mask such as `sk******yz`. The CP format is
+in `ecwowk (sk******yz)`; the modals and monitoring then do not show the mask a
+second time. A name that contains `sk-` or `sess-` followed by 6 or more characters
+(`sk-abcdef`, but also `task-runner`) is shown masked, as an alias is. Any other key
+is shown as a mask such as `sk******yz`. The CP format is
 produced by `bridex-cp`; if it changes, these labels fall back to the mask. Raw keys
 stay in memory and in request bodies; they are never
 rendered (except in the add form's key field before the key is added), logged,

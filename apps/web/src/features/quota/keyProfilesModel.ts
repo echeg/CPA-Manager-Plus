@@ -6,7 +6,7 @@ import type {
   RoutingSelectionOptions,
 } from '@/features/personal-quota-support/services/api/routingProfiles';
 import type { AuthFileItem } from '@/features/personal-quota-support/types';
-import { buildApiKeyDisplayMap } from '@/features/monitoring/model/apiKeys';
+import { buildApiKeyDisplayMap, labelShowsMask } from '@/features/monitoring/model/apiKeys';
 import { getQuotaDisplayName } from '@/features/quota/utils/quota/identity';
 import type { ApiKeyAlias } from '@/services/api/usageService';
 import { sha256Hex } from '@/utils/apiKeyHash';
@@ -72,7 +72,10 @@ export interface KeyDisplayRow extends KeyProfileRow {
   /** The stored alias, else the CP instance name (`utils/apiKeyName.ts`), else the masked key. */
   label: string;
   masked: string;
-  /** `label` is a name (a stored alias or a CP instance name), so the mask is shown beside it. */
+  /**
+   * `label` is a name (a stored alias or a CP instance name), so the mask is shown beside it.
+   * `false` when the label already holds the mask (a shared name, `labelShowsMask`).
+   */
   hasAlias: boolean;
 }
 
@@ -86,7 +89,13 @@ export function buildKeyRows(rows: KeyProfileRow[], aliases: ApiKeyAlias[] = [])
     const masked = info?.masked || maskApiKey(row.key);
     // An alias that repeats the raw key would put it on screen.
     const label = info && info.label && !info.label.includes(row.key) ? info.label : masked;
-    return { key: row.key, profile: row.profile, label, masked, hasAlias: label !== masked };
+    return {
+      key: row.key,
+      profile: row.profile,
+      label,
+      masked,
+      hasAlias: !labelShowsMask(label, masked),
+    };
   });
 }
 

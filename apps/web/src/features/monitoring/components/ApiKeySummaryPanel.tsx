@@ -2,6 +2,7 @@ import { Fragment, type ReactNode } from 'react';
 import type { TFunction } from 'i18next';
 import { IconChevronDown, IconChevronUp, IconCopy, IconInfo, IconKey } from '@/components/ui/icons';
 import type { MonitoringApiKeyRow } from '@/features/monitoring/hooks/useMonitoringData';
+import { labelShowsMask } from '@/features/monitoring/model/apiKeys';
 import { useNotificationStore } from '@/stores';
 import { copyToClipboard } from '@/utils/clipboard';
 import { formatCompactNumber, formatUsd } from '@/utils/usage';
@@ -66,7 +67,7 @@ const buildApiKeySecondaryText = (row: MonitoringApiKeyRow) => {
       return joinShort(row.channels, 2);
     }
   }
-  if (row.apiKeyLabel && row.apiKeyMasked && row.apiKeyLabel !== row.apiKeyMasked) {
+  if (row.apiKeyLabel && row.apiKeyMasked && !labelShowsMask(row.apiKeyLabel, row.apiKeyMasked)) {
     return row.apiKeyMasked;
   }
   if (row.apiKeyHash) {
