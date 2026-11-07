@@ -133,10 +133,10 @@
 - [x] run `npm --workspace apps/web run test -- src/features/monitoring src/features/quota src/features/usage-analytics` - must pass before task 3
 
 ### Task 3: Verify acceptance criteria
-- [ ] verify every success criterion in Decisions is covered by a test: CP key named in the modals, monitoring and usage analytics, alias wins, non-CP key unchanged, key-like name sanitized, label never contains the tail, mask never contains the key
-- [ ] run the full test suite: `npm test`
-- [ ] run `npm run type-check`
-- [ ] run `npm run lint` - all issues must be fixed
+- [x] verify every success criterion in Decisions is covered by a test: CP key named in the modals, monitoring and usage analytics, alias wins, non-CP key unchanged, key-like name sanitized, label never contains the tail, mask never contains the key
+- [x] run the full test suite: `npm test` (312 web files / 5177 tests and 16 repo files / 266 tests pass)
+- [x] run `npm run type-check`
+- [x] run `npm run lint` - all issues must be fixed (0 errors; the 7 remaining warnings are pre-existing, in files this branch does not touch, and already tracked in `docs/backlog/web-lint-warnings.md`)
 
 ### Task 4: [Final] Document the CP key names
 - [ ] in `docs/personal-quota.md`, rewrite the label order in the **How keys are shown** paragraph (`:243-249`); do not add a separate bullet elsewhere:
