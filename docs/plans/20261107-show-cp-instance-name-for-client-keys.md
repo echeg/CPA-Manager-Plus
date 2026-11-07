@@ -139,7 +139,7 @@
 - [x] run `npm run lint` - all issues must be fixed (0 errors; the 7 remaining warnings are pre-existing, in files this branch does not touch, and already tracked in `docs/backlog/web-lint-warnings.md`)
 
 ### Task 4: [Final] Document the CP key names
-- [ ] in `docs/personal-quota.md`, rewrite the label order in the **How keys are shown** paragraph (`:243-249`); do not add a separate bullet elsewhere:
+- [x] in `docs/personal-quota.md`, rewrite the label order in the **How keys are shown** paragraph (`:243-249`); do not add a separate bullet elsewhere:
   - a key is labelled by its stored alias first;
   - otherwise, a key in the bridex CP format `sk-bx-<instance name>-<32 base62>` is labelled with its instance name, in the modals, monitoring and usage analytics; a name that looks like a key (`sk-…`) is shown masked;
   - otherwise the panel shows a mask such as `sk******yz`;
