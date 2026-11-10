@@ -1,0 +1,219 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Request routing by client key",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "legend": {
+      "entries": {
+        "frontend": {
+          "label": "Client"
+        },
+        "backend": {
+          "label": "Credential pool"
+        },
+        "security": {
+          "label": "Policy / failure"
+        },
+        "external": {
+          "label": "Codex leg"
+        }
+      }
+    }
+  },
+  "lanes": [
+    {
+      "id": "inbound",
+      "label": "Client key → routing profile (routing.key-profiles)"
+    },
+    {
+      "id": "pool",
+      "label": "Credential selection (Claude / Codex)"
+    },
+    {
+      "id": "fallback",
+      "label": "Claude → Codex fallback (claude-fallback)"
+    }
+  ],
+  "phases": [
+    {
+      "id": "inbound_phase",
+      "label": "Inbound",
+      "fromCol": 0,
+      "toCol": 1
+    },
+    {
+      "id": "selection_phase",
+      "label": "Selection stages",
+      "fromCol": 2,
+      "toCol": 4,
+      "variant": "emphasis"
+    },
+    {
+      "id": "outcome_phase",
+      "label": "Outcome",
+      "fromCol": 5,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "mainPath": [
+    "request",
+    "profile",
+    "sticky",
+    "preferred",
+    "selection",
+    "response"
+  ],
+  "nodes": [
+    {
+      "id": "request",
+      "lane": "inbound",
+      "col": 0,
+      "type": "frontend",
+      "label": "Request",
+      "sublabel": "client key + model",
+      "width": 145
+    },
+    {
+      "id": "profile",
+      "lane": "inbound",
+      "col": 1,
+      "type": "security",
+      "label": "Routing profile",
+      "sublabel": "key or shared",
+      "tag": "per client key",
+      "width": 150
+    },
+    {
+      "id": "sticky",
+      "lane": "pool",
+      "col": 2,
+      "type": "backend",
+      "label": "Sticky session",
+      "sublabel": "binding kept",
+      "tag": "session-affinity",
+      "width": 150
+    },
+    {
+      "id": "preferred",
+      "lane": "pool",
+      "col": 3,
+      "type": "backend",
+      "label": "Preferred account",
+      "sublabel": "taken if usable",
+      "tag": "preferred-accounts",
+      "width": 150
+    },
+    {
+      "id": "selection",
+      "lane": "pool",
+      "col": 4,
+      "type": "backend",
+      "label": "Pool selection",
+      "sublabel": "primary → tiebreak",
+      "tag": "selection",
+      "width": 155
+    },
+    {
+      "id": "response",
+      "lane": "inbound",
+      "col": 5,
+      "type": "frontend",
+      "label": "Response",
+      "sublabel": "upstream answer",
+      "width": 140
+    },
+    {
+      "id": "fail",
+      "lane": "fallback",
+      "col": 4,
+      "type": "security",
+      "label": "Claude round failed",
+      "sublabel": "429 / 5xx / cooldown",
+      "width": 150
+    },
+    {
+      "id": "codex",
+      "lane": "fallback",
+      "col": 5,
+      "type": "external",
+      "label": "Codex subscription",
+      "sublabel": "claude-* → gpt-*",
+      "tag": "mode: auto | always",
+      "width": 160
+    }
+  ],
+  "edges": [
+    {
+      "from": "request",
+      "to": "profile"
+    },
+    {
+      "from": "profile",
+      "to": "sticky",
+      "label": "resolve"
+    },
+    {
+      "from": "sticky",
+      "to": "preferred",
+      "label": "no binding"
+    },
+    {
+      "from": "preferred",
+      "to": "selection",
+      "label": "unset or unavailable"
+    },
+    {
+      "from": "selection",
+      "to": "response",
+      "label": "credential",
+      "variant": "emphasis"
+    },
+    {
+      "from": "selection",
+      "to": "fail",
+      "role": "error",
+      "variant": "security"
+    },
+    {
+      "from": "fail",
+      "to": "codex",
+      "label": "mapped model",
+      "role": "branch"
+    },
+    {
+      "from": "codex",
+      "to": "response",
+      "role": "return",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Profile per client key",
+      "items": [
+        "A key without its own profile uses the shared routing fields",
+        "A key profile replaces the shared profile entirely: nothing is inherited"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Four stages in order",
+      "items": [
+        "Sticky session keeps a bound credential while it stays usable",
+        "Preferred account wins even at soft reserve levels; then the pool pipeline runs"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Claude → Codex fallback",
+      "items": [
+        "auto: Claude first, Codex after a failed round (429, 5xx, cooldown, no credential); always: mapped models go straight to Codex",
+        "The Codex leg uses OAuth credentials and the same key's Codex preference and selection"
+      ]
+    }
+  ]
+}
