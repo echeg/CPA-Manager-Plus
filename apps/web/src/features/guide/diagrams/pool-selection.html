@@ -5132,8 +5132,8 @@
           <text data-detail="context" x="966" y="258" class="t-muted" font-size="8" text-anchor="middle">second slot or picker</text>
         </g>
 
-        <g id="node-none" data-node-id="none" data-node-label="No credential" tabindex="0" role="button" aria-label="Focus No credential, cooldown error, Retry-After, Pick: choose one credential › Availability" aria-pressed="false" data-node-kind="security" data-node-sublabel="cooldown error, Retry-After" data-node-context="Pick: choose one credential › Availability">
-          <title>No credential · cooldown error, Retry-After · Pick: choose one credential › Availability</title>
+        <g id="node-none" data-node-id="none" data-node-label="No credential" tabindex="0" role="button" aria-label="Focus No credential, not found · cooldown · unavailable, Pick: choose one credential › Availability" aria-pressed="false" data-node-kind="security" data-node-sublabel="not found · cooldown · unavailable" data-node-context="Pick: choose one credential › Availability">
+          <title>No credential · not found · cooldown · unavailable · Pick: choose one credential › Availability</title>
           <rect x="48" y="346" width="175" height="52" rx="6" class="c-mask"/>
           <rect x="48" y="346" width="175" height="52" rx="6" class="c-security" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(54 352) scale(0.6875)">
@@ -5141,7 +5141,7 @@
             <path d="m5.8 8 1.5 1.5 3-3"/>
           </g>
           <text data-node-label="" data-detail-anchor="" x="135.5" y="367" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">No credential</text>
-          <text data-detail="context" x="135.5" y="384" class="t-muted" font-size="8" text-anchor="middle">cooldown error, Retry-After</text>
+          <text data-detail="context" x="135.5" y="384" class="t-muted" font-size="8" text-anchor="middle">not found · cooldown · unavailable</text>
         </g>
 
         <g id="node-picker" data-node-id="picker" data-node-label="Picker" tabindex="0" role="button" aria-label="Focus Picker, round-robin · weighted · fill-first, Pick: choose one credential › Result" aria-pressed="false" data-node-kind="external" data-node-sublabel="round-robin · weighted · fill-first" data-node-tag="default round-robin" data-node-context="Pick: choose one credential › Result">
@@ -5399,6 +5399,8 @@
         <ul>
           <li>&bull; Disabled, cooling-down, model-ineligible, and hard-reserved credentials never enter the pipeline</li>
           <li>&bull; Soft reserve levels 1-3 only rank the pool, and only when reserves is a slot</li>
+          <li>&bull; No credential for the provider and model, or all turned off: auth_not_found, without Retry-After</li>
+          <li>&bull; All filtered out: 429 with Retry-After only when all are cooling down or hard-reserved; otherwise auth_unavailable, with Retry-After only if a recovery time is known</li>
         </ul>
       </div>
 

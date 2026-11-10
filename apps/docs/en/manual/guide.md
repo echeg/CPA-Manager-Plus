@@ -7,7 +7,7 @@ Guide explains how CPA routes a request today. Open it from the last block of th
 The page has two tabs. Each tab starts with a short summary and then shows an interactive diagram:
 
 - **Request routing by client key**: routing profile of the client key, sticky session binding, preferred account, pool selection, and the Claude → Codex fallback after a failed Claude round (for example 429, 5xx, or cooldown).
-- **Credential selection inside the pool**: availability filter, preferred account, primary slot, tiebreak slot, picker, and the selected credential (or a cooldown error with `Retry-After` when nothing is left).
+- **Credential selection inside the pool**: availability filter, preferred account, primary slot, tiebreak slot, picker, and the selected credential. If the provider has no credential for the model, or all of them are turned off, the request gets a not-found error without `Retry-After`. If credentials exist but none is usable, it gets a cooldown error with `Retry-After` when every one is cooling down or held by a hard reserve; otherwise it gets an unavailable error (for example, for expired or rejected tokens), which carries `Retry-After` only if a recovery time is known.
 
 Click a stage to focus it, zoom and pan the canvas, or export the picture with the diagram's own controls. The diagram follows the panel's Light, Dark, or Auto theme. The diagram's Copy link buttons do not produce shareable links inside the panel.
 
