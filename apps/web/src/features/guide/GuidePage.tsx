@@ -4,9 +4,10 @@ import { SegmentedTabs, type SegmentedTabItem } from '@/components/ui/SegmentedT
 import { DiagramFrame } from './DiagramFrame';
 import keyRoutingHtml from './diagrams/key-routing.html?raw';
 import poolSelectionHtml from './diagrams/pool-selection.html?raw';
+import apiKeyRoutingHtml from './diagrams/api-key-routing.html?raw';
 import styles from './GuidePage.module.scss';
 
-const GUIDE_TABS = ['key-routing', 'pool-selection'] as const;
+const GUIDE_TABS = ['key-routing', 'pool-selection', 'api-key-routing'] as const;
 
 type GuideTab = (typeof GUIDE_TABS)[number];
 
@@ -34,6 +35,11 @@ const GUIDE_TAB_CONFIG: Record<GuideTab, GuideTabConfig> = {
     labelKey: 'guide.tab_pool_selection',
     introKey: 'guide.intro_pool_selection',
     html: withoutRemoteFonts(poolSelectionHtml),
+  },
+  'api-key-routing': {
+    labelKey: 'guide.tab_api_key_routing',
+    introKey: 'guide.intro_api_key_routing',
+    html: withoutRemoteFonts(apiKeyRoutingHtml),
   },
 };
 

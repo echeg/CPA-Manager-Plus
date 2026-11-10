@@ -17,7 +17,7 @@
           "label": "Policy / failure"
         },
         "external": {
-          "label": "Codex leg"
+          "label": "Fallback leg"
         }
       }
     }
@@ -29,11 +29,11 @@
     },
     {
       "id": "pool",
-      "label": "Credential selection (Claude / Codex)"
+      "label": "Subscription selection (Claude / Codex OAuth)"
     },
     {
       "id": "fallback",
-      "label": "Claude → Codex fallback (claude-fallback)"
+      "label": "Fallback: Codex subscription or API key"
     }
   ],
   "phases": [
@@ -130,7 +130,7 @@
       "lane": "fallback",
       "col": 4,
       "type": "security",
-      "label": "Claude round failed",
+      "label": "Round failed",
       "sublabel": "429 / 5xx / cooldown",
       "width": 150
     },
@@ -139,9 +139,9 @@
       "lane": "fallback",
       "col": 5,
       "type": "external",
-      "label": "Codex subscription",
-      "sublabel": "claude-* → gpt-*",
-      "tag": "mode: auto | always",
+      "label": "Fallback target",
+      "sublabel": "Codex or API key",
+      "tag": "target: codex | api",
       "width": 160
     }
   ],
@@ -180,7 +180,7 @@
     {
       "from": "fail",
       "to": "codex",
-      "label": "mapped model",
+      "label": "if enabled",
       "role": "branch"
     },
     {
@@ -201,18 +201,18 @@
     },
     {
       "dot": "cyan",
-      "title": "Four stages in order",
+      "title": "Subscriptions first",
       "items": [
-        "Sticky session keeps a bound credential while it stays usable",
-        "Preferred account wins even at soft reserve levels; then the pool pipeline runs"
+        "In subscription mode only OAuth credentials are candidates: sticky session, then the preferred account, then the pool pipeline",
+        "Upstream API keys are used only through mode: api or an API-key fallback"
       ]
     },
     {
       "dot": "amber",
-      "title": "Claude → Codex fallback",
+      "title": "Fallback per provider",
       "items": [
-        "auto: Claude first, Codex after a failed round (429, 5xx, cooldown, no credential); always: mapped models go straight to Codex",
-        "The Codex leg uses OAuth credentials and the same key's Codex preference and selection"
+        "Claude: off, a Codex subscription (auto or always, with model mappings), or the profile's API key; Codex: off or its API key",
+        "The API-key leg does not bind the session: the next request tries subscriptions again"
       ]
     }
   ]

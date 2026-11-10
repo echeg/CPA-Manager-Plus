@@ -174,11 +174,12 @@
 - [x] run `npm test` in `apps/web` - must pass before task 5
 
 ### Task 5: Guide: third tab and updated diagrams
-- [ ] copy byte-for-byte into `apps/web/src/features/guide/diagrams/`: `/Users/echeg/Projects/CPA/diagrams/api-key-routing.html` and `api-key-routing.workflow.json` (new), and replace `key-routing.html`, `key-routing.workflow.json`, `pool-selection.html`, `pool-selection.workflow.json` with the files of the same names from `/Users/echeg/Projects/CPA/diagrams/`
-- [ ] add the tab `api-key-routing` to `GuidePage.tsx` (`?raw` import, i18n keys `guide.tab_api_key_routing` and `guide.intro_api_key_routing` in all four locales; the intro explains in two or three sentences that API keys are used only through API key mode or an API-key fallback, and that the fallback leg does not bind the session)
-- [ ] update `guide.intro_key_routing` and `guide.intro_pool_selection` in all four locales to match the replaced diagrams: in Subscription mode only OAuth credentials are candidates, the fallback target is a Codex subscription or the profile's API key (Codex: its API key only), and API keys are never picked on their own; keep the existing sentences about `auth_not_found`, 429 with `Retry-After` and `auth_unavailable` unchanged in meaning
-- [ ] update `GuidePage.test.tsx` (three tabs; the third iframe `srcdoc` contains "Routing with API keys") and `guideWiring.test.ts` (new keys in all locales)
-- [ ] run `npm test` in `apps/web` - must pass before task 6
+- [x] copy byte-for-byte into `apps/web/src/features/guide/diagrams/`: `/Users/echeg/Projects/CPA/diagrams/api-key-routing.html` and `api-key-routing.workflow.json` (new), and replace `key-routing.html`, `key-routing.workflow.json`, `pool-selection.html`, `pool-selection.workflow.json` with the files of the same names from `/Users/echeg/Projects/CPA/diagrams/`
+- [x] add the tab `api-key-routing` to `GuidePage.tsx` (`?raw` import, i18n keys `guide.tab_api_key_routing` and `guide.intro_api_key_routing` in all four locales; the intro explains in two or three sentences that API keys are used only through API key mode or an API-key fallback, and that the fallback leg does not bind the session)
+- [x] update `guide.intro_key_routing` and `guide.intro_pool_selection` in all four locales to match the replaced diagrams: in Subscription mode only OAuth credentials are candidates, the fallback target is a Codex subscription or the profile's API key (Codex: its API key only), and API keys are never picked on their own; keep the existing sentences about `auth_not_found`, 429 with `Retry-After` and `auth_unavailable` unchanged in meaning
+- [x] update `GuidePage.test.tsx` (three tabs; the third iframe `srcdoc` contains "Routing with API keys") and `guideWiring.test.ts` (new keys in all locales)
+- [x] run `npm test` in `apps/web` - must pass before task 6
+- ➕ `intro_pool_selection` keeps its error sentences unchanged and gains a leading sentence on Subscription mode (OAuth credentials only) and API key mode (the profile's one key); `guideWiring.test.ts` also checks the English tab label and that the intros mention the API-key fallback
 
 ### Task 6: Verify acceptance criteria
 - [ ] verify every item of Decisions against the code: layout, field behavior, labels, summary, old backend, write body, toolbar

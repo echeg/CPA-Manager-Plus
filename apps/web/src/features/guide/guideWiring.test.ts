@@ -19,8 +19,10 @@ const guideKeys = [
   'guide.tabs_label',
   'guide.tab_key_routing',
   'guide.tab_pool_selection',
+  'guide.tab_api_key_routing',
   'guide.intro_key_routing',
   'guide.intro_pool_selection',
+  'guide.intro_api_key_routing',
 ];
 
 // Built from parts so this file does not itself contain the asserted import line.
@@ -67,6 +69,19 @@ describe('guide app wiring', () => {
         expect((value as string).trim(), `${localeName}:${key}`).not.toBe('');
       }
     }
+  });
+
+  it('names the third Guide tab after its diagram', () => {
+    expect(en.guide.tab_api_key_routing).toBe('Routing with API keys');
+  });
+
+  it('describes per-provider fallback in the routing intros, not a Codex-only fallback', () => {
+    expect(en.guide.intro_key_routing).toContain('API key');
+    expect(en.guide.intro_key_routing).toContain('Codex subscription');
+    expect(en.guide.intro_pool_selection).toContain('OAuth credentials');
+    // The error semantics of the pool intro stay in place.
+    expect(en.guide.intro_pool_selection).toContain('without Retry-After');
+    expect(en.guide.intro_pool_selection).toContain('unavailable error');
   });
 
   it('uses the agreed sidebar labels', () => {

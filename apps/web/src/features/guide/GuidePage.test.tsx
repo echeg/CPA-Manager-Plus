@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GuidePage } from './GuidePage';
 import keyRoutingHtml from './diagrams/key-routing.html?raw';
 import poolSelectionHtml from './diagrams/pool-selection.html?raw';
+import apiKeyRoutingHtml from './diagrams/api-key-routing.html?raw';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -51,7 +52,7 @@ describe('GuidePage', () => {
     vi.unstubAllGlobals();
   });
 
-  it('renders the title, subtitle and both tab labels', () => {
+  it('renders the title, subtitle and all three tab labels', () => {
     const renderer = renderPage();
 
     expect(getText(renderer.root.findByType('h1'))).toBe('guide.title');
@@ -63,6 +64,10 @@ describe('GuidePage', () => {
     );
     expect(getText(findTab(renderer, 'key-routing'))).toBe('guide.tab_key_routing');
     expect(getText(findTab(renderer, 'pool-selection'))).toBe('guide.tab_pool_selection');
+    expect(getText(findTab(renderer, 'api-key-routing'))).toBe('guide.tab_api_key_routing');
+    expect(
+      renderer.root.findAll((node) => node.props.role === 'tab' && node.type === 'button')
+    ).toHaveLength(3);
   });
 
   it('shows the key routing diagram and intro on the first tab', () => {
@@ -106,6 +111,28 @@ describe('GuidePage', () => {
     expect(backIframes[0].props.srcDoc).toContain('Request routing by client key');
   });
 
+  it('shows the API key routing diagram and intro on the third tab', () => {
+    const renderer = renderPage();
+
+    act(() => {
+      findTab(renderer, 'api-key-routing').props.onClick({ preventDefault: () => {} });
+    });
+
+    const iframes = renderer.root.findAllByType('iframe');
+    expect(iframes).toHaveLength(1);
+    expect(iframes[0].props.srcDoc).toContain('Routing with API keys');
+    expect(iframes[0].props.srcDoc).not.toContain('Credential selection inside the pool');
+    expect(iframes[0].props.title).toBe('guide.tab_api_key_routing');
+    expect(findTab(renderer, 'api-key-routing').props['aria-selected']).toBe(true);
+    expect(findTab(renderer, 'key-routing').props['aria-selected']).toBe(false);
+    expect(findTab(renderer, 'pool-selection').props['aria-selected']).toBe(false);
+
+    const panel = renderer.root.findByProps({ role: 'tabpanel' });
+    expect(panel.props['aria-labelledby']).toBe('guide-tab-api-key-routing');
+    expect(getText(panel)).toContain('guide.intro_api_key_routing');
+    expect(getText(panel)).not.toContain('guide.intro_key_routing');
+  });
+
   it('strips the Google Fonts links so the Guide makes no third-party requests', () => {
     const renderer = renderPage();
     const keyRoutingDoc = renderer.root.findByType('iframe').props.srcDoc as string;
@@ -113,8 +140,12 @@ describe('GuidePage', () => {
       findTab(renderer, 'pool-selection').props.onClick({ preventDefault: () => {} });
     });
     const poolSelectionDoc = renderer.root.findByType('iframe').props.srcDoc as string;
+    act(() => {
+      findTab(renderer, 'api-key-routing').props.onClick({ preventDefault: () => {} });
+    });
+    const apiKeyRoutingDoc = renderer.root.findByType('iframe').props.srcDoc as string;
 
-    for (const doc of [keyRoutingDoc, poolSelectionDoc]) {
+    for (const doc of [keyRoutingDoc, poolSelectionDoc, apiKeyRoutingDoc]) {
       expect(doc).not.toMatch(/fonts\.(googleapis|gstatic)\.com/);
       expect(doc).toContain('<style>');
     }
@@ -126,6 +157,7 @@ describe('GuidePage', () => {
 describe.each([
   ['key-routing.html', keyRoutingHtml],
   ['pool-selection.html', poolSelectionHtml],
+  ['api-key-routing.html', apiKeyRoutingHtml],
 ])('%s theme contract', (_name, html) => {
   it('reads the stored archify-theme before first paint', () => {
     expect(html).toContain("localStorage.getItem('archify-theme')");

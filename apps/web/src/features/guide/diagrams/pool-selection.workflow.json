@@ -74,7 +74,7 @@
       "col": 0,
       "type": "backend",
       "label": "Provider credentials",
-      "sublabel": "all tiers of a provider",
+      "sublabel": "subscriptions, all tiers",
       "width": 170
     },
     {
@@ -193,8 +193,8 @@
       "dot": "rose",
       "title": "Availability first",
       "items": [
+        "Subscription mode: only OAuth credentials are candidates; mode: api pins the profile's one API key",
         "Disabled, cooling-down, model-ineligible, and hard-reserved credentials never enter the pipeline",
-        "Soft reserve levels 1-3 only rank the pool, and only when reserves is a slot",
         "No credential for the provider and model, or all turned off: auth_not_found, without Retry-After",
         "All filtered out: 429 with Retry-After only when all are cooling down or hard-reserved; otherwise auth_unavailable, with Retry-After only if a recovery time is known"
       ]
@@ -204,6 +204,7 @@
       "title": "Slots",
       "items": [
         "Narrowing criteria keep the best group: priority, reserves, earliest-reset, most-remaining",
+        "Soft reserve levels 1-3 only rank the pool, and only when reserves is a slot",
         "A picker as primary makes tiebreak inactive; an empty tiebreak means round-robin"
       ]
     },

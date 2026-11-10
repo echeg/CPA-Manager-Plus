@@ -5064,15 +5064,15 @@
         <path data-edge-from="tiebreak" data-edge-to="picker" data-edge-label="remaining ties" data-edge-key="7" data-composition-points="966,272;966,294;1079,294;1079,338" d="M 966 272 L 966 294 L 1079 294 L 1079 338" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
 
         <!-- Nodes -->
-        <g id="node-candidates" data-node-id="candidates" data-node-label="Provider credentials" tabindex="0" role="button" aria-label="Focus Provider credentials, all tiers of a provider, Provider pool › Availability" aria-pressed="false" data-node-kind="backend" data-node-sublabel="all tiers of a provider" data-node-context="Provider pool › Availability">
-          <title>Provider credentials · all tiers of a provider · Provider pool › Availability</title>
+        <g id="node-candidates" data-node-id="candidates" data-node-label="Provider credentials" tabindex="0" role="button" aria-label="Focus Provider credentials, subscriptions, all tiers, Provider pool › Availability" aria-pressed="false" data-node-kind="backend" data-node-sublabel="subscriptions, all tiers" data-node-context="Provider pool › Availability">
+          <title>Provider credentials · subscriptions, all tiers · Provider pool › Availability</title>
           <rect x="50.5" y="94" width="170" height="52" rx="6" class="c-mask"/>
           <rect x="50.5" y="94" width="170" height="52" rx="6" class="c-backend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(56.5 100) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
           <text data-node-label="" data-detail-anchor="" x="135.5" y="115" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Provider credentials</text>
-          <text data-detail="context" x="135.5" y="132" class="t-muted" font-size="8" text-anchor="middle">all tiers of a provider</text>
+          <text data-detail="context" x="135.5" y="132" class="t-muted" font-size="8" text-anchor="middle">subscriptions, all tiers</text>
         </g>
 
         <g id="node-available" data-node-id="available" data-node-label="Availability filter" tabindex="0" role="button" aria-label="Focus Availability filter, disabled · cooldown · model, Provider pool › Availability" aria-pressed="false" data-node-kind="security" data-node-sublabel="disabled · cooldown · model" data-node-context="Provider pool › Availability">
@@ -5397,8 +5397,8 @@
           <h3>Availability first</h3>
         </div>
         <ul>
+          <li>&bull; Subscription mode: only OAuth credentials are candidates; mode: api pins the profile&#39;s one API key</li>
           <li>&bull; Disabled, cooling-down, model-ineligible, and hard-reserved credentials never enter the pipeline</li>
-          <li>&bull; Soft reserve levels 1-3 only rank the pool, and only when reserves is a slot</li>
           <li>&bull; No credential for the provider and model, or all turned off: auth_not_found, without Retry-After</li>
           <li>&bull; All filtered out: 429 with Retry-After only when all are cooling down or hard-reserved; otherwise auth_unavailable, with Retry-After only if a recovery time is known</li>
         </ul>
@@ -5411,6 +5411,7 @@
         </div>
         <ul>
           <li>&bull; Narrowing criteria keep the best group: priority, reserves, earliest-reset, most-remaining</li>
+          <li>&bull; Soft reserve levels 1-3 only rank the pool, and only when reserves is a slot</li>
           <li>&bull; A picker as primary makes tiebreak inactive; an empty tiebreak means round-robin</li>
         </ul>
       </div>

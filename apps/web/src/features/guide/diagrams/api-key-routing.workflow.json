@@ -1,0 +1,234 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Routing with API keys",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "legend": {
+      "entries": {
+        "frontend": {
+          "label": "Client"
+        },
+        "backend": {
+          "label": "Subscription"
+        },
+        "security": {
+          "label": "Policy / failure"
+        },
+        "external": {
+          "label": "API key"
+        }
+      }
+    }
+  },
+  "lanes": [
+    {
+      "id": "inbound",
+      "label": "Client key → routing profile (routing.key-profiles)"
+    },
+    {
+      "id": "subs",
+      "label": "Subscription pool (OAuth)"
+    },
+    {
+      "id": "api",
+      "label": "API keys (api-keys.claude / api-keys.codex)"
+    }
+  ],
+  "phases": [
+    {
+      "id": "inbound_phase",
+      "label": "Inbound",
+      "fromCol": 0,
+      "toCol": 1
+    },
+    {
+      "id": "primary_leg",
+      "label": "Primary leg",
+      "fromCol": 2,
+      "toCol": 3,
+      "variant": "emphasis"
+    },
+    {
+      "id": "fallback_leg",
+      "label": "Fallback leg",
+      "fromCol": 4,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "mainPath": [
+    "request",
+    "profile",
+    "primary",
+    "response"
+  ],
+  "nodes": [
+    {
+      "id": "request",
+      "lane": "inbound",
+      "col": 0,
+      "type": "frontend",
+      "label": "Request",
+      "sublabel": "client key + model",
+      "width": 180
+    },
+    {
+      "id": "profile",
+      "lane": "inbound",
+      "col": 1,
+      "type": "security",
+      "label": "Routing profile",
+      "sublabel": "mode: subscription | api",
+      "tag": "per provider",
+      "width": 190
+    },
+    {
+      "id": "primary",
+      "lane": "subs",
+      "col": 2,
+      "type": "backend",
+      "label": "Subscriptions only",
+      "sublabel": "sticky → preferred → selection",
+      "tag": "OAuth credentials",
+      "width": 200
+    },
+    {
+      "id": "response",
+      "lane": "inbound",
+      "col": 3,
+      "type": "frontend",
+      "label": "Response",
+      "sublabel": "from a subscription",
+      "width": 180
+    },
+    {
+      "id": "fail",
+      "lane": "subs",
+      "col": 3,
+      "type": "security",
+      "label": "Round failed",
+      "sublabel": "429 / 5xx / cooldown",
+      "width": 190
+    },
+    {
+      "id": "api_mode",
+      "lane": "api",
+      "col": 2,
+      "type": "external",
+      "label": "API mode",
+      "sublabel": "subscriptions skipped",
+      "tag": "mode: api",
+      "width": 190
+    },
+    {
+      "id": "codex_sub",
+      "lane": "subs",
+      "col": 4,
+      "type": "backend",
+      "label": "Codex subscription",
+      "sublabel": "claude-* → gpt-* mappings",
+      "tag": "Claude only",
+      "width": 200
+    },
+    {
+      "id": "api_key",
+      "lane": "api",
+      "col": 4,
+      "type": "external",
+      "label": "Profile API key",
+      "sublabel": "same model, pinned auth_index",
+      "tag": "billed to this key",
+      "width": 200
+    },
+    {
+      "id": "off",
+      "lane": "inbound",
+      "col": 5,
+      "type": "security",
+      "label": "Error to client",
+      "sublabel": "fallback off",
+      "width": 190
+    }
+  ],
+  "edges": [
+    {
+      "from": "request",
+      "to": "profile"
+    },
+    {
+      "from": "profile",
+      "to": "primary",
+      "label": "subscription"
+    },
+    {
+      "from": "profile",
+      "to": "api_mode",
+      "label": "api",
+      "role": "branch"
+    },
+    {
+      "from": "primary",
+      "to": "response",
+      "label": "success",
+      "variant": "emphasis"
+    },
+    {
+      "from": "primary",
+      "to": "fail",
+      "role": "error",
+      "variant": "security"
+    },
+    {
+      "from": "fail",
+      "to": "codex_sub",
+      "label": "target: codex",
+      "role": "branch"
+    },
+    {
+      "from": "fail",
+      "to": "api_key",
+      "label": "target: api",
+      "role": "branch"
+    },
+    {
+      "from": "fail",
+      "to": "off",
+      "label": "target: off",
+      "role": "error",
+      "variant": "security"
+    },
+    {
+      "from": "api_mode",
+      "to": "api_key",
+      "role": "branch"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Primary leg",
+      "items": [
+        "In subscription mode the pool holds OAuth subscriptions only",
+        "API keys never enter the primary leg, even while every subscription is cooling down"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Fallback: off | codex | api",
+      "items": [
+        "codex: Claude only, with model mappings; api: the same model through the profile's API key",
+        "The API-key leg does not bind the session; an unavailable key returns the original error"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Keys and spend",
+      "items": [
+        "API keys are configured under AI Providers; a profile points to one key per provider",
+        "Usage records the client key and the credential, so spend is visible per API key and per client key"
+      ]
+    }
+  ]
+}
