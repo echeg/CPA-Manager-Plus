@@ -88,11 +88,11 @@
 - [x] run `npm test` in `apps/web` - must pass before task 3
 
 ### Task 3: Wire the nav item and route
-- [ ] add a `guide` book icon to `sidebarIcons` in `apps/web/src/components/layout/MainLayout.tsx` (inline SVG in the same style and size as the neighbours)
-- [ ] add the nav item `{ path: '/guide', label: t('nav.guide'), shortLabel: navShortLabel('nav.guide', t('nav.guide')), icon: sidebarIcons.guide }` to the last `navSections` block, directly after the `/system` item
-- [ ] add `{ path: '/guide', element: <GuidePage /> }` to `apps/web/src/router/MainRoutes.tsx`, importing `GuidePage` from `@/pages/GuidePage`
-- [ ] write `apps/web/src/features/guide/guideWiring.test.ts` in the style of `usageAnalyticsWiring.test.ts`: asserts the nav item source string and the route source string, and that every `nav.guide` / `guide.*` key exists in `en`, `ru`, `zh-CN`, `zh-TW`
-- [ ] run `npm test` in `apps/web` - must pass before task 4
+- [x] add a `guide` book icon to `sidebarIcons` in `apps/web/src/components/layout/MainLayout.tsx` (inline SVG in the same style and size as the neighbours)
+- [x] add the nav item `{ path: '/guide', label: t('nav.guide'), shortLabel: navShortLabel('nav.guide', t('nav.guide')), icon: sidebarIcons.guide }` to the last `navSections` block, directly after the `/system` item
+- [x] add `{ path: '/guide', element: <GuidePage /> }` to `apps/web/src/router/MainRoutes.tsx`, importing `GuidePage` from `@/pages/GuidePage`
+- [x] write `apps/web/src/features/guide/guideWiring.test.ts` in the style of `usageAnalyticsWiring.test.ts`: asserts the nav item source string and the route source string, and that every `nav.guide` / `guide.*` key exists in `en`, `ru`, `zh-CN`, `zh-TW`
+- [x] run `npm test` in `apps/web` - must pass before task 4
 
 ### Task 4: Verify acceptance criteria
 - [ ] verify all requirements from Overview are implemented (nav item in last block, `/guide` route, two tabs, intro texts, iframes with theme sync)

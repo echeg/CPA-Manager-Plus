@@ -783,6 +783,21 @@ export function IconSidebarSystem({ size = 20, ...props }: IconProps) {
   );
 }
 
+export function IconSidebarGuide({ size = 20, ...props }: IconProps) {
+  return (
+    <svg {...sidebarSvgProps} width={size} height={size} {...props}>
+      <path
+        d="M12 7a4 4 0 0 0-4-3H4v14h5a3 3 0 0 1 3 2Z"
+        fill="currentColor"
+        fillOpacity="0.12"
+      />
+      <path d="M12 7a4 4 0 0 0-4-3H4v14h5a3 3 0 0 1 3 2" />
+      <path d="M12 7a4 4 0 0 1 4-3h4v14h-5a3 3 0 0 0-3 2" />
+      <path d="M12 7v13" />
+    </svg>
+  );
+}
+
 export function IconClock({ size = 20, ...props }: IconProps) {
   return (
     <svg {...baseSvgProps} width={size} height={size} {...props}>
