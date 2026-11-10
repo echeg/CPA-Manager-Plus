@@ -14,6 +14,7 @@ import {
   LastClientKeyError,
 } from '@/features/personal-quota-support/services/api/clientKeys';
 import {
+  providersFromClaudeFallback,
   InvalidRoutingConfigError,
   UnknownApiKeyError,
   routingProfilesApi,
@@ -94,17 +95,19 @@ const sharedProfile = (): RoutingProfile => ({
   sessionAffinity: true,
   preferredAccounts: {},
   selection: { primary: 'reserves', tiebreak: 'round-robin' },
-  claudeFallback: { enabled: true, mode: 'auto', mappings: [] },
+  providers: providersFromClaudeFallback({ enabled: true, mode: 'auto', mappings: [] }),
 });
 const ownProfile = (): RoutingProfile => ({
   sessionAffinity: false,
   preferredAccounts: { claude: 'claude-1' },
   selection: { primary: 'priority', tiebreak: 'fill-first' },
-  claudeFallback: { enabled: false, mode: 'auto', mappings: [] },
+  providers: providersFromClaudeFallback({ enabled: false, mode: 'auto', mappings: [] }),
 });
 const profilesState = (keys: RoutingProfilesState['keys'] = []): RoutingProfilesState => ({
   supported: true,
   unsupportedBackend: false,
+  providersSupported: true,
+  apiCredentials: { claude: [], codex: [] },
   shared: sharedProfile(),
   keys,
   selectionOptions: {
@@ -204,7 +207,8 @@ describe('useKeyProfiles', () => {
     expect(save).toHaveBeenCalledExactlyOnceWith(
       KEY_A,
       ownProfile(),
-      profilesState().selectionOptions
+      profilesState().selectionOptions,
+      true
     );
     expect(hook.state).toBe(saved);
     expect(ownProfiles()).toBe(2);
@@ -221,7 +225,12 @@ describe('useKeyProfiles', () => {
     await act(async () => {
       await hook.saveKeyProfile(KEY_B, null);
     });
-    expect(save).toHaveBeenCalledExactlyOnceWith(KEY_B, null, profilesState().selectionOptions);
+    expect(save).toHaveBeenCalledExactlyOnceWith(
+      KEY_B,
+      null,
+      profilesState().selectionOptions,
+      true
+    );
     expect(ownProfiles()).toBe(0);
     expect(hook.rows[1].profile).toBeNull();
   });
@@ -494,7 +503,8 @@ describe('useKeyProfiles shared profile', () => {
     expect(save).toHaveBeenCalledExactlyOnceWith(
       ownProfile(),
       '24h',
-      profilesState().selectionOptions
+      profilesState().selectionOptions,
+      true
     );
     expect(routingProfilesApi.get).toHaveBeenCalledTimes(2);
     expect(fetchConfig).toHaveBeenLastCalledWith(true);
@@ -517,7 +527,34 @@ describe('useKeyProfiles shared profile', () => {
     expect(save).toHaveBeenCalledExactlyOnceWith(
       sharedProfile(),
       undefined,
-      profilesState().selectionOptions
+      profilesState().selectionOptions,
+      true
+    );
+  });
+
+  test('saves on an older backend pass providersSupported false for the legacy body', async () => {
+    const legacy = { ...profilesState(), providersSupported: false };
+    vi.mocked(routingProfilesApi.get).mockResolvedValue(legacy);
+    const saveKey = vi.spyOn(routingProfilesApi, 'saveKeyProfile').mockResolvedValue(legacy);
+    const saveShared = vi.spyOn(routingProfilesApi, 'saveSharedProfile').mockResolvedValue(legacy);
+    await mount();
+    await act(async () => {
+      await hook.saveKeyProfile(KEY_A, ownProfile());
+    });
+    await act(async () => {
+      await hook.saveShared(sharedProfile());
+    });
+    expect(saveKey).toHaveBeenCalledExactlyOnceWith(
+      KEY_A,
+      ownProfile(),
+      legacy.selectionOptions,
+      false
+    );
+    expect(saveShared).toHaveBeenCalledExactlyOnceWith(
+      sharedProfile(),
+      undefined,
+      legacy.selectionOptions,
+      false
     );
   });
 

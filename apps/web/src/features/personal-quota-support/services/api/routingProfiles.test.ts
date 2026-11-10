@@ -13,6 +13,8 @@ import {
   InvalidRoutingConfigError,
   keyProfilePatch,
   mergeKeyRows,
+  profileBody,
+  providersFromClaudeFallback,
   readRoutingProfiles,
   routingProfilesApi,
   sharedProfilePatch,
@@ -56,11 +58,72 @@ const keyProfile = (): RoutingProfile => ({
   sessionAffinity: false,
   preferredAccounts: { claude: 'claude-2', codex: 'codex-1' },
   selection: { primary: 'priority', tiebreak: 'round-robin' },
-  claudeFallback: {
+  providers: providersFromClaudeFallback({
     enabled: true,
     mode: 'always',
     mappings: [{ from: 'claude-*', to: 'gpt-6-sol' }],
+  }),
+});
+
+// A backend with `providers`: the fixtures above are an older backend's response.
+const rawProviders = () => ({
+  claude: {
+    mode: 'subscription',
+    'api-credential': 'claude-idx',
+    fallback: {
+      target: 'api',
+      mode: 'auto',
+      mappings: [{ from: 'claude-opus-*', to: 'gpt-6-astra' }],
+    },
   },
+  codex: {
+    mode: 'api',
+    'api-credential': 'codex-idx',
+    fallback: { target: 'off', mode: '', mappings: [] },
+  },
+});
+const providersProfile = (): RoutingProfile => ({
+  sessionAffinity: true,
+  preferredAccounts: { claude: 'claude-1' },
+  selection: { primary: 'reserves', tiebreak: 'earliest-reset' },
+  providers: {
+    claude: {
+      mode: 'subscription',
+      apiCredential: 'claude-idx',
+      fallback: {
+        target: 'api',
+        mode: 'auto',
+        mappings: [{ from: 'claude-opus-*', to: 'gpt-6-astra' }],
+      },
+    },
+    codex: {
+      mode: 'api',
+      apiCredential: 'codex-idx',
+      fallback: { target: 'off', mode: 'auto', mappings: [] },
+    },
+  },
+});
+const providersResponse = (
+  sharedPatch: Record<string, unknown> = {},
+  keys: unknown[] = [{ key: RAW_KEY, profile: { ...rawShared(), providers: rawProviders() } }]
+) => ({
+  supported: true,
+  shared: {
+    ...rawShared(),
+    // The legacy view the backend still sends; `providers` wins.
+    'claude-fallback': { enabled: false, mode: 'auto', mappings: [] },
+    providers: rawProviders(),
+    ...sharedPatch,
+  },
+  keys,
+  api_credentials: {
+    claude: [{ auth_index: 'claude-idx', label: 'claude-apikey', base_url: '', disabled: false }],
+    codex: [
+      { auth_index: 'codex-idx', label: 'codex-apikey', base_url: 'https://proxy.example' },
+      { auth_index: 'codex-off', label: 'codex-old', base_url: '', disabled: true },
+    ],
+  },
+  selection_options: options,
 });
 
 const assertNoKeyInRequests = () => {
@@ -84,15 +147,131 @@ describe('reading routing profiles', () => {
         sessionAffinity: true,
         preferredAccounts: { claude: 'claude-1' },
         selection: { primary: 'reserves', tiebreak: 'earliest-reset' },
-        claudeFallback: {
+        providers: providersFromClaudeFallback({
           enabled: true,
+          mode: 'auto',
+          mappings: [{ from: 'claude-opus-*', to: 'gpt-6-astra' }],
+        }),
+      },
+      keys: [{ key: RAW_KEY, profile: keyProfile() }],
+      selectionOptions: options,
+      providersSupported: false,
+      apiCredentials: { claude: [], codex: [] },
+    });
+  });
+
+  it('derives providers from claude-fallback on an older backend', () => {
+    const state = readRoutingProfiles(response());
+    expect(state.providersSupported).toBe(false);
+    expect(state.shared.providers).toEqual({
+      claude: {
+        mode: 'subscription',
+        apiCredential: '',
+        fallback: {
+          target: 'codex',
           mode: 'auto',
           mappings: [{ from: 'claude-opus-*', to: 'gpt-6-astra' }],
         },
       },
-      keys: [{ key: RAW_KEY, profile: keyProfile() }],
-      selectionOptions: options,
+      codex: {
+        mode: 'subscription',
+        apiCredential: '',
+        fallback: { target: 'off', mode: 'auto', mappings: [] },
+      },
     });
+    const disabled = readRoutingProfiles({
+      ...response([]),
+      shared: {
+        ...rawShared(),
+        'claude-fallback': { enabled: false, mode: 'always', mappings: [] },
+      },
+    });
+    expect(disabled.shared.providers.claude.fallback).toEqual({
+      target: 'off',
+      mode: 'always',
+      mappings: [],
+    });
+  });
+
+  it('reads providers and api_credentials from a backend that serves them', () => {
+    const state = readRoutingProfiles(providersResponse());
+    expect(state.providersSupported).toBe(true);
+    expect(state.shared).toEqual(providersProfile());
+    expect(state.keys[0].profile).toEqual(providersProfile());
+    expect(state.apiCredentials).toEqual({
+      claude: [{ authIndex: 'claude-idx', label: 'claude-apikey', baseUrl: '', disabled: false }],
+      codex: [
+        {
+          authIndex: 'codex-idx',
+          label: 'codex-apikey',
+          baseUrl: 'https://proxy.example',
+          disabled: false,
+        },
+        { authIndex: 'codex-off', label: 'codex-old', baseUrl: '', disabled: true },
+      ],
+    });
+  });
+
+  it('defaults missing provider values and an absent provider block', () => {
+    const state = readRoutingProfiles(
+      providersResponse({
+        providers: {
+          claude: { mode: 'api', 'api-credential': null, fallback: { target: '' } },
+        },
+      })
+    );
+    expect(state.shared.providers).toEqual({
+      claude: {
+        mode: 'api',
+        apiCredential: '',
+        fallback: { target: 'off', mode: 'auto', mappings: [] },
+      },
+      codex: {
+        mode: 'subscription',
+        apiCredential: '',
+        fallback: { target: 'off', mode: 'auto', mappings: [] },
+      },
+    });
+  });
+
+  it('reads absent api_credentials as empty lists and skips malformed entries', () => {
+    const withoutList = { ...providersResponse() } as Record<string, unknown>;
+    delete withoutList.api_credentials;
+    expect(readRoutingProfiles(withoutList).apiCredentials).toEqual({ claude: [], codex: [] });
+    const messy = {
+      ...providersResponse(),
+      api_credentials: {
+        claude: [null, { label: 'no index' }, { auth_index: '  ' }, { auth_index: 'ok', label: 1 }],
+        codex: 'not a list',
+      },
+    };
+    expect(readRoutingProfiles(messy).apiCredentials).toEqual({
+      claude: [{ authIndex: 'ok', label: '', baseUrl: '', disabled: false }],
+      codex: [],
+    });
+  });
+
+  it.each([
+    ['an unknown mode', { claude: { mode: 'hybrid' } }],
+    ['an unknown target', { claude: { fallback: { target: 'gemini' } } }],
+    ['a Codex target of codex', { codex: { fallback: { target: 'codex' } } }],
+    ['an unknown fallback mode', { claude: { fallback: { target: 'codex', mode: 'sometimes' } } }],
+    ['a non-string credential', { claude: { 'api-credential': 5 } }],
+    ['non-list mappings', { claude: { fallback: { target: 'codex', mappings: 'x' } } }],
+    ['a malformed mapping', { claude: { fallback: { target: 'codex', mappings: [{ from: 1 }] } } }],
+    ['a non-object provider', { claude: 'subscription' }],
+  ])('rejects invalid provider settings: %s', (_name, providers) => {
+    expect(() => readRoutingProfiles(providersResponse({ providers }))).toThrow(
+      'Invalid routing provider settings'
+    );
+  });
+
+  it('rejects a providers value that is not an object', () => {
+    expect(() =>
+      readRoutingProfiles(
+        providersResponse({}, [{ key: RAW_KEY, profile: { ...rawShared(), providers: [] } }])
+      )
+    ).toThrow('Invalid routing provider settings');
   });
 
   it('accepts an omitted preferred-accounts block and an empty tiebreak', () => {
@@ -119,9 +298,9 @@ describe('reading routing profiles', () => {
       ]),
       shared: { ...rawShared(), 'claude-fallback': emptyFallback },
     });
-    const expected = { enabled: false, mode: 'auto', mappings: [] };
-    expect(state.shared.claudeFallback).toEqual(expected);
-    expect(state.keys[0].profile.claudeFallback).toEqual(expected);
+    const expected = { target: 'off', mode: 'auto', mappings: [] };
+    expect(state.shared.providers.claude.fallback).toEqual(expected);
+    expect(state.keys[0].profile.providers.claude.fallback).toEqual(expected);
   });
 
   it.each([
@@ -162,6 +341,8 @@ describe('reading routing profiles', () => {
     await expect(routingProfilesApi.get()).resolves.toMatchObject({
       supported: false,
       unsupportedBackend: true,
+      providersSupported: false,
+      apiCredentials: { claude: [], codex: [] },
       keys: [],
     });
     expect(mocks.get).toHaveBeenCalledWith('/routing/profiles');
@@ -212,21 +393,21 @@ describe('client key list', () => {
 });
 
 describe('writing a key profile', () => {
-  it('sends the complete profile with cleared values as null', () => {
+  it('sends the complete legacy profile with cleared values as null to an older backend', () => {
     const profile: RoutingProfile = {
       ...keyProfile(),
       preferredAccounts: { claude: ' claude-2 ', codex: '' },
       selection: { primary: 'priority' },
-      claudeFallback: {
+      providers: providersFromClaudeFallback({
         enabled: true,
         mode: 'auto',
         mappings: [
           { from: ' claude-opus-* ', to: 'gpt-6-astra ' },
           { from: 'claude-sonnet-*', to: 'gpt-6-sol' },
         ],
-      },
+      }),
     };
-    expect(keyProfilePatch(RAW_KEY, profile, options)).toEqual({
+    expect(keyProfilePatch(RAW_KEY, profile, options, false)).toEqual({
       routing: {
         'key-profiles': {
           [RAW_KEY]: {
@@ -245,6 +426,121 @@ describe('writing a key profile', () => {
         },
       },
     });
+  });
+
+  it('sends the complete providers block and no claude-fallback to a backend with providers', () => {
+    const profile = providersProfile();
+    profile.providers.claude.apiCredential = '  ';
+    profile.providers.claude.fallback.mappings = [{ from: ' claude-opus-* ', to: ' gpt-6-astra ' }];
+    profile.providers.codex.fallback = {
+      target: 'api',
+      mode: 'always',
+      mappings: [{ from: 'x', to: 'y' }],
+    };
+    expect(keyProfilePatch(RAW_KEY, profile, options)).toEqual({
+      routing: {
+        'key-profiles': {
+          [RAW_KEY]: {
+            'session-affinity': true,
+            'preferred-accounts': { claude: 'claude-1', codex: null },
+            selection: { primary: 'reserves', tiebreak: 'earliest-reset' },
+            providers: {
+              claude: {
+                mode: 'subscription',
+                'api-credential': null,
+                fallback: {
+                  target: 'api',
+                  mode: 'auto',
+                  mappings: [{ from: 'claude-opus-*', to: 'gpt-6-astra' }],
+                },
+              },
+              // API key mode carries target off; the Codex fallback is its target only.
+              codex: { mode: 'api', 'api-credential': 'codex-idx', fallback: { target: 'off' } },
+            },
+          },
+        },
+      },
+    });
+  });
+
+  it('API key mode sends target off but keeps the Claude mapping table', () => {
+    const profile = providersProfile();
+    profile.providers.claude.mode = 'api';
+    profile.providers.claude.fallback.target = 'codex';
+    const body = profileBody(profile, options) as { providers: { claude: unknown } };
+    expect(body.providers.claude).toEqual({
+      mode: 'api',
+      'api-credential': 'claude-idx',
+      fallback: {
+        target: 'off',
+        mode: 'auto',
+        mappings: [{ from: 'claude-opus-*', to: 'gpt-6-astra' }],
+      },
+    });
+    expect(body).not.toHaveProperty('claude-fallback');
+  });
+
+  it('an older backend gets claude-fallback enabled only for the Codex target', () => {
+    const toApi = providersProfile();
+    const legacy = profileBody(toApi, options, false);
+    expect(legacy).not.toHaveProperty('providers');
+    expect(legacy['claude-fallback']).toEqual({
+      enabled: false,
+      mode: 'auto',
+      mappings: [{ from: 'claude-opus-*', to: 'gpt-6-astra' }],
+    });
+    toApi.providers.claude.fallback.target = 'codex';
+    expect(profileBody(toApi, options, false)['claude-fallback']).toMatchObject({ enabled: true });
+  });
+
+  it('threads providersSupported into the PATCH body', async () => {
+    mocks.patch.mockResolvedValue({});
+    mocks.get.mockResolvedValue(response());
+    await routingProfilesApi.saveKeyProfile(RAW_KEY, keyProfile(), options, false);
+    expect(mocks.patch).toHaveBeenCalledWith(
+      '/config',
+      keyProfilePatch(RAW_KEY, keyProfile(), options, false)
+    );
+    const body = mocks.patch.mock.calls[0][1].routing['key-profiles'][RAW_KEY];
+    expect(body).toHaveProperty('claude-fallback');
+    expect(body).not.toHaveProperty('providers');
+  });
+
+  it('verifies a providers profile by reading it back', async () => {
+    mocks.patch.mockResolvedValue({});
+    mocks.get.mockResolvedValue(providersResponse());
+    // Hidden values in the draft: a Codex target under API key mode is stored as off,
+    // and a Codex fallback mode or mapping list is not stored at all.
+    const sent = providersProfile();
+    sent.providers.codex.fallback = {
+      target: 'api',
+      mode: 'always',
+      mappings: [{ from: 'a', to: 'b' }],
+    };
+    const state = await routingProfilesApi.saveKeyProfile(RAW_KEY, sent, options, true);
+    expect(state.keys[0].profile).toEqual(providersProfile());
+    assertNoKeyInRequests();
+  });
+
+  it('rejects a providers read-back with a different credential, mode or target', async () => {
+    mocks.patch.mockResolvedValue({});
+    const stored = (claude: Record<string, unknown>) =>
+      providersResponse({}, [
+        {
+          key: RAW_KEY,
+          profile: { ...rawShared(), providers: { ...rawProviders(), claude } },
+        },
+      ]);
+    for (const claude of [
+      { ...rawProviders().claude, 'api-credential': 'other-idx' },
+      { ...rawProviders().claude, mode: 'api' },
+      { ...rawProviders().claude, fallback: { ...rawProviders().claude.fallback, target: 'off' } },
+    ]) {
+      mocks.get.mockResolvedValue(stored(claude));
+      await expect(
+        routingProfilesApi.saveKeyProfile(RAW_KEY, providersProfile(), options, true)
+      ).rejects.toThrow('CPA did not retain the routing profile');
+    }
   });
 
   it('sends a picker primary without a tiebreak and a reset as null', () => {
@@ -332,10 +628,48 @@ describe('writing a key profile', () => {
     await expect(
       routingProfilesApi.saveKeyProfile(RAW_KEY, {
         ...keyProfile(),
-        claudeFallback: { enabled: true, mode: 'auto', mappings: [] },
+        providers: providersFromClaudeFallback({ enabled: true, mode: 'auto', mappings: [] }),
       })
     ).rejects.toThrow('Invalid Claude fallback mappings');
     expect(mocks.patch).not.toHaveBeenCalled();
+  });
+
+  it('checks the mappings only while CPA uses them: target Codex in Subscription mode', async () => {
+    mocks.patch.mockResolvedValue({});
+    const hidden = providersProfile();
+    hidden.providers.claude.fallback.mappings = [{ from: 'claude-*-x*', to: '' }];
+    mocks.get.mockResolvedValue(
+      providersResponse({}, [
+        {
+          key: RAW_KEY,
+          profile: {
+            ...rawShared(),
+            providers: {
+              ...rawProviders(),
+              claude: {
+                ...rawProviders().claude,
+                fallback: {
+                  target: 'api',
+                  mode: 'auto',
+                  mappings: [{ from: 'claude-*-x*', to: '' }],
+                },
+              },
+            },
+          },
+        },
+      ])
+    );
+    await expect(
+      routingProfilesApi.saveKeyProfile(RAW_KEY, hidden, options, true)
+    ).resolves.toBeTruthy();
+    const apiMode = providersProfile();
+    apiMode.providers.claude.mode = 'api';
+    apiMode.providers.claude.fallback = { target: 'codex', mode: 'auto', mappings: [] };
+    mocks.patch.mockClear();
+    await expect(
+      routingProfilesApi.saveKeyProfile(RAW_KEY, apiMode, options, true)
+    ).rejects.toThrow('did not retain');
+    expect(mocks.patch).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -440,11 +774,11 @@ describe('writing the shared profile', () => {
     sessionAffinity: true,
     preferredAccounts: { claude: 'claude-1' },
     selection: { primary: 'reserves', tiebreak: 'earliest-reset' },
-    claudeFallback: {
+    providers: providersFromClaudeFallback({
       enabled: true,
       mode: 'auto',
       mappings: [{ from: 'claude-opus-*', to: 'gpt-6-astra' }],
-    },
+    }),
   });
   const routeGets = (profiles: unknown, config: unknown = { routing: {} }) =>
     mocks.get.mockImplementation(async (url: string) => {
@@ -453,8 +787,43 @@ describe('writing the shared profile', () => {
       throw new Error(`unexpected GET ${url}`);
     });
 
-  it('sends the complete profile as top-level routing fields', () => {
-    expect(sharedProfilePatch(sharedProfile(), undefined, options)).toEqual({
+  it('sends the providers block as top-level routing fields', () => {
+    expect(sharedProfilePatch(providersProfile(), undefined, options)).toEqual({
+      routing: {
+        'session-affinity': true,
+        'preferred-accounts': { claude: 'claude-1', codex: null },
+        selection: { primary: 'reserves', tiebreak: 'earliest-reset' },
+        providers: {
+          claude: {
+            mode: 'subscription',
+            'api-credential': 'claude-idx',
+            fallback: {
+              target: 'api',
+              mode: 'auto',
+              mappings: [{ from: 'claude-opus-*', to: 'gpt-6-astra' }],
+            },
+          },
+          codex: { mode: 'api', 'api-credential': 'codex-idx', fallback: { target: 'off' } },
+        },
+      },
+    });
+  });
+
+  it('verifies a shared providers profile on a backend with providers', async () => {
+    mocks.patch.mockResolvedValue({});
+    routeGets(providersResponse());
+    const state = await routingProfilesApi.saveSharedProfile(
+      providersProfile(),
+      undefined,
+      options,
+      true
+    );
+    expect(state.shared).toEqual(providersProfile());
+    expect(mocks.patch.mock.calls[0][1].routing).not.toHaveProperty('claude-fallback');
+  });
+
+  it('sends the complete legacy profile as top-level routing fields to an older backend', () => {
+    expect(sharedProfilePatch(sharedProfile(), undefined, options, false)).toEqual({
       routing: {
         'session-affinity': true,
         'preferred-accounts': { claude: 'claude-1', codex: null },
@@ -535,7 +904,10 @@ describe('writing the shared profile', () => {
   it('rejects invalid fallback mappings before any request', async () => {
     await expect(
       routingProfilesApi.saveSharedProfile(
-        { ...sharedProfile(), claudeFallback: { enabled: true, mode: 'auto', mappings: [] } },
+        {
+          ...sharedProfile(),
+          providers: providersFromClaudeFallback({ enabled: true, mode: 'auto', mappings: [] }),
+        },
         undefined,
         options
       )

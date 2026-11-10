@@ -15,12 +15,41 @@ export interface SelectionSlots {
   tiebreak?: string;
 }
 
+export type ProviderMode = 'subscription' | 'api';
+export type FallbackTarget = 'off' | 'codex' | 'api';
+
+/** One provider's routing: subscriptions or its API key, and where to go when subscriptions fail. */
+export interface ProviderRouting {
+  mode: ProviderMode;
+  /** The `auth_index` of the provider's API key; `''` when none is chosen. */
+  apiCredential: string;
+  fallback: {
+    /** `codex` is valid for Claude only. */
+    target: FallbackTarget;
+    /** Claude -> Codex mode and model mappings; kept while hidden, ignored by CPA for Codex. */
+    mode: 'auto' | 'always';
+    mappings: Array<{ from: string; to: string }>;
+  };
+}
+
+export type ApiProvider = 'claude' | 'codex';
+
 export interface RoutingProfile {
   sessionAffinity: boolean;
   preferredAccounts: { claude?: string; codex?: string };
   selection: SelectionSlots;
-  claudeFallback: ClaudeFallbackSettings;
+  providers: { claude: ProviderRouting; codex: ProviderRouting };
 }
+
+/** One upstream API key CPA can route to, as listed in `api_credentials`. */
+export interface ApiCredential {
+  authIndex: string;
+  label: string;
+  baseUrl: string;
+  disabled: boolean;
+}
+
+export type ApiCredentials = Record<ApiProvider, ApiCredential[]>;
 
 export interface RoutingSelectionOptions {
   narrowing: string[];
@@ -41,6 +70,12 @@ export interface RoutingProfilesState {
   /** Only keys with their own profile, in `access.api-keys` order. */
   keys: KeyProfileEntry[];
   selectionOptions: RoutingSelectionOptions;
+  /**
+   * The backend serves `providers` (API key mode and API-key fallback). `false` on an
+   * older backend: `providers` is derived from `claude-fallback` and written back as it.
+   */
+  providersSupported: boolean;
+  apiCredentials: ApiCredentials;
 }
 
 export interface KeyProfileRow {
@@ -72,12 +107,147 @@ const stringList = (value: unknown): string[] => {
   return value.filter((item): item is string => typeof item === 'string' && item !== '');
 };
 
+export const defaultProviderRouting = (): ProviderRouting => ({
+  mode: 'subscription',
+  apiCredential: '',
+  fallback: { target: 'off', mode: 'auto', mappings: [] },
+});
+
 const emptyProfile = (): RoutingProfile => ({
   sessionAffinity: false,
   preferredAccounts: {},
   selection: { primary: 'reserves', tiebreak: 'round-robin' },
-  claudeFallback: { enabled: false, mode: 'auto', mappings: [] },
+  providers: { claude: defaultProviderRouting(), codex: defaultProviderRouting() },
 });
+
+/** The target CPA applies: API key mode skips the fallback, and Codex cannot fall back to itself. */
+export function effectiveFallbackTarget(
+  provider: ApiProvider,
+  routing: ProviderRouting
+): FallbackTarget {
+  if (routing.mode === 'api') return 'off';
+  if (provider === 'codex' && routing.fallback.target === 'codex') return 'off';
+  return routing.fallback.target;
+}
+
+/** The legacy `claude-fallback` view of a profile: enabled only for the Codex target. */
+export function claudeFallbackOf(profile: RoutingProfile): ClaudeFallbackSettings {
+  const claude = profile.providers.claude;
+  return {
+    enabled: effectiveFallbackTarget('claude', claude) === 'codex',
+    mode: claude.fallback.mode,
+    mappings: claude.fallback.mappings.map((mapping) => ({ ...mapping })),
+  };
+}
+
+/**
+ * The Claude -> Codex mappings must be valid only while CPA uses them (target Codex);
+ * under any other target they are kept as hidden values and CPA ignores them.
+ */
+export function validProviderFallbacks(profile: RoutingProfile): boolean {
+  const fallback = claudeFallbackOf(profile);
+  return !fallback.enabled || validFallbackSettings(fallback);
+}
+
+const PROVIDER_MODES: readonly ProviderMode[] = ['subscription', 'api'];
+const FALLBACK_TARGETS: Record<ApiProvider, readonly FallbackTarget[]> = {
+  claude: ['off', 'codex', 'api'],
+  codex: ['off', 'api'],
+};
+
+/** An absent, `null` or `""` value takes the default; any other unknown value is an error. */
+function readEnum<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
+  if (value === undefined || value === null || value === '') return fallback;
+  if (typeof value === 'string' && (allowed as readonly string[]).includes(value))
+    return value as T;
+  throw new Error('Invalid routing provider settings');
+}
+
+function readProviderRouting(provider: ApiProvider, raw: unknown): ProviderRouting {
+  if (raw === undefined || raw === null) return defaultProviderRouting();
+  if (!isRecord(raw)) throw new Error('Invalid routing provider settings');
+  const credential = raw['api-credential'];
+  if (credential !== undefined && credential !== null && typeof credential !== 'string')
+    throw new Error('Invalid routing provider settings');
+  const fallbackRaw = raw.fallback;
+  if (fallbackRaw !== undefined && fallbackRaw !== null && !isRecord(fallbackRaw))
+    throw new Error('Invalid routing provider settings');
+  const mappingsRaw = fallbackRaw?.mappings;
+  if (
+    mappingsRaw !== undefined &&
+    mappingsRaw !== null &&
+    !(
+      Array.isArray(mappingsRaw) &&
+      mappingsRaw.every(
+        (item: unknown) =>
+          isRecord(item) && typeof item.from === 'string' && typeof item.to === 'string'
+      )
+    )
+  )
+    throw new Error('Invalid routing provider settings');
+  return {
+    mode: readEnum(raw.mode, PROVIDER_MODES, 'subscription'),
+    apiCredential: typeof credential === 'string' ? credential : '',
+    fallback: {
+      target: readEnum(fallbackRaw?.target, FALLBACK_TARGETS[provider], 'off'),
+      mode: readEnum(fallbackRaw?.mode, ['auto', 'always'] as const, 'auto'),
+      mappings: Array.isArray(mappingsRaw)
+        ? mappingsRaw.map((item) => ({ from: item.from as string, to: item.to as string }))
+        : [],
+    },
+  };
+}
+
+/** `providers` from a legacy `claude-fallback` block: subscriptions only, Codex or no fallback. */
+export function providersFromClaudeFallback(
+  legacy: ClaudeFallbackSettings
+): RoutingProfile['providers'] {
+  return {
+    claude: {
+      mode: 'subscription',
+      apiCredential: '',
+      fallback: {
+        target: legacy.enabled ? 'codex' : 'off',
+        mode: legacy.mode,
+        mappings: legacy.mappings.map((mapping) => ({ ...mapping })),
+      },
+    },
+    codex: defaultProviderRouting(),
+  };
+}
+
+function readProviders(raw: Record<string, unknown>): RoutingProfile['providers'] {
+  const providers = raw.providers;
+  if (providers === undefined || providers === null)
+    return providersFromClaudeFallback(readFallbackSettings(raw['claude-fallback']));
+  if (!isRecord(providers)) throw new Error('Invalid routing provider settings');
+  return {
+    claude: readProviderRouting('claude', providers.claude),
+    codex: readProviderRouting('codex', providers.codex),
+  };
+}
+
+/** `api_credentials` is informational: a missing list is empty and malformed entries are skipped. */
+function readApiCredentials(raw: unknown): ApiCredentials {
+  const list = (value: unknown): ApiCredential[] =>
+    Array.isArray(value)
+      ? value.flatMap((item: unknown) =>
+          isRecord(item) && typeof item.auth_index === 'string' && item.auth_index.trim()
+            ? [
+                {
+                  authIndex: item.auth_index.trim(),
+                  label: typeof item.label === 'string' ? item.label : '',
+                  baseUrl: typeof item.base_url === 'string' ? item.base_url : '',
+                  disabled: item.disabled === true,
+                },
+              ]
+            : []
+        )
+      : [];
+  return isRecord(raw)
+    ? { claude: list(raw.claude), codex: list(raw.codex) }
+    : { claude: [], codex: [] };
+}
 
 function readProfile(raw: unknown): RoutingProfile {
   if (!isRecord(raw) || typeof raw['session-affinity'] !== 'boolean')
@@ -106,7 +276,7 @@ function readProfile(raw: unknown): RoutingProfile {
       typeof selection.tiebreak === 'string' && selection.tiebreak
         ? { primary: selection.primary, tiebreak: selection.tiebreak }
         : { primary: selection.primary },
-    claudeFallback: readFallbackSettings(raw['claude-fallback']),
+    providers: readProviders(raw),
   };
 }
 
@@ -133,6 +303,8 @@ export function readRoutingProfiles(raw: unknown): RoutingProfilesState {
       narrowing: stringList(raw.selection_options.narrowing),
       pickers: stringList(raw.selection_options.pickers),
     },
+    providersSupported: isRecord(raw.shared) && isRecord(raw.shared.providers),
+    apiCredentials: readApiCredentials(raw.api_credentials),
   };
 }
 
@@ -142,6 +314,8 @@ export const unsupportedRoutingProfiles = (): RoutingProfilesState => ({
   shared: emptyProfile(),
   keys: [],
   selectionOptions: { narrowing: [], pickers: [] },
+  providersSupported: false,
+  apiCredentials: { claude: [], codex: [] },
 });
 
 /**
@@ -170,15 +344,19 @@ const noSelectionOptions: RoutingSelectionOptions = { narrowing: [], pickers: []
 
 /**
  * One complete profile body in kebab-case, normalized against the selection
- * options, so a PATCH merge leaves nothing from the old one: cleared providers
- * and an empty or picker-blocked tiebreak are `null`, and mappings replace the list.
+ * options, so a PATCH merge leaves nothing from the old one: cleared providers,
+ * a cleared API credential and an empty or picker-blocked tiebreak are `null`,
+ * and mappings replace the list. A backend with `providers` gets the complete
+ * `providers` block (API key mode carries `target: off`; the Codex fallback is its
+ * target only); an older one gets the `claude-fallback` block instead.
  */
 export function profileBody(
   profile: RoutingProfile,
-  selectionOptions: RoutingSelectionOptions = noSelectionOptions
+  selectionOptions: RoutingSelectionOptions = noSelectionOptions,
+  providersSupported = true
 ): Record<string, unknown> {
   const normalized = normalizeProfile(profile, selectionOptions);
-  return {
+  const body: Record<string, unknown> = {
     'session-affinity': normalized.sessionAffinity,
     'preferred-accounts': {
       claude: normalized.preferredAccounts.claude ?? null,
@@ -188,12 +366,34 @@ export function profileBody(
       primary: normalized.selection.primary,
       tiebreak: normalized.selection.tiebreak ?? null,
     },
-    'claude-fallback': {
-      enabled: normalized.claudeFallback.enabled,
-      mode: normalized.claudeFallback.mode,
-      mappings: normalized.claudeFallback.mappings,
-    },
   };
+  const { claude, codex } = normalized.providers;
+  if (providersSupported) {
+    body.providers = {
+      claude: {
+        mode: claude.mode,
+        'api-credential': claude.apiCredential || null,
+        fallback: {
+          target: claude.fallback.target,
+          mode: claude.fallback.mode,
+          mappings: claude.fallback.mappings,
+        },
+      },
+      codex: {
+        mode: codex.mode,
+        'api-credential': codex.apiCredential || null,
+        fallback: { target: codex.fallback.target },
+      },
+    };
+  } else {
+    const fallback = claudeFallbackOf(normalized);
+    body['claude-fallback'] = {
+      enabled: fallback.enabled,
+      mode: fallback.mode,
+      mappings: fallback.mappings,
+    };
+  }
+  return body;
 }
 
 /**
@@ -203,9 +403,10 @@ export function profileBody(
 export function keyProfilePatch(
   key: string,
   profile: RoutingProfile | null,
-  selectionOptions: RoutingSelectionOptions = noSelectionOptions
+  selectionOptions: RoutingSelectionOptions = noSelectionOptions,
+  providersSupported = true
 ): Record<string, unknown> {
-  const body = profile ? profileBody(profile, selectionOptions) : null;
+  const body = profile ? profileBody(profile, selectionOptions, providersSupported) : null;
   return { routing: { 'key-profiles': { [key]: body } } };
 }
 
@@ -216,9 +417,10 @@ export function keyProfilePatch(
 export function sharedProfilePatch(
   profile: RoutingProfile,
   ttl: string | undefined,
-  selectionOptions: RoutingSelectionOptions = noSelectionOptions
+  selectionOptions: RoutingSelectionOptions = noSelectionOptions,
+  providersSupported = true
 ): Record<string, unknown> {
-  const routing = profileBody(profile, selectionOptions);
+  const routing = profileBody(profile, selectionOptions, providersSupported);
   if (ttl !== undefined) routing['session-affinity-ttl'] = ttl.trim();
   return { routing };
 }
@@ -256,13 +458,17 @@ export const routingProfilesApi = {
   async saveKeyProfile(
     key: string,
     profile: RoutingProfile | null,
-    selectionOptions: RoutingSelectionOptions = noSelectionOptions
+    selectionOptions: RoutingSelectionOptions = noSelectionOptions,
+    providersSupported = true
   ): Promise<RoutingProfilesState> {
     const assertCurrent = guardConfigConnection();
-    if (profile && !validFallbackSettings(profile.claudeFallback))
+    if (profile && !validProviderFallbacks(profile))
       throw new Error('Invalid Claude fallback mappings');
     try {
-      await apiClient.patch('/config', keyProfilePatch(key, profile, selectionOptions));
+      await apiClient.patch(
+        '/config',
+        keyProfilePatch(key, profile, selectionOptions, providersSupported)
+      );
     } catch (error) {
       assertCurrent();
       throw translateWriteError(error, key);
@@ -283,14 +489,17 @@ export const routingProfilesApi = {
   async saveSharedProfile(
     profile: RoutingProfile,
     ttl: string | undefined,
-    selectionOptions: RoutingSelectionOptions = noSelectionOptions
+    selectionOptions: RoutingSelectionOptions = noSelectionOptions,
+    providersSupported = true
   ): Promise<RoutingProfilesState> {
     const assertCurrent = guardConfigConnection();
-    if (!validFallbackSettings(profile.claudeFallback))
-      throw new Error('Invalid Claude fallback mappings');
+    if (!validProviderFallbacks(profile)) throw new Error('Invalid Claude fallback mappings');
     if (ttl !== undefined && invalidTTL(ttl)) throw new Error('Invalid session affinity TTL');
     try {
-      await apiClient.patch('/config', sharedProfilePatch(profile, ttl, selectionOptions));
+      await apiClient.patch(
+        '/config',
+        sharedProfilePatch(profile, ttl, selectionOptions, providersSupported)
+      );
     } catch (error) {
       assertCurrent();
       throw translateWriteError(error, '');

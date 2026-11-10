@@ -1,9 +1,13 @@
 import type { TFunction } from 'i18next';
 import { normalizeFallbackSettings } from '@/features/personal-quota-support/services/api/claudeFallback';
-import type {
-  KeyProfileRow,
-  RoutingProfile,
-  RoutingSelectionOptions,
+import {
+  claudeFallbackOf,
+  effectiveFallbackTarget,
+  type ApiProvider,
+  type KeyProfileRow,
+  type ProviderRouting,
+  type RoutingProfile,
+  type RoutingSelectionOptions,
 } from '@/features/personal-quota-support/services/api/routingProfiles';
 import type { AuthFileItem } from '@/features/personal-quota-support/types';
 import { buildApiKeyDisplayMap, labelShowsMask } from '@/features/monitoring/model/apiKeys';
@@ -13,6 +17,35 @@ import { sha256Hex } from '@/utils/apiKeyHash';
 import { maskApiKey } from '@/utils/format';
 import { maskQuotaName } from './ledgerModel';
 import { preferredAccountOptions, withPickerRule } from './routingModel';
+
+/**
+ * Canonical form of one provider block: the credential is trimmed, API key mode
+ * carries `target: off` (the save body does too), and the Codex fallback keeps only
+ * its target because CPA stores no Codex mode or mappings. Claude's mode and
+ * mappings are kept under every target: they survive as hidden values.
+ */
+function normalizeProviderRouting(
+  provider: ApiProvider,
+  routing: ProviderRouting
+): ProviderRouting {
+  const target = effectiveFallbackTarget(provider, routing);
+  if (provider === 'codex')
+    return {
+      mode: routing.mode,
+      apiCredential: routing.apiCredential.trim(),
+      fallback: { target, mode: 'auto', mappings: [] },
+    };
+  const fallback = normalizeFallbackSettings({
+    enabled: false,
+    mode: routing.fallback.mode,
+    mappings: routing.fallback.mappings,
+  });
+  return {
+    mode: routing.mode,
+    apiCredential: routing.apiCredential.trim(),
+    fallback: { target, mode: fallback.mode, mappings: fallback.mappings },
+  };
+}
 
 /**
  * Canonical form of a profile: the shape the backend keeps. A picker as primary
@@ -32,12 +65,14 @@ export function normalizeProfile(
     { primary: profile.selection.primary.trim(), tiebreak: profile.selection.tiebreak?.trim() },
     selectionOptions
   );
-  const fallback = normalizeFallbackSettings(profile.claudeFallback);
   return {
     sessionAffinity: profile.sessionAffinity,
     preferredAccounts,
     selection,
-    claudeFallback: { enabled: fallback.enabled, mode: fallback.mode, mappings: fallback.mappings },
+    providers: {
+      claude: normalizeProviderRouting('claude', profile.providers.claude),
+      codex: normalizeProviderRouting('codex', profile.providers.codex),
+    },
   };
 }
 
@@ -53,16 +88,25 @@ export function profileDirty(
   );
 }
 
-/** A new key profile starts as an independent copy of the shared profile. */
+const copyOfProviderRouting = (routing: ProviderRouting): ProviderRouting => ({
+  mode: routing.mode,
+  apiCredential: routing.apiCredential,
+  fallback: {
+    target: routing.fallback.target,
+    mode: routing.fallback.mode,
+    mappings: routing.fallback.mappings.map((mapping) => ({ ...mapping })),
+  },
+});
+
+/** A new key profile starts as an independent copy of the shared profile, hidden values included. */
 export function copyOfShared(shared: RoutingProfile): RoutingProfile {
   return {
     sessionAffinity: shared.sessionAffinity,
     preferredAccounts: { ...shared.preferredAccounts },
     selection: { ...shared.selection },
-    claudeFallback: {
-      enabled: shared.claudeFallback.enabled,
-      mode: shared.claudeFallback.mode,
-      mappings: shared.claudeFallback.mappings.map((mapping) => ({ ...mapping })),
+    providers: {
+      claude: copyOfProviderRouting(shared.providers.claude),
+      codex: copyOfProviderRouting(shared.providers.codex),
     },
   };
 }
@@ -135,7 +179,7 @@ export function chainSummary(
   }
   const { primary, tiebreak } = profile.selection;
   parts.push(tiebreak ? `${primary} → ${tiebreak}` : primary);
-  const fallback = profile.claudeFallback;
+  const fallback = claudeFallbackOf(profile);
   parts.push(
     t(
       !fallback.enabled

@@ -1,8 +1,10 @@
 import { beforeAll, describe, expect, test } from 'vitest';
 import i18n from '@/i18n';
-import type {
-  RoutingProfile,
-  RoutingSelectionOptions,
+import {
+  providersFromClaudeFallback,
+  type ProviderRouting,
+  type RoutingProfile,
+  type RoutingSelectionOptions,
 } from '@/features/personal-quota-support/services/api/routingProfiles';
 import type { AuthFileItem } from '@/features/personal-quota-support/types';
 import { sha256Hex } from '@/utils/apiKeyHash';
@@ -30,8 +32,26 @@ const profile = (patch: Partial<RoutingProfile> = {}): RoutingProfile => ({
   sessionAffinity: true,
   preferredAccounts: { claude: 'claude-a' },
   selection: { primary: 'reserves', tiebreak: 'round-robin' },
-  claudeFallback: {
+  providers: providersFromClaudeFallback({
     enabled: true,
+    mode: 'auto',
+    mappings: [{ from: 'claude-opus-*', to: 'gpt-6-astra' }],
+  }),
+  ...patch,
+});
+
+/** `profile()` with one provider block replaced. */
+const withProvider = (
+  provider: 'claude' | 'codex',
+  routing: ProviderRouting,
+  base: RoutingProfile = profile()
+): RoutingProfile => ({ ...base, providers: { ...base.providers, [provider]: routing } });
+
+const claudeRouting = (patch: Partial<ProviderRouting> = {}): ProviderRouting => ({
+  mode: 'subscription',
+  apiCredential: '',
+  fallback: {
+    target: 'codex',
     mode: 'auto',
     mappings: [{ from: 'claude-opus-*', to: 'gpt-6-astra' }],
   },
@@ -77,15 +97,15 @@ describe('normalizeProfile and profileDirty', () => {
   test('mappings are trimmed and empty preferences dropped', () => {
     const messy = profile({
       preferredAccounts: { claude: ' claude-a ', codex: '  ' },
-      claudeFallback: {
+      providers: providersFromClaudeFallback({
         enabled: true,
         mode: 'auto',
         mappings: [{ from: ' claude-opus-* ', to: ' gpt-6-astra ' }],
-      },
+      }),
     });
     const normalized = normalizeProfile(messy, options);
     expect(normalized.preferredAccounts).toEqual({ claude: 'claude-a' });
-    expect(normalized.claudeFallback.mappings).toEqual([
+    expect(normalized.providers.claude.fallback.mappings).toEqual([
       { from: 'claude-opus-*', to: 'gpt-6-astra' },
     ]);
     expect(profileDirty(messy, profile(), options)).toBe(false);
@@ -99,6 +119,118 @@ describe('normalizeProfile and profileDirty', () => {
   });
 });
 
+describe('normalizeProfile with providers', () => {
+  test('trims the API credential and builds keys in a fixed order', () => {
+    const messy = withProvider('claude', {
+      fallback: { mappings: [], mode: 'always', target: 'api' },
+      apiCredential: '  claude-key  ',
+      mode: 'subscription',
+    });
+    const normalized = normalizeProfile(messy, options);
+    expect(normalized.providers.claude.apiCredential).toBe('claude-key');
+    expect(JSON.stringify(normalized.providers.claude)).toBe(
+      '{"mode":"subscription","apiCredential":"claude-key","fallback":{"target":"api","mode":"always","mappings":[]}}'
+    );
+    expect(
+      profileDirty(
+        messy,
+        withProvider(
+          'claude',
+          claudeRouting({
+            apiCredential: 'claude-key',
+            fallback: { target: 'api', mode: 'always', mappings: [] },
+          })
+        ),
+        options
+      )
+    ).toBe(false);
+  });
+
+  test('API key mode carries target off but keeps the mappings and the credential', () => {
+    const api = withProvider('claude', claudeRouting({ mode: 'api', apiCredential: 'claude-key' }));
+    expect(normalizeProfile(api, options).providers.claude).toEqual({
+      mode: 'api',
+      apiCredential: 'claude-key',
+      fallback: {
+        target: 'off',
+        mode: 'auto',
+        mappings: [{ from: 'claude-opus-*', to: 'gpt-6-astra' }],
+      },
+    });
+    // The backend stores target off for API key mode, so a read-back with off is equal.
+    const stored = withProvider(
+      'claude',
+      claudeRouting({
+        mode: 'api',
+        apiCredential: 'claude-key',
+        fallback: { ...claudeRouting().fallback, target: 'off' },
+      })
+    );
+    expect(profileDirty(api, stored, options)).toBe(false);
+  });
+
+  test('hidden values stay part of the profile: mappings and a credential under target off', () => {
+    const hidden = withProvider(
+      'claude',
+      claudeRouting({
+        apiCredential: 'claude-key',
+        fallback: { ...claudeRouting().fallback, target: 'off' },
+      })
+    );
+    const cleared = withProvider(
+      'claude',
+      claudeRouting({ fallback: { target: 'off', mode: 'auto', mappings: [] } })
+    );
+    expect(normalizeProfile(hidden, options).providers.claude.apiCredential).toBe('claude-key');
+    expect(profileDirty(hidden, cleared, options)).toBe(true);
+  });
+
+  test('ignores the Codex fallback mode and mappings, and a Codex target of codex', () => {
+    const codex = (fallback: ProviderRouting['fallback']): RoutingProfile =>
+      withProvider('codex', { mode: 'subscription', apiCredential: ' codex-key ', fallback });
+    const a = codex({ target: 'api', mode: 'always', mappings: [{ from: 'x', to: 'y' }] });
+    const b = codex({ target: 'api', mode: 'auto', mappings: [] });
+    expect(normalizeProfile(a, options).providers.codex).toEqual({
+      mode: 'subscription',
+      apiCredential: 'codex-key',
+      fallback: { target: 'api', mode: 'auto', mappings: [] },
+    });
+    expect(profileDirty(a, b, options)).toBe(false);
+    expect(
+      normalizeProfile(codex({ target: 'codex', mode: 'auto', mappings: [] }), options).providers
+        .codex.fallback.target
+    ).toBe('off');
+  });
+
+  test('a change of mode, target or credential is dirty', () => {
+    const base = profile();
+    expect(
+      profileDirty(base, withProvider('claude', claudeRouting({ mode: 'api' })), options)
+    ).toBe(true);
+    expect(
+      profileDirty(
+        base,
+        withProvider(
+          'claude',
+          claudeRouting({ fallback: { ...claudeRouting().fallback, target: 'api' } })
+        ),
+        options
+      )
+    ).toBe(true);
+    expect(
+      profileDirty(
+        base,
+        withProvider('codex', {
+          mode: 'subscription',
+          apiCredential: 'codex-key',
+          fallback: { target: 'off', mode: 'auto', mappings: [] },
+        }),
+        options
+      )
+    ).toBe(true);
+  });
+});
+
 describe('copyOfShared', () => {
   test('returns an equal, independent copy', () => {
     const shared = profile();
@@ -106,9 +238,27 @@ describe('copyOfShared', () => {
     expect(copy).toEqual(shared);
     copy.preferredAccounts.claude = 'other';
     copy.selection.primary = 'priority';
-    copy.claudeFallback.mappings[0].to = 'changed';
-    copy.claudeFallback.mappings.push({ from: 'x', to: 'y' });
+    copy.providers.claude.fallback.mappings[0].to = 'changed';
+    copy.providers.claude.fallback.mappings.push({ from: 'x', to: 'y' });
+    copy.providers.claude.fallback.target = 'off';
+    copy.providers.codex.apiCredential = 'changed';
     expect(shared).toEqual(profile());
+  });
+
+  test('keeps hidden values: API key mode with a stored mapping table and credential', () => {
+    const shared = withProvider(
+      'claude',
+      claudeRouting({ mode: 'api', apiCredential: 'claude-key' }),
+      withProvider('codex', {
+        mode: 'subscription',
+        apiCredential: 'codex-key',
+        fallback: { target: 'off', mode: 'auto', mappings: [] },
+      })
+    );
+    const copy = copyOfShared(shared);
+    expect(copy).toEqual(shared);
+    expect(copy.providers.claude.fallback).not.toBe(shared.providers.claude.fallback);
+    expect(copy.providers.codex).not.toBe(shared.providers.codex);
   });
 });
 
@@ -229,13 +379,17 @@ describe('chainSummary', () => {
     const off = profile({
       sessionAffinity: false,
       selection: { primary: 'fill-first' },
-      claudeFallback: { enabled: false, mode: 'auto', mappings: [] },
+      providers: providersFromClaudeFallback({ enabled: false, mode: 'auto', mappings: [] }),
     });
     expect(chainSummary(off, files, true, t)).toBe(
       'No sticky session · Claude: claude-bob@example.com.json · Codex: Automatic · fill-first · Fallback off'
     );
     const always = profile({
-      claudeFallback: { ...profile().claudeFallback, mode: 'always' },
+      providers: providersFromClaudeFallback({
+        enabled: true,
+        mode: 'always',
+        mappings: [{ from: 'claude-opus-*', to: 'gpt-6-astra' }],
+      }),
     });
     expect(chainSummary(always, files, true, t)).toMatch(/Fallback: always Codex$/);
   });

@@ -4,9 +4,11 @@ import { afterEach, beforeAll, describe, expect, test, vi } from 'vitest';
 import i18n from '@/i18n';
 import { Button } from '@/components/ui/Button';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
-import type {
-  RoutingProfile,
-  RoutingSelectionOptions,
+import {
+  claudeFallbackOf,
+  providersFromClaudeFallback,
+  type RoutingProfile,
+  type RoutingSelectionOptions,
 } from '@/features/personal-quota-support/services/api/routingProfiles';
 import { suggestedFallbackMappings } from '@/features/personal-quota-support/services/api/claudeFallback';
 import type { AuthFileItem } from '@/features/personal-quota-support/types';
@@ -28,11 +30,11 @@ const shared: RoutingProfile = {
   sessionAffinity: true,
   preferredAccounts: { claude: 'claude-a' },
   selection: { primary: 'reserves', tiebreak: 'round-robin' },
-  claudeFallback: {
+  providers: providersFromClaudeFallback({
     enabled: true,
     mode: 'auto',
     mappings: [{ from: 'claude-opus-*', to: 'gpt-6-astra' }],
-  },
+  }),
 };
 
 const files: AuthFileItem[] = [
@@ -123,7 +125,7 @@ describe('KeyProfileEditor', () => {
     expect(accountSelect('Claude').props.value).toBe('claude-a');
     expect(accountSelect('Codex').props.value).toBe('');
     expect(slotSelects().map((select) => select.props.value)).toEqual(['reserves', 'round-robin']);
-    expect(root().findByType(FallbackSettingsEditor).props.value).toEqual(shared.claudeFallback);
+    expect(root().findByType(FallbackSettingsEditor).props.value).toEqual(claudeFallbackOf(shared));
     expect(summaryText()).toContain('Sticky session');
   });
 
@@ -190,7 +192,7 @@ describe('KeyProfileEditor', () => {
   test('a stored profile without mappings opens clean and saves the suggested ones', async () => {
     const stored = {
       ...copyOfShared(shared),
-      claudeFallback: { enabled: false, mode: 'auto' as const, mappings: [] },
+      providers: providersFromClaudeFallback({ enabled: false, mode: 'auto', mappings: [] }),
     };
     const { onSave } = await mount({ initial: stored });
     // The fallback editor shows suggestions for an empty list; that alone is no edit.
@@ -198,7 +200,9 @@ describe('KeyProfileEditor', () => {
     act(() => sticky().props.onChange(false));
     click(saveButton());
     expect(onSave.mock.calls[0][0].sessionAffinity).toBe(false);
-    expect(onSave.mock.calls[0][0].claudeFallback.mappings).toEqual(suggestedFallbackMappings());
+    expect(onSave.mock.calls[0][0].providers.claude.fallback.mappings).toEqual(
+      suggestedFallbackMappings()
+    );
   });
 
   test('edits never touch the initial profile', async () => {
@@ -259,7 +263,7 @@ describe('KeyProfileEditor', () => {
     act(() =>
       root()
         .findByType(FallbackSettingsEditor)
-        .props.onChange({ ...shared.claudeFallback, mappings: [] })
+        .props.onChange({ ...claudeFallbackOf(shared), mappings: [] })
     );
     expect(saveButton().props.disabled).toBe(true);
     expect(root().findAll((node) => node.props.role === 'alert')).toHaveLength(1);
@@ -275,7 +279,7 @@ describe('KeyProfileEditor', () => {
     act(() =>
       root()
         .findByType(FallbackSettingsEditor)
-        .props.onChange({ ...shared.claudeFallback, mode: 'always' })
+        .props.onChange({ ...claudeFallbackOf(shared), mode: 'always' })
     );
     click(saveButton());
     expect(onSave).toHaveBeenCalledWith(
@@ -283,7 +287,7 @@ describe('KeyProfileEditor', () => {
         sessionAffinity: false,
         preferredAccounts: { codex: 'codex-a' },
         selection: { primary: 'priority' },
-        claudeFallback: { ...shared.claudeFallback, mode: 'always' },
+        providers: providersFromClaudeFallback({ ...claudeFallbackOf(shared), mode: 'always' }),
       },
       undefined
     );
@@ -317,7 +321,7 @@ describe('KeyProfileEditor', () => {
     // An empty mapping list is filled with suggestions on screen; a save must not store them.
     const stored: RoutingProfile = {
       ...shared,
-      claudeFallback: { enabled: false, mode: 'auto', mappings: [] },
+      providers: providersFromClaudeFallback({ enabled: false, mode: 'auto', mappings: [] }),
     };
     const { onSave } = await mount({ initial: stored, variant: 'default', fallbackReadOnly: true });
     expect(textOf(root())).toContain('Requires an updated CPA backend with native routing');

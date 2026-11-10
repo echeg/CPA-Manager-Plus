@@ -2,13 +2,12 @@ import { useId, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
+import { withSuggestions } from '@/features/personal-quota-support/services/api/claudeFallback';
 import {
-  validFallbackSettings,
-  withSuggestions,
-} from '@/features/personal-quota-support/services/api/claudeFallback';
-import type {
-  RoutingProfile,
-  RoutingSelectionOptions,
+  claudeFallbackOf,
+  validProviderFallbacks,
+  type RoutingProfile,
+  type RoutingSelectionOptions,
 } from '@/features/personal-quota-support/services/api/routingProfiles';
 import type { AuthFileItem } from '@/features/personal-quota-support/types';
 import { getQuotaDisplayName } from '@/features/quota/utils/quota/identity';
@@ -58,10 +57,21 @@ export interface KeyProfileEditorProps {
 }
 
 /** The fallback editor fills an empty mapping list with suggestions, so the baseline does too. */
-const withFallbackSuggestions = (profile: RoutingProfile): RoutingProfile => ({
-  ...profile,
-  claudeFallback: withSuggestions(profile.claudeFallback),
-});
+const withFallbackSuggestions = (profile: RoutingProfile): RoutingProfile => {
+  const claude = profile.providers.claude;
+  const { mappings } = withSuggestions({
+    enabled: false,
+    mode: claude.fallback.mode,
+    mappings: claude.fallback.mappings,
+  });
+  return {
+    ...profile,
+    providers: {
+      ...profile.providers,
+      claude: { ...claude, fallback: { ...claude.fallback, mappings } },
+    },
+  };
+};
 
 /** Editor for one routing profile: the four routing stages, plus the TTL for the default one. */
 export function KeyProfileEditor({
@@ -100,8 +110,7 @@ export function KeyProfileEditor({
     return showEmails ? name : maskQuotaName(name);
   };
 
-  const invalid =
-    !draft.selection.primary.trim() || !validFallbackSettings(draft.claudeFallback) || ttlInvalid;
+  const invalid = !draft.selection.primary.trim() || !validProviderFallbacks(draft) || ttlInvalid;
   // Creating a profile is a change even when the copy still equals the shared settings:
   // from then on the key no longer follows the default profile.
   const dirty = !baseline || profileDirty(draft, baseline, selectionOptions) || ttlChanged;
@@ -114,7 +123,7 @@ export function KeyProfileEditor({
     const profile = {
       ...draft,
       selection: withPickerRule(draft.selection, selectionOptions),
-      claudeFallback: fallbackReadOnly ? initial.claudeFallback : draft.claudeFallback,
+      providers: fallbackReadOnly ? initial.providers : draft.providers,
     };
     onSave(profile, ttlChanged ? ttlDraft.trim() : undefined);
   };
@@ -249,10 +258,23 @@ export function KeyProfileEditor({
           </p>
         )}
         <FallbackSettingsEditor
-          value={draft.claudeFallback}
+          value={claudeFallbackOf(draft)}
           models={models}
           disabled={locked || fallbackReadOnly}
-          onChange={(claudeFallback) => update({ claudeFallback })}
+          onChange={({ enabled, mode, mappings }) => {
+            const claude = draft.providers.claude;
+            const target = enabled
+              ? 'codex'
+              : claude.fallback.target === 'codex'
+                ? 'off'
+                : claude.fallback.target;
+            update({
+              providers: {
+                ...draft.providers,
+                claude: { ...claude, fallback: { target, mode, mappings } },
+              },
+            });
+          }}
         />
       </section>
 

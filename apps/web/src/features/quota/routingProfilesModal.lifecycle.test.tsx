@@ -4,9 +4,10 @@ import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vi
 import i18n from '@/i18n';
 import { Button } from '@/components/ui/Button';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
-import type {
-  RoutingProfile,
-  RoutingProfilesState,
+import {
+  providersFromClaudeFallback,
+  type RoutingProfile,
+  type RoutingProfilesState,
 } from '@/features/personal-quota-support/services/api/routingProfiles';
 import type { AuthFileItem } from '@/features/personal-quota-support/types';
 import { useNotificationStore } from '@/stores';
@@ -55,27 +56,29 @@ const shared = (): RoutingProfile => ({
   sessionAffinity: true,
   preferredAccounts: { claude: 'claude-a' },
   selection: { primary: 'reserves', tiebreak: 'round-robin' },
-  claudeFallback: {
+  providers: providersFromClaudeFallback({
     enabled: true,
     mode: 'auto',
     mappings: [{ from: 'claude-opus-*', to: 'gpt-6-astra' }],
-  },
+  }),
 });
 
 const betaProfile = (): RoutingProfile => ({
   sessionAffinity: true,
   preferredAccounts: { codex: 'codex-a' },
   selection: { primary: 'priority', tiebreak: 'fill-first' },
-  claudeFallback: {
+  providers: providersFromClaudeFallback({
     enabled: false,
     mode: 'always',
     mappings: [{ from: 'claude-sonnet-*', to: 'gpt-6-sol' }],
-  },
+  }),
 });
 
 const profilesState = (overrides: Partial<RoutingProfilesState> = {}): RoutingProfilesState => ({
   supported: true,
   unsupportedBackend: false,
+  providersSupported: true,
+  apiCredentials: { claude: [], codex: [] },
   shared: shared(),
   keys: [{ key: RAW_BETA, profile: betaProfile() }],
   selectionOptions: {

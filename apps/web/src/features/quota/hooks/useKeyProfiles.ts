@@ -181,7 +181,12 @@ export function useKeyProfiles(disabled: boolean) {
   const saveKeyProfile = async (key: string, profile: RoutingProfile | null) => {
     if (!state?.supported || !beginWrite()) return false;
     try {
-      const saved = await routingProfilesApi.saveKeyProfile(key, profile, state.selectionOptions);
+      const saved = await routingProfilesApi.saveKeyProfile(
+        key,
+        profile,
+        state.selectionOptions,
+        state.providersSupported
+      );
       if (!isCurrent()) return false;
       useConfigStore.getState().clearCache();
       setState(saved);
@@ -205,7 +210,8 @@ export function useKeyProfiles(disabled: boolean) {
       const saved = await routingProfilesApi.saveSharedProfile(
         profile,
         nextTTL,
-        state.selectionOptions
+        state.selectionOptions,
+        state.providersSupported
       );
       if (!isCurrent()) return false;
       useConfigStore.getState().clearCache();

@@ -3,9 +3,10 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import i18n from '@/i18n';
 import { Button } from '@/components/ui/Button';
-import type {
-  RoutingProfile,
-  RoutingProfilesState,
+import {
+  providersFromClaudeFallback,
+  type RoutingProfile,
+  type RoutingProfilesState,
 } from '@/features/personal-quota-support/services/api/routingProfiles';
 import type { AuthFileItem } from '@/features/personal-quota-support/types';
 import { useNotificationStore } from '@/stores';
@@ -48,19 +49,21 @@ const shared = (): RoutingProfile => ({
   sessionAffinity: true,
   preferredAccounts: { claude: 'claude-a' },
   selection: { primary: 'reserves', tiebreak: 'round-robin' },
-  claudeFallback: { enabled: false, mode: 'auto', mappings: [] },
+  providers: providersFromClaudeFallback({ enabled: false, mode: 'auto', mappings: [] }),
 });
 
 const betaProfile = (): RoutingProfile => ({
   sessionAffinity: false,
   preferredAccounts: {},
   selection: { primary: 'priority', tiebreak: 'fill-first' },
-  claudeFallback: { enabled: false, mode: 'auto', mappings: [] },
+  providers: providersFromClaudeFallback({ enabled: false, mode: 'auto', mappings: [] }),
 });
 
 const profilesState = (overrides: Partial<RoutingProfilesState> = {}): RoutingProfilesState => ({
   supported: true,
   unsupportedBackend: false,
+  providersSupported: true,
+  apiCredentials: { claude: [], codex: [] },
   shared: shared(),
   keys: [{ key: RAW_BETA, profile: betaProfile() }],
   selectionOptions: {

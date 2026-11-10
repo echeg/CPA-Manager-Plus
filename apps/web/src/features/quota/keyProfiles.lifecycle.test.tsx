@@ -10,6 +10,8 @@ import {
   type ClaudeFallbackState,
 } from '@/features/personal-quota-support/services/api/claudeFallback';
 import {
+  claudeFallbackOf,
+  providersFromClaudeFallback,
   unsupportedRoutingProfiles,
   type RoutingProfile,
   type RoutingProfilesState,
@@ -71,27 +73,29 @@ const shared = (): RoutingProfile => ({
   sessionAffinity: true,
   preferredAccounts: { claude: 'claude-a' },
   selection: { primary: 'reserves', tiebreak: 'round-robin' },
-  claudeFallback: {
+  providers: providersFromClaudeFallback({
     enabled: true,
     mode: 'auto',
     mappings: [{ from: 'claude-opus-*', to: 'gpt-6-astra' }],
-  },
+  }),
 });
 
 const betaProfile = (): RoutingProfile => ({
   sessionAffinity: true,
   preferredAccounts: { codex: 'codex-a' },
   selection: { primary: 'priority', tiebreak: 'fill-first' },
-  claudeFallback: {
+  providers: providersFromClaudeFallback({
     enabled: false,
     mode: 'always',
     mappings: [{ from: 'claude-sonnet-*', to: 'gpt-6-sol' }],
-  },
+  }),
 });
 
 const profilesState = (overrides: Partial<RoutingProfilesState> = {}): RoutingProfilesState => ({
   supported: true,
   unsupportedBackend: false,
+  providersSupported: true,
+  apiCredentials: { claude: [], codex: [] },
   shared: shared(),
   keys: [{ key: RAW_BETA, profile: betaProfile() }],
   selectionOptions: {
@@ -103,7 +107,7 @@ const profilesState = (overrides: Partial<RoutingProfilesState> = {}): RoutingPr
 
 const fallbackState = (): ClaudeFallbackState => ({
   supported: true,
-  settings: shared().claudeFallback,
+  settings: claudeFallbackOf(shared()),
   models: { claude: ['claude-opus-5'], codex: ['gpt-6-astra', 'gpt-6-sol'] },
 });
 

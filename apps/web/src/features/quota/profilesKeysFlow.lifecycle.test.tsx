@@ -7,6 +7,7 @@ import { claudeFallbackApi } from '@/features/personal-quota-support/services/ap
 import { apiClient } from '@/features/personal-quota-support/services/api/client';
 import { clientKeysApi } from '@/features/personal-quota-support/services/api/clientKeys';
 import {
+  providersFromClaudeFallback,
   routingProfilesApi,
   type RoutingProfile,
   type RoutingProfilesState,
@@ -49,12 +50,14 @@ const profile = (primary: string): RoutingProfile => ({
   sessionAffinity: false,
   preferredAccounts: {},
   selection: { primary },
-  claudeFallback: { enabled: false, mode: 'auto', mappings: [] },
+  providers: providersFromClaudeFallback({ enabled: false, mode: 'auto', mappings: [] }),
 });
 
 const profilesState = (bProfile: RoutingProfile): RoutingProfilesState => ({
   supported: true,
   unsupportedBackend: false,
+  providersSupported: true,
+  apiCredentials: { claude: [], codex: [] },
   shared: { ...profile('reserves'), selection: { primary: 'reserves', tiebreak: 'round-robin' } },
   keys: [{ key: KEY_B, profile: bProfile }],
   selectionOptions: {
