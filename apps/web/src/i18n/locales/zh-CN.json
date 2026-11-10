@@ -5702,9 +5702,11 @@
         "sticky_on": "会话粘性",
         "sticky_off": "无会话粘性",
         "account": "{{provider}}：{{account}}",
-        "fallback_off": "回退已关闭",
-        "fallback_auto": "回退：自动",
-        "fallback_always": "回退：始终使用 Codex"
+        "to_codex": "{{provider}}：{{account}} → Codex",
+        "codex_forced": "{{provider}}：强制使用 Codex",
+        "to_api_key": "{{provider}}：{{account}} → API 密钥",
+        "api_key": "{{provider}}：API 密钥 {{key}}",
+        "api_key_unset": "{{provider}}：未选择 API 密钥"
       },
       "errors": {
         "unknown_key": "此密钥已在配置页面中删除，密钥列表已重新加载。"
@@ -5738,6 +5740,13 @@
       },
       "profiles_button": "配置档",
       "profiles_button_hint": "路由配置档：含会话 TTL 的默认配置，以及使用独立配置的密钥。"
+    },
+    "provider_routing": {
+      "key_disabled": "已禁用",
+      "key_unknown": "未找到",
+      "errors": {
+        "key_required": "请选择一个 API 密钥。"
+      }
     },
     "client_keys": {
       "title": "客户端密钥",

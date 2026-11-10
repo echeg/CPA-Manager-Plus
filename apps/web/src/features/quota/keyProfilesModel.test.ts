@@ -351,9 +351,40 @@ describe('preferredAccountOptions', () => {
 });
 
 describe('chainSummary', () => {
-  test('lists the four stages with emails shown', () => {
+  const apiKeys = {
+    apiCredentials: {
+      claude: [{ authIndex: 'claude-key-1', label: 'claude-apikey', baseUrl: '', disabled: false }],
+      codex: [{ authIndex: 'codex-key-1', label: 'codex-apikey', baseUrl: '', disabled: false }],
+    },
+    providerConfigs: {
+      claude: [],
+      codex: [{ authIndex: 'codex-key-1', name: 'codex-1', masked: 'sk******yz', baseUrl: '' }],
+    },
+  };
+  const codexRouting = (patch: Partial<ProviderRouting> = {}): ProviderRouting => ({
+    mode: 'subscription',
+    apiCredential: '',
+    fallback: { target: 'off', mode: 'auto', mappings: [] },
+    ...patch,
+  });
+
+  test('lists sticky session, both providers and pool selection with emails shown', () => {
     expect(chainSummary(profile(), files, true, t)).toBe(
-      'Sticky session · Claude: claude-bob@example.com.json · Codex: Automatic · reserves → round-robin · Fallback: automatic'
+      'Sticky session · Claude: claude-bob@example.com.json → Codex · Codex: Automatic · reserves → round-robin'
+    );
+  });
+
+  test('matches the documented example', () => {
+    const value = withProvider(
+      'codex',
+      codexRouting({ mode: 'api', apiCredential: 'codex-key-1' }),
+      profile({
+        preferredAccounts: {},
+        selection: { primary: 'reserves', tiebreak: 'earliest-reset' },
+      })
+    );
+    expect(chainSummary(value, files, true, t, apiKeys)).toBe(
+      'Sticky session · Claude: Automatic → Codex · Codex: API key codex-1 · sk******yz · reserves → earliest-reset'
     );
   });
 
@@ -362,6 +393,21 @@ describe('chainSummary', () => {
     expect(summary).not.toContain('bob@example.com');
     expect(summary).toContain('Claude: ');
     expect(summary).not.toContain('Claude: Automatic');
+    const toApiKey = chainSummary(
+      withProvider(
+        'claude',
+        claudeRouting({
+          fallback: { ...claudeRouting().fallback, target: 'api' },
+          apiCredential: 'claude-key-1',
+        })
+      ),
+      files,
+      false,
+      t,
+      apiKeys
+    );
+    expect(toApiKey).not.toContain('bob@example.com');
+    expect(toApiKey).toMatch(/Claude: .+ → API key ·/);
   });
 
   test('shows a missing and a disabled account', () => {
@@ -371,26 +417,84 @@ describe('chainSummary', () => {
       true,
       t
     );
-    expect(summary).toContain('Claude: Subscription unavailable or removed');
+    expect(summary).toContain('Claude: Subscription unavailable or removed → Codex');
     expect(summary).toContain('Codex: codex-alice@example.com.json · disabled');
   });
 
-  test('covers every fallback state and a primary without a tiebreak', () => {
+  test('fallback off shows the preferred account only, and a primary without a tiebreak', () => {
     const off = profile({
       sessionAffinity: false,
       selection: { primary: 'fill-first' },
       providers: providersFromClaudeFallback({ enabled: false, mode: 'auto', mappings: [] }),
     });
     expect(chainSummary(off, files, true, t)).toBe(
-      'No sticky session · Claude: claude-bob@example.com.json · Codex: Automatic · fill-first · Fallback off'
+      'No sticky session · Claude: claude-bob@example.com.json · Codex: Automatic · fill-first'
     );
-    const always = profile({
-      providers: providersFromClaudeFallback({
-        enabled: true,
-        mode: 'always',
-        mappings: [{ from: 'claude-opus-*', to: 'gpt-6-astra' }],
+  });
+
+  test('a forced Codex fallback skips the preferred account', () => {
+    const always = withProvider(
+      'claude',
+      claudeRouting({ fallback: { ...claudeRouting().fallback, mode: 'always' } })
+    );
+    expect(chainSummary(always, files, true, t)).toBe(
+      'Sticky session · Claude: Codex (forced) · Codex: Automatic · reserves → round-robin'
+    );
+  });
+
+  test('an API-key fallback for each provider', () => {
+    const value = withProvider(
+      'codex',
+      codexRouting({
+        apiCredential: 'codex-key-1',
+        fallback: { target: 'api', mode: 'auto', mappings: [] },
       }),
-    });
-    expect(chainSummary(always, files, true, t)).toMatch(/Fallback: always Codex$/);
+      withProvider(
+        'claude',
+        claudeRouting({
+          apiCredential: 'claude-key-1',
+          fallback: { ...claudeRouting().fallback, target: 'api' },
+        })
+      )
+    );
+    expect(chainSummary(value, files, true, t, apiKeys)).toBe(
+      'Sticky session · Claude: claude-bob@example.com.json → API key · Codex: Automatic → API key · reserves → round-robin'
+    );
+  });
+
+  test('API key mode names the key, ignores the fallback and the preferred account', () => {
+    const value = withProvider(
+      'claude',
+      claudeRouting({ mode: 'api', apiCredential: 'claude-key-1' }),
+      withProvider('codex', codexRouting({ mode: 'api', apiCredential: 'codex-key-1' }))
+    );
+    expect(chainSummary(value, files, true, t, apiKeys)).toBe(
+      'Sticky session · Claude: API key claude-apikey · claude-k · Codex: API key codex-1 · sk******yz · reserves → round-robin'
+    );
+  });
+
+  test('API key mode without label sources, with an unknown key, and with no key', () => {
+    const known = withProvider(
+      'codex',
+      codexRouting({ mode: 'api', apiCredential: 'codex-key-1' })
+    );
+    expect(chainSummary(known, files, true, t)).toContain('Codex: API key codex-ke ·');
+    const unknown = withProvider(
+      'codex',
+      codexRouting({ mode: 'api', apiCredential: 'removed-index-42' })
+    );
+    expect(chainSummary(unknown, files, true, t, apiKeys)).toContain('Codex: API key removed- ·');
+    const unset = withProvider('codex', codexRouting({ mode: 'api' }));
+    expect(chainSummary(unset, files, true, t, apiKeys)).toContain(
+      'Codex: API key not chosen · reserves'
+    );
+  });
+
+  test('a stored Codex target on Codex reads as fallback off', () => {
+    const value = withProvider(
+      'codex',
+      codexRouting({ fallback: { target: 'codex', mode: 'auto', mappings: [] } })
+    );
+    expect(chainSummary(value, files, true, t)).toContain('Codex: Automatic · reserves');
   });
 });

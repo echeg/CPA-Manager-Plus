@@ -1,8 +1,8 @@
 import type { TFunction } from 'i18next';
 import { normalizeFallbackSettings } from '@/features/personal-quota-support/services/api/claudeFallback';
 import {
-  claudeFallbackOf,
   effectiveFallbackTarget,
+  type ApiCredentials,
   type ApiProvider,
   type KeyProfileRow,
   type ProviderRouting,
@@ -16,6 +16,7 @@ import type { ApiKeyAlias } from '@/services/api/usageService';
 import { sha256Hex } from '@/utils/apiKeyHash';
 import { maskApiKey } from '@/utils/format';
 import { maskQuotaName } from './ledgerModel';
+import { chosenApiKeyLabel, type ApiKeyConfigSummaries } from './providerRoutingModel';
 import { preferredAccountOptions, withPickerRule } from './routingModel';
 
 /**
@@ -145,49 +146,78 @@ export function buildKeyRows(rows: KeyProfileRow[], aliases: ApiKeyAlias[] = [])
 
 const PROVIDER_LABELS = { claude: 'Claude', codex: 'Codex' } as const;
 
+/** What a summary needs to name a chosen API key; without it the key shows by index. */
+export interface ApiKeyLabelSource {
+  apiCredentials: ApiCredentials;
+  providerConfigs: ApiKeyConfigSummaries;
+}
+
+// A literal, not `emptyApiKeyConfigs()`: this module sits in an import cycle with
+// routingProfiles.ts and providerRoutingModel.ts, so nothing runs at load time.
+const noApiKeyLabels: ApiKeyLabelSource = {
+  apiCredentials: { claude: [], codex: [] },
+  providerConfigs: { claude: [], codex: [] },
+};
+
+const SUMMARY = 'quota_management.key_profiles.summary';
+
+/** One provider's leg of the chain: preferred account and fallback, or its API key. */
+function providerSummary(
+  provider: ApiProvider,
+  profile: RoutingProfile,
+  account: string,
+  apiKeys: ApiKeyLabelSource,
+  t: TFunction
+): string {
+  const routing = profile.providers[provider];
+  const name = PROVIDER_LABELS[provider];
+  if (routing.mode === 'api') {
+    const key = chosenApiKeyLabel(
+      provider,
+      routing.apiCredential,
+      apiKeys.apiCredentials,
+      apiKeys.providerConfigs
+    );
+    return key
+      ? t(`${SUMMARY}.api_key`, { provider: name, key })
+      : t(`${SUMMARY}.api_key_unset`, { provider: name });
+  }
+  switch (effectiveFallbackTarget(provider, routing)) {
+    case 'codex':
+      return routing.fallback.mode === 'always'
+        ? t(`${SUMMARY}.codex_forced`, { provider: name })
+        : t(`${SUMMARY}.to_codex`, { provider: name, account });
+    case 'api':
+      return t(`${SUMMARY}.to_api_key`, { provider: name, account });
+    default:
+      return t(`${SUMMARY}.account`, { provider: name, account });
+  }
+}
+
 /**
- * One-line chain of the four routing stages: sticky session, preferred accounts,
- * pool selection, and the Claude -> Codex fallback.
+ * One-line chain of a profile: sticky session, one leg per provider (preferred
+ * account, then Codex or its API key; or its API key alone in API key mode), and
+ * pool selection. Account names are masked unless emails are shown.
  */
 export function chainSummary(
   profile: RoutingProfile,
   files: AuthFileItem[],
   showEmails: boolean,
-  t: TFunction
+  t: TFunction,
+  apiKeys: ApiKeyLabelSource = noApiKeyLabels
 ): string {
   const displayName = (file: AuthFileItem) => {
     const name = getQuotaDisplayName(file);
     return showEmails ? name : maskQuotaName(name);
   };
-  const parts = [
-    t(
-      profile.sessionAffinity
-        ? 'quota_management.key_profiles.summary.sticky_on'
-        : 'quota_management.key_profiles.summary.sticky_off'
-    ),
-  ];
+  const parts = [t(profile.sessionAffinity ? `${SUMMARY}.sticky_on` : `${SUMMARY}.sticky_off`)];
   for (const provider of ['claude', 'codex'] as const) {
     const selected = profile.preferredAccounts[provider]?.trim() ?? '';
     const options = preferredAccountOptions(provider, files, selected, displayName, t);
     const account = options.find((option) => option.value === selected)?.label ?? '';
-    parts.push(
-      t('quota_management.key_profiles.summary.account', {
-        provider: PROVIDER_LABELS[provider],
-        account,
-      })
-    );
+    parts.push(providerSummary(provider, profile, account, apiKeys, t));
   }
   const { primary, tiebreak } = profile.selection;
   parts.push(tiebreak ? `${primary} → ${tiebreak}` : primary);
-  const fallback = claudeFallbackOf(profile);
-  parts.push(
-    t(
-      !fallback.enabled
-        ? 'quota_management.key_profiles.summary.fallback_off'
-        : fallback.mode === 'always'
-          ? 'quota_management.key_profiles.summary.fallback_always'
-          : 'quota_management.key_profiles.summary.fallback_auto'
-    )
-  );
   return parts.join(' · ');
 }

@@ -5706,9 +5706,11 @@
         "sticky_on": "Привязка к сессии",
         "sticky_off": "Без привязки к сессии",
         "account": "{{provider}}: {{account}}",
-        "fallback_off": "Fallback выкл.",
-        "fallback_auto": "Fallback: автоматически",
-        "fallback_always": "Fallback: всегда Codex"
+        "to_codex": "{{provider}}: {{account}} → Codex",
+        "codex_forced": "{{provider}}: сразу Codex",
+        "to_api_key": "{{provider}}: {{account}} → API-ключ",
+        "api_key": "{{provider}}: API-ключ {{key}}",
+        "api_key_unset": "{{provider}}: API-ключ не выбран"
       },
       "errors": {
         "unknown_key": "Этот ключ удалён на странице конфигурации. Список ключей обновлён."
@@ -5742,6 +5744,13 @@
       },
       "profiles_button": "Профили",
       "profiles_button_hint": "Профили маршрутизации: профиль по умолчанию с TTL сессий и ключи со своим профилем."
+    },
+    "provider_routing": {
+      "key_disabled": "отключён",
+      "key_unknown": "не найден",
+      "errors": {
+        "key_required": "Выберите API-ключ."
+      }
     },
     "client_keys": {
       "title": "Клиентские ключи",

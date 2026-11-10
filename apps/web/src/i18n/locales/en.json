@@ -5707,9 +5707,11 @@
         "sticky_on": "Sticky session",
         "sticky_off": "No sticky session",
         "account": "{{provider}}: {{account}}",
-        "fallback_off": "Fallback off",
-        "fallback_auto": "Fallback: automatic",
-        "fallback_always": "Fallback: always Codex"
+        "to_codex": "{{provider}}: {{account}} → Codex",
+        "codex_forced": "{{provider}}: Codex (forced)",
+        "to_api_key": "{{provider}}: {{account}} → API key",
+        "api_key": "{{provider}}: API key {{key}}",
+        "api_key_unset": "{{provider}}: API key not chosen"
       },
       "errors": {
         "unknown_key": "This key was removed on the Config page. The key list was reloaded."
@@ -5743,6 +5745,13 @@
       },
       "profiles_button": "Profiles",
       "profiles_button_hint": "Routing profiles: the default profile with the session TTL, and keys with their own profile."
+    },
+    "provider_routing": {
+      "key_disabled": "disabled",
+      "key_unknown": "unknown",
+      "errors": {
+        "key_required": "Choose an API key."
+      }
     },
     "client_keys": {
       "title": "Client keys",

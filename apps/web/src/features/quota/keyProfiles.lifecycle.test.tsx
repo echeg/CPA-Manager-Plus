@@ -130,6 +130,7 @@ function makeKeyProfiles(
   return {
     state,
     rows,
+    apiKeyConfigs: { claude: [], codex: [] },
     total: rows.length,
     ttl: '1h',
     aliasesEditable: true,

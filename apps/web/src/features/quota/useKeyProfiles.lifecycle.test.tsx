@@ -24,6 +24,7 @@ import {
 } from '@/features/personal-quota-support/services/api/routingProfiles';
 import { useConfigStore } from '@/features/personal-quota-support/stores/useConfigStore';
 import type { Config } from '@/features/personal-quota-support/types';
+import { providersApi } from '@/services/api/providers';
 import type { ApiKeyAlias } from '@/services/api/usageService';
 import { sha256Hex } from '@/utils/apiKeyHash';
 import { useKeyProfiles, type KeyProfilesState } from './hooks/useKeyProfiles';
@@ -155,6 +156,8 @@ beforeEach(() => {
   vi.spyOn(routingProfilesApi, 'get').mockResolvedValue(
     profilesState([{ key: KEY_B, profile: ownProfile() }])
   );
+  vi.spyOn(providersApi, 'getClaudeConfigs').mockResolvedValue([]);
+  vi.spyOn(providersApi, 'getCodexConfigs').mockResolvedValue([]);
 });
 afterEach(async () => {
   await act(async () => renderer?.unmount());
@@ -183,9 +186,66 @@ describe('useKeyProfiles', () => {
     expect(useConfigStore.getState().fetchConfig).toHaveBeenCalledExactlyOnceWith(false);
   });
 
+  test('loads the provider API-key entries for labels without their raw keys', async () => {
+    const rawClaude = 'sk-ant-api03-RAWCLAUDE-0123456789';
+    vi.mocked(providersApi.getClaudeConfigs).mockResolvedValue([
+      { apiKey: rawClaude, prefix: 'team-a', authIndex: 'claude-idx-1' },
+    ]);
+    vi.mocked(providersApi.getCodexConfigs).mockResolvedValue([
+      { apiKey: 'sk-proj-RAWCODEX-99', authIndex: 'codex-idx-1', baseUrl: 'https://r.example' },
+    ]);
+    await mount();
+    expect(hook.apiKeyConfigs).toEqual({
+      claude: [{ authIndex: 'claude-idx-1', name: 'team-a', masked: 'sk******89', baseUrl: '' }],
+      codex: [
+        { authIndex: 'codex-idx-1', name: '', masked: 'sk******99', baseUrl: 'https://r.example' },
+      ],
+    });
+    expect(JSON.stringify(hook.apiKeyConfigs)).not.toContain('RAW');
+  });
+
+  test('a failed API-key list leaves that provider empty and never blocks the profiles', async () => {
+    vi.mocked(providersApi.getClaudeConfigs).mockRejectedValue(new Error('forbidden'));
+    vi.mocked(providersApi.getCodexConfigs).mockResolvedValue([
+      { apiKey: 'sk-proj-key-0011', authIndex: 'codex-idx-1' },
+    ]);
+    await mount();
+    expect(hook.error).toBe('');
+    expect(hook.state?.supported).toBe(true);
+    expect(hook.apiKeyConfigs.claude).toEqual([]);
+    expect(hook.apiKeyConfigs.codex).toHaveLength(1);
+  });
+
+  test('a pending API-key list does not hold back the profiles', async () => {
+    const pending = deferred<never[]>();
+    vi.mocked(providersApi.getClaudeConfigs).mockReturnValue(pending.promise);
+    await mount();
+    expect(hook.loading).toBe(false);
+    expect(hook.state).not.toBeNull();
+    expect(hook.apiKeyConfigs).toEqual({ claude: [], codex: [] });
+    await act(async () => pending.resolve([]));
+  });
+
+  test('a connection change drops the API-key entries and a stale list', async () => {
+    vi.mocked(providersApi.getCodexConfigs).mockResolvedValue([
+      { apiKey: 'sk-proj-key-0011', authIndex: 'codex-idx-1' },
+    ]);
+    await mount();
+    expect(hook.apiKeyConfigs.codex).toHaveLength(1);
+    const stale = deferred<{ apiKey: string; authIndex: string }[]>();
+    vi.mocked(providersApi.getCodexConfigs).mockReturnValue(stale.promise);
+    revision += 1;
+    await act(async () => hook.reload());
+    expect(hook.apiKeyConfigs).toEqual({ claude: [], codex: [] });
+    revision += 1;
+    await act(async () => stale.resolve([{ apiKey: 'sk-proj-old-0022', authIndex: 'old' }]));
+    expect(hook.apiKeyConfigs.codex).toEqual([]);
+  });
+
   test('does not load while disabled', async () => {
     await mount(true);
     expect(routingProfilesApi.get).not.toHaveBeenCalled();
+    expect(providersApi.getClaudeConfigs).not.toHaveBeenCalled();
     expect(hook.state).toBeNull();
     expect(hook.rows).toEqual([]);
   });

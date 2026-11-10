@@ -5702,9 +5702,11 @@
         "sticky_on": "會話黏性",
         "sticky_off": "無會話黏性",
         "account": "{{provider}}：{{account}}",
-        "fallback_off": "備援已關閉",
-        "fallback_auto": "備援：自動",
-        "fallback_always": "備援：一律使用 Codex"
+        "to_codex": "{{provider}}：{{account}} → Codex",
+        "codex_forced": "{{provider}}：強制使用 Codex",
+        "to_api_key": "{{provider}}：{{account}} → API 金鑰",
+        "api_key": "{{provider}}：API 金鑰 {{key}}",
+        "api_key_unset": "{{provider}}：尚未選擇 API 金鑰"
       },
       "errors": {
         "unknown_key": "此金鑰已在設定頁面中刪除，金鑰清單已重新載入。"
@@ -5738,6 +5740,13 @@
       },
       "profiles_button": "設定檔",
       "profiles_button_hint": "路由設定檔：含工作階段 TTL 的預設設定，以及使用獨立設定的金鑰。"
+    },
+    "provider_routing": {
+      "key_disabled": "已停用",
+      "key_unknown": "找不到",
+      "errors": {
+        "key_required": "請選擇一個 API 金鑰。"
+      }
     },
     "client_keys": {
       "title": "用戶端金鑰",

@@ -144,13 +144,16 @@
 - ➕ `KeyProfileEditor` got an interim adapter (legacy toggle editor bound to `providers.claude.fallback`) so the build stays green until Task 4 replaces the layout
 
 ### Task 2: Provider routing model: validation, API-key options, summary
-- [ ] check which fields `ProviderKeyConfig` from `providersApi.getClaudeConfigs()` / `getCodexConfigs()` exposes for a v8 key group (name, masked or raw key, base URL, `authIndex`) and record the answer in Technical Details
-- [ ] create `apps/web/src/features/quota/providerRoutingModel.ts` with: `providerRoutingErrors(profile, providersSupported)` (missing key for API mode or API fallback, invalid Codex mappings), `apiCredentialOptions(provider, apiCredentials, providerConfigs, selected, t)` returning select options with labels per Decisions (matched, unmatched, `disabled`, `unknown` for a selected index not in the list), and `fallbackTargets(provider)` (`claude`: off/codex/api; `codex`: off/api)
-- [ ] load provider key configs for labels in `useKeyProfiles.ts` (or a small hook next to it) together with the profiles; a failed configs request leaves labels in the unmatched form and never blocks the editor; never keep a raw upstream key in rendered output (mask with the existing `maskApiKey`)
-- [ ] rewrite `chainSummary` in `keyProfilesModel.ts` to the per-provider format in Decisions
-- [ ] write tests for `providerRoutingErrors` (each rule, valid cases, old backend)
-- [ ] write tests for `apiCredentialOptions` (match, no match, custom host, disabled, unknown selected, empty list, no raw key in any label) and for `chainSummary` (every combination listed in Decisions, masked account names when emails are hidden)
-- [ ] run `npm test` in `apps/web` - must pass before task 3
+- [x] check which fields `ProviderKeyConfig` from `providersApi.getClaudeConfigs()` / `getCodexConfigs()` exposes for a v8 key group (name, masked or raw key, base URL, `authIndex`) and record the answer in Technical Details
+- [x] create `apps/web/src/features/quota/providerRoutingModel.ts` with: `providerRoutingErrors(profile, providersSupported)` (missing key for API mode or API fallback, invalid Codex mappings), `apiCredentialOptions(provider, apiCredentials, providerConfigs, selected, t)` returning select options with labels per Decisions (matched, unmatched, `disabled`, `unknown` for a selected index not in the list), and `fallbackTargets(provider)` (`claude`: off/codex/api; `codex`: off/api)
+- [x] load provider key configs for labels in `useKeyProfiles.ts` (or a small hook next to it) together with the profiles; a failed configs request leaves labels in the unmatched form and never blocks the editor; never keep a raw upstream key in rendered output (mask with the existing `maskApiKey`)
+- [x] rewrite `chainSummary` in `keyProfilesModel.ts` to the per-provider format in Decisions
+- [x] write tests for `providerRoutingErrors` (each rule, valid cases, old backend)
+- [x] write tests for `apiCredentialOptions` (match, no match, custom host, disabled, unknown selected, empty list, no raw key in any label) and for `chainSummary` (every combination listed in Decisions, masked account names when emails are hidden)
+- [x] run `npm test` in `apps/web` - must pass before task 3
+- ➕ `chainSummary` takes an optional fifth argument `ApiKeyLabelSource` (`apiCredentials` + `providerConfigs`) to name an API key; without it the key shows by its first 8 index characters. Task 4 passes it from `useKeyProfiles().apiKeyConfigs` and `state.apiCredentials` in `RoutingProfilesModal`, `ClientKeysModal` and `KeyProfileEditor`
+- ➕ `useKeyProfiles` keeps `ApiKeyConfigSummary` (index, prefix, mask, base URL) instead of `ProviderKeyConfig`, so a raw upstream key never reaches React state; exposed as `apiKeyConfigs`
+- ➕ `providerRoutingErrors` returns i18n keys per field (`apiCredential`, `mappings`); the mappings error reuses `quota_management.fallback.invalid`. Keys added now: `quota_management.provider_routing.{key_disabled,key_unknown,errors.key_required}` and the new `quota_management.key_profiles.summary.*` fragments (`to_codex`, `codex_forced`, `to_api_key`, `api_key`, `api_key_unset`); the unused `summary.fallback_*` keys were removed
 
 ### Task 3: Provider block component
 - [ ] check `apps/web/src/components/ui/` for an existing segmented control or radio group and reuse it; only if none exists, add a small accessible `SegmentedControl` (radiogroup semantics, keyboard arrows, `disabled` per option with a `title` hint)
@@ -206,7 +209,7 @@
   ```
 - **PATCH body, old backend**: today's body; `claude-fallback.enabled = (providers.claude.fallback.target === 'codex')`.
 - **Read-back comparison**: compare `normalizeProfile` of the stored and the sent profile; ignore Codex fallback mode and mappings.
-- **`ProviderKeyConfig` fields available for labels**: to be filled in by Task 2.
+- **`ProviderKeyConfig` fields available for labels** (checked in Task 2): `providersApi.getClaudeConfigs()` / `getCodexConfigs()` call the v0 routes `/claude-api-key` and `/codex-api-key` (the v8 management group has no such routes) and return `apiKey` (raw), `prefix`, `baseUrl`, `authIndex` (from `auth-index`, injected by the backend from the live auth manager), plus priority, models and other settings. There is no name field; `prefix` is the only name and the AI Providers table also sorts by it. The backend `api_credentials[].label` is generic (`claude-apikey`, `codex-apikey`). So the label name is `prefix`, else the backend label; the key part is `maskApiKey(apiKey)`; the host comes from the entry's `baseUrl`, else the credential's `base_url`. Entries without `auth-index` cannot be matched and are dropped.
 
 ## Post-Completion
 *Items requiring manual intervention or external systems - no checkboxes, informational only*

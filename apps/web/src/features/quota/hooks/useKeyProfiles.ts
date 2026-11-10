@@ -26,7 +26,13 @@ import {
 } from '@/features/personal-quota-support/services/api/routingProfiles';
 import { useConfigStore } from '@/features/personal-quota-support/stores';
 import { useApiKeyAliases } from '@/hooks/useApiKeyAliases';
+import { providersApi } from '@/services/api/providers';
 import { buildKeyRows } from '../keyProfilesModel';
+import {
+  emptyApiKeyConfigs,
+  summarizeKeyConfigs,
+  type ApiKeyConfigSummaries,
+} from '../providerRoutingModel';
 import { errorText } from '../routingModel';
 
 const DEFAULT_TTL = '1h';
@@ -51,8 +57,20 @@ function clientKeyErrorText(err: unknown, t: TFunction): string {
 }
 
 /**
+ * The Claude and Codex API-key entries, reduced to what labels need. A failed list
+ * is empty, so its labels fall back to the backend label and index.
+ */
+async function loadApiKeyConfigs(): Promise<ApiKeyConfigSummaries> {
+  const [claude, codex] = await Promise.all([
+    providersApi.getClaudeConfigs().then(summarizeKeyConfigs, () => []),
+    providersApi.getCodexConfigs().then(summarizeKeyConfigs, () => []),
+  ]);
+  return { claude, codex };
+}
+
+/**
  * Loads the per-key routing profiles, the client key list and the global sticky
- * TTL of the loaded config. Saves one key profile or the shared profile at a time,
+ * TTL of the loaded config, and the provider API-key entries for API-key labels. Saves one key profile or the shared profile at a time,
  * and adds or removes client keys. Results that arrive after the quota connection
  * changed, or after unmount, are dropped.
  */
@@ -77,6 +95,7 @@ export function useKeyProfiles(disabled: boolean) {
   const [state, setState] = useState<RoutingProfilesState | null>(null);
   const [apiKeys, setApiKeys] = useState<string[]>([]);
   const [ttl, setTtl] = useState(DEFAULT_TTL);
+  const [apiKeyConfigs, setApiKeyConfigs] = useState<ApiKeyConfigSummaries>(emptyApiKeyConfigs);
   const [loadError, setLoadError] = useState('');
   // A save error survives the reload it triggers; a user reload or the next save clears it.
   const [saveError, setSaveError] = useState('');
@@ -100,6 +119,7 @@ export function useKeyProfiles(disabled: boolean) {
     setState(null);
     setApiKeys([]);
     setTtl(DEFAULT_TTL);
+    setApiKeyConfigs(emptyApiKeyConfigs());
   }, [revision]);
 
   useEffect(() => {
@@ -123,6 +143,11 @@ export function useKeyProfiles(disabled: boolean) {
       .finally(() => {
         if (active) setLoading(false);
       });
+    // Labels only: loaded beside the profiles so a slow or failed list never holds
+    // the editor back.
+    void loadApiKeyConfigs().then((configs) => {
+      if (isCurrent()) setApiKeyConfigs(configs);
+    });
     return () => {
       active = false;
     };
@@ -293,6 +318,7 @@ export function useKeyProfiles(disabled: boolean) {
   return {
     state,
     rows,
+    apiKeyConfigs,
     total: rows.length,
     ttl,
     aliasesEditable,
