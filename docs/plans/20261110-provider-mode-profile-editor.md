@@ -191,9 +191,10 @@
 - ➕ lint: 0 errors, only the 7 known warnings from `docs/backlog/web-lint-warnings.md`
 
 ### Task 7: Update documentation
-- [ ] update the panel's user-facing docs or README section that describes Routing profiles (if one exists) with the provider blocks and the API-key options
-- [ ] update `apps/web/src/features/guide/diagrams/README.md` to list the third diagram
-- [ ] update `apps/docs/en/manual/guide.md` and `apps/docs/manual/guide.md`: list the third diagram and replace the "Claude → Codex fallback" wording with the per-provider fallback (Codex subscription or API key)
+- [x] update the panel's user-facing docs or README section that describes Routing profiles (if one exists) with the provider blocks and the API-key options (none exists: no page in `apps/docs` or `README.md` covers Quota Management or Routing profiles; the Guide pages below carry the per-provider mode and fallback)
+- [x] update `apps/web/src/features/guide/diagrams/README.md` to list the third diagram
+- [x] update `apps/docs/en/manual/guide.md` and `apps/docs/manual/guide.md`: list the third diagram and replace the "Claude → Codex fallback" wording with the per-provider fallback (Codex subscription or API key)
+- ➕ the repo suite's `tests/installerScript.test.mjs` timed out at random at the 5s default (each case runs the real installer); its `describe` now has a 30s timeout
 
 ## Technical Details
 - **Capability flag**: `providersSupported = isRecord(raw.shared.providers)`.

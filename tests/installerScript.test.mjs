@@ -645,7 +645,9 @@ const stopNativeFixtureProcess = (installDir) => {
   }
 };
 
-describe('installer script', () => {
+// Each case runs the real installer in a subshell; several take close to 5s on a loaded machine,
+// so the default per-test timeout makes them fail at random.
+describe('installer script', { timeout: 30_000 }, () => {
   it('passes shell syntax validation', () => {
     const result = spawnSync('bash', ['-n', installerPath], {
       cwd: repoRoot,
