@@ -1,12 +1,12 @@
 import type { TFunction } from 'i18next';
 import { validFallbackSettings } from '@/features/personal-quota-support/services/api/claudeFallback';
 import {
-  claudeFallbackOf,
   effectiveFallbackTarget,
   type ApiCredential,
   type ApiCredentials,
   type ApiProvider,
   type FallbackTarget,
+  type ProviderRouting,
   type RoutingProfile,
 } from '@/features/personal-quota-support/services/api/routingProfiles';
 import type { ProviderKeyConfig } from '@/types';
@@ -151,24 +151,40 @@ export type ProviderRoutingErrors = Record<ApiProvider, ProviderFieldErrors>;
 const ERRORS = 'quota_management.provider_routing.errors';
 
 /**
- * Save-blocking errors of both provider blocks. On an older backend API key mode
- * and the API-key fallback cannot be written, so only the mappings are checked.
+ * Save-blocking errors of one provider block. On an older backend API key mode and
+ * the API-key fallback cannot be written, so only the mappings are checked.
  */
+export function providerFieldErrors(
+  provider: ApiProvider,
+  routing: ProviderRouting,
+  providersSupported: boolean
+): ProviderFieldErrors {
+  const errors: ProviderFieldErrors = {};
+  const target = effectiveFallbackTarget(provider, routing);
+  const needsKey = routing.mode === 'api' || target === 'api';
+  if (providersSupported && needsKey && !routing.apiCredential.trim())
+    errors.apiCredential = `${ERRORS}.key_required`;
+  if (
+    target === 'codex' &&
+    !validFallbackSettings({
+      enabled: true,
+      mode: routing.fallback.mode,
+      mappings: routing.fallback.mappings,
+    })
+  )
+    errors.mappings = 'quota_management.fallback.invalid';
+  return errors;
+}
+
+/** Save-blocking errors of both provider blocks of a profile. */
 export function providerRoutingErrors(
   profile: RoutingProfile,
   providersSupported: boolean
 ): ProviderRoutingErrors {
-  const errors: ProviderRoutingErrors = { claude: {}, codex: {} };
-  for (const provider of API_PROVIDERS) {
-    const routing = profile.providers[provider];
-    const needsKey = routing.mode === 'api' || effectiveFallbackTarget(provider, routing) === 'api';
-    if (providersSupported && needsKey && !routing.apiCredential.trim())
-      errors[provider].apiCredential = `${ERRORS}.key_required`;
-  }
-  const claude = claudeFallbackOf(profile);
-  if (claude.enabled && !validFallbackSettings(claude))
-    errors.claude.mappings = 'quota_management.fallback.invalid';
-  return errors;
+  return {
+    claude: providerFieldErrors('claude', profile.providers.claude, providersSupported),
+    codex: providerFieldErrors('codex', profile.providers.codex, providersSupported),
+  };
 }
 
 export const hasProviderRoutingErrors = (errors: ProviderRoutingErrors): boolean =>

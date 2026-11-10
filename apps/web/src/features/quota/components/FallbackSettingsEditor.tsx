@@ -9,38 +9,35 @@ import {
 import { Select } from './Select';
 import styles from './QuotaSettingsToolbar.module.scss';
 
+/** The Claude -> Codex mode and model mappings, without the enable toggle. */
+export type FallbackModeMappingsValue = Pick<ClaudeFallbackSettings, 'mode' | 'mappings'>;
+
 /**
- * Controlled editor for one Claude -> Codex fallback block: the enabled toggle, the mode,
- * and the model mappings. Used by the shared fallback modal and by the per-key profile editor.
+ * Controlled editor for the fallback mode and the model-mapping table. The provider
+ * routing block shows it for the Codex target; `FallbackSettingsEditor` adds the toggle.
+ * While `enabled` (the default) the table must hold at least one valid mapping.
  */
-export function FallbackSettingsEditor({
+export function FallbackModeMappings({
   value,
+  enabled = true,
   models,
   disabled,
   onChange,
-  children,
 }: {
-  value: ClaudeFallbackSettings;
+  value: FallbackModeMappingsValue;
+  enabled?: boolean;
   models: { claude: string[]; codex: string[] };
   disabled: boolean;
-  onChange: (value: ClaudeFallbackSettings) => void;
-  /** Extra content rendered at the end of the editor, such as a save error. */
-  children?: ReactNode;
+  onChange: (value: FallbackModeMappingsValue) => void;
 }) {
   const { t } = useTranslation();
   const id = useId();
   const setMappings = (mappings: ClaudeFallbackSettings['mappings']) =>
-    onChange({ ...value, mappings });
+    onChange({ mode: value.mode, mappings });
   const updateRow = (index: number, patch: Partial<{ from: string; to: string }>) =>
     setMappings(value.mappings.map((item, i) => (i === index ? { ...item, ...patch } : item)));
   return (
-    <div className={styles.fallbackEditor}>
-      <ToggleSwitch
-        checked={value.enabled}
-        disabled={disabled}
-        onChange={(enabled) => onChange({ ...value, enabled })}
-        label={t('quota_management.fallback.title')}
-      />
+    <>
       <Select
         value={value.mode}
         disabled={disabled}
@@ -49,7 +46,9 @@ export function FallbackSettingsEditor({
           { value: 'auto', label: t('quota_management.fallback.auto') },
           { value: 'always', label: t('quota_management.fallback.always') },
         ]}
-        onChange={(mode) => onChange({ ...value, mode: mode as ClaudeFallbackSettings['mode'] })}
+        onChange={(mode) =>
+          onChange({ mode: mode as ClaudeFallbackSettings['mode'], mappings: value.mappings })
+        }
       />
       <p>{t(`quota_management.fallback.${value.mode}_hint`)}</p>
       <p>{t('quota_management.fallback.mapping_hint')}</p>
@@ -103,11 +102,50 @@ export function FallbackSettingsEditor({
       >
         {t('quota_management.fallback.add')}
       </Button>
-      {!validFallbackSettings(value) && (
+      {!validFallbackSettings({ enabled, mode: value.mode, mappings: value.mappings }) && (
         <p role="alert" className={styles.fieldError}>
           {t('quota_management.fallback.invalid')}
         </p>
       )}
+    </>
+  );
+}
+
+/**
+ * Controlled editor for one Claude -> Codex fallback block: the enabled toggle, the mode,
+ * and the model mappings. Used by the shared fallback modal on a backend without
+ * per-provider routing.
+ */
+export function FallbackSettingsEditor({
+  value,
+  models,
+  disabled,
+  onChange,
+  children,
+}: {
+  value: ClaudeFallbackSettings;
+  models: { claude: string[]; codex: string[] };
+  disabled: boolean;
+  onChange: (value: ClaudeFallbackSettings) => void;
+  /** Extra content rendered at the end of the editor, such as a save error. */
+  children?: ReactNode;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className={styles.fallbackEditor}>
+      <ToggleSwitch
+        checked={value.enabled}
+        disabled={disabled}
+        onChange={(enabled) => onChange({ ...value, enabled })}
+        label={t('quota_management.fallback.title')}
+      />
+      <FallbackModeMappings
+        value={value}
+        enabled={value.enabled}
+        models={models}
+        disabled={disabled}
+        onChange={(part) => onChange({ ...value, ...part })}
+      />
       {children}
     </div>
   );

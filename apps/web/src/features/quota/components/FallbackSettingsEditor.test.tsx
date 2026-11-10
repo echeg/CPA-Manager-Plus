@@ -5,7 +5,7 @@ import i18n from '@/i18n';
 import { Button } from '@/components/ui/Button';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import type { ClaudeFallbackSettings } from '@/features/personal-quota-support/services/api/claudeFallback';
-import { FallbackSettingsEditor } from './FallbackSettingsEditor';
+import { FallbackModeMappings, FallbackSettingsEditor } from './FallbackSettingsEditor';
 import { Select } from './Select';
 
 (
@@ -119,5 +119,74 @@ describe('FallbackSettingsEditor', () => {
     expect(new Set(ids).size).toBe(4);
     const lists = inputs().map((input) => input.props.list as string);
     expect(lists.every((list) => ids.includes(list))).toBe(true);
+  });
+
+  test('a disabled block without mappings is not an error', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(FallbackSettingsEditor, {
+          value: { ...value, enabled: false, mappings: [] },
+          models,
+          disabled: false,
+          onChange: vi.fn(),
+        })
+      );
+    });
+    expect(renderer!.root.findAll((node) => node.props.role === 'alert')).toHaveLength(0);
+    expect(renderer!.root.findByType(FallbackModeMappings).props.enabled).toBe(false);
+  });
+});
+
+describe('FallbackModeMappings', () => {
+  const part = { mode: 'auto' as const, mappings: value.mappings };
+
+  async function mountPart(props: Partial<Parameters<typeof FallbackModeMappings>[0]> = {}) {
+    const onChange = vi.fn();
+    await act(async () => {
+      renderer = create(
+        createElement(FallbackModeMappings, {
+          value: part,
+          models,
+          disabled: false,
+          onChange,
+          ...props,
+        })
+      );
+    });
+    return onChange;
+  }
+
+  test('renders the mode select and the mapping table without a toggle', async () => {
+    await mountPart();
+    expect(renderer!.root.findAllByType(ToggleSwitch)).toHaveLength(0);
+    expect(renderer!.root.findByType(Select).props.value).toBe('auto');
+    expect(inputs()).toHaveLength(4);
+  });
+
+  test('reports only the mode and the mappings', async () => {
+    const onChange = await mountPart();
+    act(() => renderer!.root.findByType(Select).props.onChange('always'));
+    expect(onChange).toHaveBeenLastCalledWith({ mode: 'always', mappings: value.mappings });
+
+    act(() => buttonByLabel('Remove mapping 2').props.onClick());
+    expect(onChange).toHaveBeenLastCalledWith({ mode: 'auto', mappings: [value.mappings[0]] });
+  });
+
+  test('requires a mapping unless it is told the fallback is off', async () => {
+    await mountPart({ value: { mode: 'auto', mappings: [] } });
+    expect(renderer!.root.findAll((node) => node.props.role === 'alert')).toHaveLength(1);
+    await act(async () => renderer!.unmount());
+
+    await mountPart({ value: { mode: 'auto', mappings: [] }, enabled: false });
+    expect(renderer!.root.findAll((node) => node.props.role === 'alert')).toHaveLength(0);
+  });
+
+  test('the disabled prop disables every control', async () => {
+    await mountPart({ disabled: true });
+    expect(renderer!.root.findByType(Select).props.disabled).toBe(true);
+    expect(inputs().every((input) => input.props.disabled === true)).toBe(true);
+    expect(renderer!.root.findAllByType(Button).every((button) => button.props.disabled)).toBe(
+      true
+    );
   });
 });

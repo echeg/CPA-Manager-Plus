@@ -13,6 +13,7 @@ import {
   chosenApiKeyLabel,
   fallbackTargets,
   hasProviderRoutingErrors,
+  providerFieldErrors,
   providerRoutingErrors,
   summarizeKeyConfigs,
   type ApiKeyConfigSummaries,
@@ -306,5 +307,21 @@ describe('providerRoutingErrors', () => {
     });
     const apiDraft = profileWith(routing({ mode: 'api' }), routing({ mode: 'api' }));
     expect(providerRoutingErrors(apiDraft, false)).toEqual({ claude: {}, codex: {} });
+  });
+});
+
+describe('providerFieldErrors', () => {
+  test('checks one block as providerRoutingErrors does', () => {
+    const value = routing({
+      mode: 'api',
+      fallback: { target: 'codex', mode: 'auto', mappings: [] },
+    });
+    expect(providerFieldErrors('claude', value, true)).toEqual({
+      apiCredential: 'quota_management.provider_routing.errors.key_required',
+    });
+    expect(providerFieldErrors('claude', { ...value, mode: 'subscription' }, true)).toEqual({
+      mappings: 'quota_management.fallback.invalid',
+    });
+    expect(providerFieldErrors('codex', { ...value, mode: 'subscription' }, true)).toEqual({});
   });
 });

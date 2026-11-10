@@ -5744,6 +5744,25 @@
     "provider_routing": {
       "key_disabled": "已停用",
       "key_unknown": "找不到",
+      "mode": "{{provider}} 模式",
+      "mode_subscription": "訂閱",
+      "mode_api": "API 金鑰",
+      "fallback": "備援",
+      "fallback_label": "{{provider}} 備援",
+      "target_off": "關閉",
+      "target_codex": "Codex",
+      "target_api": "API 金鑰",
+      "api_key": "API 金鑰",
+      "api_key_label": "{{provider}} API 金鑰",
+      "api_key_placeholder": "選擇 API 金鑰",
+      "api_mode_hint": "略過訂閱，費用計入此金鑰。",
+      "api_fallback_hint": "僅在訂閱失敗後使用，下一個請求會重新嘗試訂閱。費用計入此金鑰。",
+      "no_keys": "尚未設定 {{provider}} API 金鑰。",
+      "no_keys_link": "前往 AI 供應商新增",
+      "key_disabled_warning": "此 API 金鑰已停用。在 AI 供應商中重新啟用之前，使用它的請求都會失敗。",
+      "key_unknown_warning": "此 API 金鑰已不在設定中。請選擇其他金鑰，或在 AI 供應商中重新新增。",
+      "requires_backend": "需要更新 CPA 後端。",
+      "locked": "路由由 Home 模式或排程外掛管理，因此無法在此變更模式與備援。",
       "errors": {
         "key_required": "請選擇一個 API 金鑰。"
       }

@@ -5744,6 +5744,25 @@
     "provider_routing": {
       "key_disabled": "已禁用",
       "key_unknown": "未找到",
+      "mode": "{{provider}} 模式",
+      "mode_subscription": "订阅",
+      "mode_api": "API 密钥",
+      "fallback": "回退",
+      "fallback_label": "{{provider}} 回退",
+      "target_off": "关闭",
+      "target_codex": "Codex",
+      "target_api": "API 密钥",
+      "api_key": "API 密钥",
+      "api_key_label": "{{provider}} API 密钥",
+      "api_key_placeholder": "选择 API 密钥",
+      "api_mode_hint": "跳过订阅，费用计入此密钥。",
+      "api_fallback_hint": "仅在订阅失败后使用，下一个请求会重新尝试订阅。费用计入此密钥。",
+      "no_keys": "尚未配置 {{provider}} API 密钥。",
+      "no_keys_link": "前往 AI 提供商添加",
+      "key_disabled_warning": "此 API 密钥已禁用。在 AI 提供商中重新启用之前，使用它的请求都会失败。",
+      "key_unknown_warning": "此 API 密钥已不在配置中。请选择其他密钥，或在 AI 提供商中重新添加。",
+      "requires_backend": "需要更新 CPA 后端。",
+      "locked": "路由由 Home 模式或调度插件管理，因此无法在此更改模式和回退。",
       "errors": {
         "key_required": "请选择一个 API 密钥。"
       }

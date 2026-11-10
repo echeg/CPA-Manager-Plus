@@ -12,7 +12,7 @@ const locales = { en, ru, 'zh-CN': zhCN, 'zh-TW': zhTW } as unknown as Record<
   { quota_management: Record<string, LocaleTree> }
 >;
 
-const subtrees = ['key_profiles', 'client_keys'] as const;
+const subtrees = ['key_profiles', 'client_keys', 'provider_routing'] as const;
 
 // Keys of the old per-key profiles toolbar that the Profiles and Keys modals replaced.
 const removedKeyProfileKeys = [

@@ -5749,6 +5749,25 @@
     "provider_routing": {
       "key_disabled": "disabled",
       "key_unknown": "unknown",
+      "mode": "{{provider}} mode",
+      "mode_subscription": "Subscription",
+      "mode_api": "API key",
+      "fallback": "Fallback",
+      "fallback_label": "{{provider}} fallback",
+      "target_off": "Off",
+      "target_codex": "Codex",
+      "target_api": "API key",
+      "api_key": "API key",
+      "api_key_label": "{{provider}} API key",
+      "api_key_placeholder": "Choose an API key",
+      "api_mode_hint": "Subscriptions are skipped. Billed to this key.",
+      "api_fallback_hint": "Used only after subscriptions fail. The next request tries subscriptions again. Billed to this key.",
+      "no_keys": "No {{provider}} API key is configured.",
+      "no_keys_link": "Add one in AI Providers",
+      "key_disabled_warning": "This API key is disabled. Requests routed to it fail until it is enabled again in AI Providers.",
+      "key_unknown_warning": "This API key is no longer configured. Choose another key or add it again in AI Providers.",
+      "requires_backend": "Requires an updated CPA backend.",
+      "locked": "Home mode or a scheduler plugin manages routing, so mode and fallback cannot be changed here.",
       "errors": {
         "key_required": "Choose an API key."
       }
