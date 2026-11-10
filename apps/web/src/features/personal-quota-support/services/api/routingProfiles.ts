@@ -187,12 +187,19 @@ function readProviderRouting(provider: ApiProvider, raw: unknown): ProviderRouti
     )
   )
     throw new Error('Invalid routing provider settings');
+  const target = readEnum(fallbackRaw?.target, FALLBACK_TARGETS[provider], 'off');
+  // CPA neither checks nor uses the fallback mode under target API key, so any value
+  // there other than `always` reads as the default instead of failing the whole load.
+  const fallbackMode =
+    target === 'api' && fallbackRaw?.mode !== 'always'
+      ? 'auto'
+      : readEnum(fallbackRaw?.mode, ['auto', 'always'] as const, 'auto');
   return {
     mode: readEnum(raw.mode, PROVIDER_MODES, 'subscription'),
     apiCredential: typeof credential === 'string' ? credential : '',
     fallback: {
-      target: readEnum(fallbackRaw?.target, FALLBACK_TARGETS[provider], 'off'),
-      mode: readEnum(fallbackRaw?.mode, ['auto', 'always'] as const, 'auto'),
+      target,
+      mode: fallbackMode,
       mappings: Array.isArray(mappingsRaw)
         ? mappingsRaw.map((item) => ({ from: item.from as string, to: item.to as string }))
         : [],

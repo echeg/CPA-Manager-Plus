@@ -234,6 +234,35 @@ describe('reading routing profiles', () => {
     });
   });
 
+  it('reads an unknown fallback mode under target API key as auto, since CPA ignores it', () => {
+    const state = readRoutingProfiles(
+      providersResponse({
+        providers: {
+          claude: { 'api-credential': 'claude-idx', fallback: { target: 'api', mode: 'alwyas' } },
+          codex: { 'api-credential': 'codex-idx', fallback: { target: 'api', mode: 'bogus' } },
+        },
+      })
+    );
+    expect(state.shared.providers.claude.fallback).toEqual({
+      target: 'api',
+      mode: 'auto',
+      mappings: [],
+    });
+    expect(state.shared.providers.codex.fallback).toEqual({
+      target: 'api',
+      mode: 'auto',
+      mappings: [],
+    });
+    const always = readRoutingProfiles(
+      providersResponse({
+        providers: {
+          claude: { 'api-credential': 'claude-idx', fallback: { target: 'api', mode: 'always' } },
+        },
+      })
+    );
+    expect(always.shared.providers.claude.fallback.mode).toBe('always');
+  });
+
   it('reads absent api_credentials as empty lists and skips malformed entries', () => {
     const withoutList = { ...providersResponse() } as Record<string, unknown>;
     delete withoutList.api_credentials;

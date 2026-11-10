@@ -142,8 +142,9 @@ entry per provider: `Claude: <preferred or Automatic> → Codex`, `Claude: Codex
 On a backend without per-provider routing the panel derives the blocks from
 `claude-fallback` (Subscription mode, target Codex or Off), disables the mode control
 and every API key option with "Requires an updated CPA backend", and saves
-`claude-fallback` as before. The standalone toolbar fallback control is shown only
-there; with per-provider routing the fallback is edited in the profiles.
+`claude-fallback` as before. Wherever routing profiles exist, the fallback is edited
+in the profiles; the standalone toolbar fallback control appears only on a backend
+without routing profiles.
 
 ## Claude to Codex fallback
 
@@ -343,7 +344,7 @@ the legacy toolbar: the legacy strategy select, sticky-session
 settings, preferred subscriptions, the fallback control and Save, with no
 Profiles or Keys button. Keys on such a backend are managed on the Config page. A
 backend with routing profiles but without per-provider routing keeps the slim
-toolbar plus the standalone fallback control; its provider blocks offer only
+toolbar without the standalone fallback control; its provider blocks offer only
 Subscription mode and the Codex target, and Save writes `claude-fallback`.
 
 This requires the custom CPA backend with per-key routing profiles
