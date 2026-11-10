@@ -19,6 +19,7 @@ import {
   IconSidebarAuthFiles,
   IconSidebarConfig,
   IconSidebarDashboard,
+  IconSidebarGuide,
   IconSidebarLogs,
   IconSidebarMonitor,
   IconSidebarOauth,
@@ -70,6 +71,7 @@ const sidebarIcons: Record<string, ReactNode> = {
   config: <IconSidebarConfig size={SIDEBAR_ICON_SIZE} />,
   logs: <IconSidebarLogs size={SIDEBAR_ICON_SIZE} />,
   system: <IconSidebarSystem size={SIDEBAR_ICON_SIZE} />,
+  guide: <IconSidebarGuide size={SIDEBAR_ICON_SIZE} />,
 };
 
 // Header action icons use a smaller size for header buttons
@@ -624,6 +626,12 @@ function MainLayoutContent({ routeBase = '', demoMode = false }: MainLayoutProps
         label: t('nav.system_info'),
         shortLabel: navShortLabel('nav.system_info', t('nav.system_info')),
         icon: sidebarIcons.system,
+      },
+      {
+        path: '/guide',
+        label: t('nav.guide'),
+        shortLabel: navShortLabel('nav.guide', t('nav.guide')),
+        icon: sidebarIcons.guide,
       },
     ],
   ].filter((section) => section.length > 0);

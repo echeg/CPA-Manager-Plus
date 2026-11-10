@@ -1,0 +1,219 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Credential selection inside the pool",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "legend": {
+      "entries": {
+        "backend": {
+          "label": "Candidate set"
+        },
+        "security": {
+          "label": "Filter / failure"
+        },
+        "cloud": {
+          "label": "Narrowing slot"
+        },
+        "external": {
+          "label": "Picker"
+        }
+      }
+    }
+  },
+  "lanes": [
+    {
+      "id": "pool",
+      "label": "Provider pool"
+    },
+    {
+      "id": "narrow",
+      "label": "Narrowing: keep the best group"
+    },
+    {
+      "id": "pick",
+      "label": "Pick: choose one credential"
+    }
+  ],
+  "phases": [
+    {
+      "id": "filter_phase",
+      "label": "Availability",
+      "fromCol": 0,
+      "toCol": 1
+    },
+    {
+      "id": "narrow_phase",
+      "label": "Selection pipeline",
+      "fromCol": 2,
+      "toCol": 4,
+      "variant": "emphasis"
+    },
+    {
+      "id": "result_phase",
+      "label": "Result",
+      "fromCol": 5,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "mainPath": [
+    "candidates",
+    "available",
+    "preferred",
+    "primary",
+    "tiebreak",
+    "picker",
+    "selected"
+  ],
+  "nodes": [
+    {
+      "id": "candidates",
+      "lane": "pool",
+      "col": 0,
+      "type": "backend",
+      "label": "Provider credentials",
+      "sublabel": "all tiers of a provider",
+      "width": 170
+    },
+    {
+      "id": "available",
+      "lane": "pool",
+      "col": 1,
+      "type": "security",
+      "label": "Availability filter",
+      "sublabel": "disabled · cooldown · model",
+      "width": 175
+    },
+    {
+      "id": "selected",
+      "lane": "pool",
+      "col": 5,
+      "type": "backend",
+      "label": "Selected credential",
+      "sublabel": "serves the request",
+      "width": 160
+    },
+    {
+      "id": "preferred",
+      "lane": "narrow",
+      "col": 2,
+      "type": "cloud",
+      "label": "Preferred account",
+      "sublabel": "preferred-accounts",
+      "tag": "checked first",
+      "width": 165
+    },
+    {
+      "id": "primary",
+      "lane": "narrow",
+      "col": 3,
+      "type": "cloud",
+      "label": "Primary slot",
+      "sublabel": "4 narrowing criteria",
+      "width": 165
+    },
+    {
+      "id": "tiebreak",
+      "lane": "narrow",
+      "col": 4,
+      "type": "cloud",
+      "label": "Tiebreak slot",
+      "sublabel": "second slot or picker",
+      "width": 165
+    },
+    {
+      "id": "none",
+      "lane": "pick",
+      "col": 0,
+      "type": "security",
+      "label": "No credential",
+      "sublabel": "not found · cooldown · unavailable",
+      "width": 175
+    },
+    {
+      "id": "picker",
+      "lane": "pick",
+      "col": 5,
+      "type": "external",
+      "label": "Picker",
+      "sublabel": "round-robin · weighted · fill-first",
+      "tag": "default round-robin",
+      "width": 180
+    }
+  ],
+  "edges": [
+    {
+      "from": "candidates",
+      "to": "available"
+    },
+    {
+      "from": "available",
+      "to": "preferred",
+      "label": "available set"
+    },
+    {
+      "from": "available",
+      "to": "none",
+      "label": "empty",
+      "role": "error",
+      "variant": "security"
+    },
+    {
+      "from": "preferred",
+      "to": "selected",
+      "label": "usable → taken",
+      "role": "branch",
+      "variant": "emphasis"
+    },
+    {
+      "from": "preferred",
+      "to": "primary",
+      "label": "unset or unavailable"
+    },
+    {
+      "from": "primary",
+      "to": "tiebreak",
+      "label": "best group"
+    },
+    {
+      "from": "tiebreak",
+      "to": "picker",
+      "label": "remaining ties"
+    },
+    {
+      "from": "picker",
+      "to": "selected",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "rose",
+      "title": "Availability first",
+      "items": [
+        "Disabled, cooling-down, model-ineligible, and hard-reserved credentials never enter the pipeline",
+        "Soft reserve levels 1-3 only rank the pool, and only when reserves is a slot",
+        "No credential for the provider and model, or all turned off: auth_not_found, without Retry-After",
+        "All filtered out: 429 with Retry-After only when all are cooling down or hard-reserved; otherwise auth_unavailable, with Retry-After only if a recovery time is known"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Slots",
+      "items": [
+        "Narrowing criteria keep the best group: priority, reserves, earliest-reset, most-remaining",
+        "A picker as primary makes tiebreak inactive; an empty tiebreak means round-robin"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Legacy strategy",
+      "items": [
+        "Without routing.selection the shared selection is {reserves, strategy}",
+        "Manual priority applies only when priority is one of the slots"
+      ]
+    }
+  ]
+}

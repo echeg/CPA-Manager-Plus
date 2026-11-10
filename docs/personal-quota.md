@@ -16,6 +16,15 @@ with expiry dates; inline reset confirmation; CPA cooldown clearing after a
 confirmed reset; refresh on entry; and privacy masking.
 Reserve editing is available directly on the quota cards.
 
+The **Guide** navigation item (`#/guide`, last sidebar block after System Info) shows
+two interactive diagrams of this fork's routing: request routing by client key (routing
+profile → sticky session → preferred account → pool selection → Claude → Codex
+fallback) and credential selection inside the pool. They are static pages bundled into
+the panel and never call the backend; the behaviour they describe needs the custom
+backend (see [Routing profiles per API key](#routing-profiles-per-api-key)). The
+diagrams are generated with archify from the JSON sources in
+`apps/web/src/features/guide/diagrams/`.
+
 The existing Accounts, Analytics, Monitoring, Usage Maintenance, OAuth, configuration,
 plugin and account automation screens remain available. Usage Maintenance also gains
 a read-only [CPA logs](#cpa-logs-storage) card. This is one CPAMP panel with

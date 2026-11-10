@@ -255,6 +255,7 @@
     "logs_short": "Logs",
     "system_info": "System Info",
     "system_info_short": "System",
+    "guide": "Guide",
     "usage_maintenance": "Usage Maintenance",
     "usage_maintenance_short": "Maintenance",
     "quota_management": "Quota Management"
@@ -5241,6 +5242,15 @@
     "clear_login_desc": "Clear locally saved login data and sign out.",
     "clear_login_button": "Clear login data",
     "clear_login_confirm": "Clear local login data and sign out now?"
+  },
+  "guide": {
+    "title": "Guide",
+    "subtitle": "How CPA routes a request today. The diagrams are interactive: click a stage to focus it, zoom and pan, or export the picture.",
+    "tabs_label": "Guide diagrams",
+    "tab_key_routing": "Request routing by client key",
+    "tab_pool_selection": "Credential selection inside the pool",
+    "intro_key_routing": "Every request first resolves the routing profile of its client key (its own or the shared one). CPA then checks the sticky session binding, then the preferred account, and only then selects a credential from the pool. If the Claude round fails (for example with 429, 5xx or cooldown), the request can fall back to a Codex subscription.",
+    "intro_pool_selection": "Inside a provider pool, CPA first drops credentials that are disabled, cooling down or do not support the model. A usable preferred account is taken right away; otherwise the primary and tiebreak slots narrow the set to the best group, and the picker (round-robin by default) chooses one credential. If the provider has no credential for the model, or all of them are turned off, the request gets a not-found error without Retry-After. If credentials exist but none is usable, the request gets a cooldown error with Retry-After when every one is cooling down or held by a hard reserve, otherwise an unavailable error (for example, for expired or rejected tokens) that carries Retry-After only if a recovery time is known."
   },
   "notification": {
     "debug_updated": "Debug settings updated",

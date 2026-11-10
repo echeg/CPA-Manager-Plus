@@ -1,0 +1,16 @@
+.frame {
+  display: block;
+  width: 100%;
+  height: 760px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-primary);
+
+  @include tablet {
+    height: 680px;
+  }
+
+  @include mobile {
+    height: 560px;
+  }
+}

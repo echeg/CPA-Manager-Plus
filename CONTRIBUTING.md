@@ -44,6 +44,8 @@ git rebase upstream/dev
 
 Frontend work follows the [Data Loading & Refresh Interaction](docs/development/data-loading-and-refresh.md)
 contract. It is the default for v2 and later development, and for v1 refresh fixes.
+To embed a self-contained HTML page (such as a generated diagram) in the single-file
+panel build, follow [Bundled Self-Contained HTML Pages](docs/development/bundled-html-frames.md).
 
 Use the narrowest checks that cover your change, then run broader checks when
 the change crosses frontend, Manager Server, packaging, or runtime boundaries.
