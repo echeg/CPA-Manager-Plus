@@ -125,6 +125,8 @@
 - 2026-11-10 brainstorm: **rejected** - "stage-ordered layout with a Mode section" - scatters one provider's settings.
 - 2026-11-10 brainstorm: **rejected** - "tabs per provider" - hides half of the profile.
 - 2026-11-10 brainstorm: **rejected** - "extend `api_credentials` in the backend" - would change a backend plan in progress.
+- 2026-11-10 pre-launch check: **accepted** - `/Users/echeg/Projects/CPA/diagrams/pool-selection.*` was rebuilt so it keeps the Guide run's review fix (the "No credential" node reads "not found · cooldown · unavailable"; the cards list `auth_not_found`, 429 and `auth_unavailable`) together with the subscription-mode wording; `deliver` 9/9 and `visual-check` pass again.
+- 2026-11-10 pre-launch check: **accepted** - Task 5 and Task 7 also refresh the two existing Guide intros and both manual pages, which still described a Claude → Codex-only fallback.
 
 ## Implementation Steps
 
@@ -169,6 +171,7 @@
 ### Task 5: Guide: third tab and updated diagrams
 - [ ] copy byte-for-byte into `apps/web/src/features/guide/diagrams/`: `/Users/echeg/Projects/CPA/diagrams/api-key-routing.html` and `api-key-routing.workflow.json` (new), and replace `key-routing.html`, `key-routing.workflow.json`, `pool-selection.html`, `pool-selection.workflow.json` with the files of the same names from `/Users/echeg/Projects/CPA/diagrams/`
 - [ ] add the tab `api-key-routing` to `GuidePage.tsx` (`?raw` import, i18n keys `guide.tab_api_key_routing` and `guide.intro_api_key_routing` in all four locales; the intro explains in two or three sentences that API keys are used only through API key mode or an API-key fallback, and that the fallback leg does not bind the session)
+- [ ] update `guide.intro_key_routing` and `guide.intro_pool_selection` in all four locales to match the replaced diagrams: in Subscription mode only OAuth credentials are candidates, the fallback target is a Codex subscription or the profile's API key (Codex: its API key only), and API keys are never picked on their own; keep the existing sentences about `auth_not_found`, 429 with `Retry-After` and `auth_unavailable` unchanged in meaning
 - [ ] update `GuidePage.test.tsx` (three tabs; the third iframe `srcdoc` contains "Routing with API keys") and `guideWiring.test.ts` (new keys in all locales)
 - [ ] run `npm test` in `apps/web` - must pass before task 6
 
@@ -182,6 +185,7 @@
 ### Task 7: Update documentation
 - [ ] update the panel's user-facing docs or README section that describes Routing profiles (if one exists) with the provider blocks and the API-key options
 - [ ] update `apps/web/src/features/guide/diagrams/README.md` to list the third diagram
+- [ ] update `apps/docs/en/manual/guide.md` and `apps/docs/manual/guide.md`: list the third diagram and replace the "Claude → Codex fallback" wording with the per-provider fallback (Codex subscription or API key)
 
 ## Technical Details
 - **Capability flag**: `providersSupported = isRecord(raw.shared.providers)`.
