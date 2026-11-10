@@ -95,11 +95,11 @@
 - [x] run `npm test` in `apps/web` - must pass before task 4
 
 ### Task 4: Verify acceptance criteria
-- [ ] verify all requirements from Overview are implemented (nav item in last block, `/guide` route, two tabs, intro texts, iframes with theme sync)
-- [ ] verify edge cases: the iframe `load` fires before the theme effect, theme switches `auto → dark → white`, narrow viewport layout does not overflow horizontally
-- [ ] run the full `apps/web` test suite (`npm test`)
-- [ ] run `npm run lint` in `apps/web` - no new warnings compared with `docs/backlog/web-lint-warnings.md`
-- [ ] run `npm run build` in `apps/web` and verify `dist/index.html` contains both strings "Request routing by client key" and "Credential selection inside the pool"; note the resulting `dist/index.html` size in the plan (expected ≈ 8.3 MB)
+- [x] verify all requirements from Overview are implemented (nav item in last block, `/guide` route, two tabs, intro texts, iframes with theme sync)
+- [x] verify edge cases: the iframe `load` fires before the theme effect, theme switches `auto → dark → white`, narrow viewport layout does not overflow horizontally (load-order and theme-before-load cases added to `DiagramFrame.test.tsx`; `DiagramFrame.themeStore.test.tsx` drives the real `useThemeStore` through auto → dark → white and auto-with-dark-system; narrow layout checked from the styles: iframe `width: 100%`, page/panel `min-width: 0`, the `SegmentedTabs` strip scrolls with `overflow-x: auto`, iframe height steps down 760 → 680 → 560px; the in-browser check is in Post-Completion)
+- [x] run the full `apps/web` test suite (`npm test`) — 316 files, 5201 tests passed
+- [x] run `npm run lint` in `apps/web` - no new warnings compared with `docs/backlog/web-lint-warnings.md` (0 errors, the same 7 known warnings)
+- [x] run `npm run build` in `apps/web` and verify `dist/index.html` contains both strings "Request routing by client key" and "Credential selection inside the pool"; note the resulting `dist/index.html` size in the plan (expected ≈ 8.3 MB) — both strings found (4 matches each); `dist/index.html` is 8,296,075 bytes (≈ 8.3 MB, gzip ≈ 2.1 MB)
 
 ### Task 5: Update documentation
 - [ ] add a short "Guide" entry to the panel's user-facing docs if a features list exists (README or `docs/`), stating that the diagrams are generated with archify from the JSON sources in `src/features/guide/diagrams/`

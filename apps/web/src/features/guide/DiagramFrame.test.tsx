@@ -96,6 +96,36 @@ describe('DiagramFrame', () => {
     expect(lastThemeSet(node)).toBe('light');
   });
 
+  it('applies the latest theme when the theme changes before the iframe loads', () => {
+    const node = fakeIframeWithDocument();
+    const renderer = renderFrame(node);
+
+    act(() => {
+      useThemeStore.setState({ resolvedTheme: 'dark' });
+    });
+    node.contentDocument!.documentElement.setAttribute.mockClear();
+
+    // The srcdoc document replaces the initial about:blank one on load, so the load
+    // handler must use the current theme rather than the one captured at mount.
+    act(() => {
+      renderer.root.findByType('iframe').props.onLoad();
+    });
+
+    expect(lastThemeSet(node)).toBe('dark');
+  });
+
+  it('keeps the theme when the iframe load fires before the theme effect re-runs', () => {
+    const node = fakeIframeWithDocument();
+    const renderer = renderFrame(node);
+
+    act(() => {
+      renderer.root.findByType('iframe').props.onLoad();
+      renderer.root.findByType('iframe').props.onLoad();
+    });
+
+    expect(lastThemeSet(node)).toBe('light');
+  });
+
   it('does not throw when the iframe has no content document', () => {
     const node: FakeIframe = { contentDocument: null };
     const renderer = renderFrame(node);
