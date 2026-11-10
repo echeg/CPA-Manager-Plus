@@ -2,12 +2,20 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import type { RoutingProfile } from '@/features/personal-quota-support/services/api/routingProfiles';
+import type {
+  RoutingProfile,
+  RoutingProfilesState,
+} from '@/features/personal-quota-support/services/api/routingProfiles';
 import type { AuthFileItem } from '@/features/personal-quota-support/types';
 import { useNotificationStore } from '@/stores';
 import { sha256Hex } from '@/utils/apiKeyHash';
 import type { KeyProfilesState } from '../hooks/useKeyProfiles';
-import { chainSummary, copyOfShared, type KeyDisplayRow } from '../keyProfilesModel';
+import {
+  chainSummary,
+  copyOfShared,
+  type ApiKeyLabelSource,
+  type KeyDisplayRow,
+} from '../keyProfilesModel';
 import { maskQuotaText } from '../ledgerModel';
 import { KeyProfileEditor } from './KeyProfileEditor';
 import { Select } from './Select';
@@ -72,14 +80,10 @@ export function RoutingProfilesModal({
   const message = showEmails ? error : maskQuotaText(error);
   const readOnly = state ? !state.supported : true;
   // What the editors and summaries need to name API keys; raw keys never reach it.
-  const apiKeys = state
-    ? { apiCredentials: state.apiCredentials, providerConfigs: keyProfiles.apiKeyConfigs }
-    : undefined;
-  const providerProps = state && {
-    providersSupported: state.providersSupported,
-    apiCredentials: state.apiCredentials,
-    apiKeyConfigs: keyProfiles.apiKeyConfigs,
-  };
+  const apiKeysOf = (loaded: RoutingProfilesState): ApiKeyLabelSource => ({
+    apiCredentials: loaded.apiCredentials,
+    providerConfigs: keyProfiles.apiKeyConfigs,
+  });
 
   const own = rows.filter((row) => row.profile !== null);
   const onDefault = rows.filter((row) => row.profile === null);
@@ -144,7 +148,8 @@ export function RoutingProfilesModal({
         showEmails={showEmails}
         selectionOptions={state.selectionOptions}
         models={models}
-        {...providerProps}
+        providersSupported={state.providersSupported}
+        apiKeys={apiKeysOf(state)}
         // A reload keeps the rows on screen; the editor waits for it because the
         // hook refuses a save while the profiles load.
         saving={saving || loading}
@@ -241,7 +246,7 @@ export function RoutingProfilesModal({
                 </Button>
               </div>
               <p className={styles.summary} data-profile-summary>
-                {chainSummary(state.shared, files, showEmails, t, apiKeys)}
+                {chainSummary(state.shared, files, showEmails, t, apiKeysOf(state))}
               </p>
               {defaultOpen && (
                 <KeyProfileEditor
@@ -254,7 +259,8 @@ export function RoutingProfilesModal({
                   showEmails={showEmails}
                   selectionOptions={state.selectionOptions}
                   models={models}
-                  {...providerProps}
+                  providersSupported={state.providersSupported}
+                  apiKeys={apiKeysOf(state)}
                   saving={saving || loading}
                   // The shared values stay editable in Home or scheduler-plugin mode,
                   // except the provider mode and fallback, which CPA ignores there.
@@ -318,7 +324,13 @@ export function RoutingProfilesModal({
                         </div>
                       </div>
                       <p className={styles.summary} data-profile-summary>
-                        {chainSummary(row.profile ?? state.shared, files, showEmails, t, apiKeys)}
+                        {chainSummary(
+                          row.profile ?? state.shared,
+                          files,
+                          showEmails,
+                          t,
+                          apiKeysOf(state)
+                        )}
                       </p>
                       {isOpen && keyEditor(row)}
                     </li>

@@ -270,6 +270,20 @@ describe('quota settings bar on a backend with /routing/profiles', () => {
     expect(root().findByType(QuotaSettingsToolbar).props.fallbackControl).toBeDefined();
   });
 
+  test('hides the standalone fallback control until a load reports an older backend', async () => {
+    keyProfiles = makeKeyProfiles(null, { loading: true });
+    await mount();
+    expect(root().findByType(QuotaSettingsToolbar).props.fallbackControl).toBeUndefined();
+
+    keyProfiles = makeKeyProfiles(null, { error: 'offline' });
+    await rerender();
+    expect(root().findByType(QuotaSettingsToolbar).props.fallbackControl).toBeUndefined();
+
+    keyProfiles = makeKeyProfiles(profilesState({ providersSupported: false }));
+    await rerender();
+    expect(root().findByType(QuotaSettingsToolbar).props.fallbackControl).toBeDefined();
+  });
+
   test('stays slim with supported: false', async () => {
     keyProfiles = makeKeyProfiles(profilesState({ supported: false }));
     await mount();

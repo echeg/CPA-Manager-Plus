@@ -140,7 +140,7 @@
 - [x] write tests in `routingProfiles.test.ts`: reading a new response, an old response (derived providers, flag false), invalid enum values; PATCH bodies for both backends including `null` credential and API-mode normalization; read-back equality and inequality
 - [x] write tests in the model tests for `normalizeProfile` / `profileDirty` / `copyOfShared` with `providers` (independence of copies, hidden values kept)
 - [x] run `npm test` in `apps/web` - must pass before task 2
-- ➕ added exported helpers in `routingProfiles.ts`: `effectiveFallbackTarget`, `claudeFallbackOf` (legacy view), `providersFromClaudeFallback` (old-backend derivation, also used by test fixtures), `validProviderFallbacks` (save guard: mappings are checked only while the effective Claude target is Codex, so a hidden invalid table under target API key / API key mode does not block a save)
+- ➕ added exported helpers in `routingProfiles.ts`: `effectiveFallbackTarget`, `claudeFallbackOf` (legacy view), `providersFromClaudeFallback` (old-backend derivation, also used by test fixtures), `validClaudeMappings` (save guard, shared with `providerFieldErrors`: CPA checks the Claude mapping rows under every target but API key, so a hidden invalid table under target Off or in API key mode (saved as Off) blocks the save, with a message in the block; an older backend checks the `claude-fallback` rows under every target; at least one row is required only for the Codex target)
 - ➕ `KeyProfileEditor` got an interim adapter (legacy toggle editor bound to `providers.claude.fallback`) so the build stays green until Task 4 replaces the layout
 
 ### Task 2: Provider routing model: validation, API-key options, summary
@@ -191,7 +191,7 @@
 - ➕ lint: 0 errors, only the 7 known warnings from `docs/backlog/web-lint-warnings.md`
 
 ### Task 7: Update documentation
-- [x] update the panel's user-facing docs or README section that describes Routing profiles (if one exists) with the provider blocks and the API-key options (none exists: no page in `apps/docs` or `README.md` covers Quota Management or Routing profiles; the Guide pages below carry the per-provider mode and fallback)
+- [x] update the panel's user-facing docs or README section that describes Routing profiles (if one exists) with the provider blocks and the API-key options (`docs/personal-quota.md`, linked from `README.md`: new section "Per-provider mode and API-key fallback", and the features list, Guide paragraph, fallback storage, profile save body, chain summary, read-only/older-backend notes and the YAML example updated)
 - [x] update `apps/web/src/features/guide/diagrams/README.md` to list the third diagram
 - [x] update `apps/docs/en/manual/guide.md` and `apps/docs/manual/guide.md`: list the third diagram and replace the "Claude → Codex fallback" wording with the per-provider fallback (Codex subscription or API key)
 - ➕ the repo suite's `tests/installerScript.test.mjs` timed out at random at the 5s default (each case runs the real installer); its `describe` now has a 30s timeout

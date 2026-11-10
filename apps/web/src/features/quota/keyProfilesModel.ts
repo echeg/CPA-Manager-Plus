@@ -29,7 +29,7 @@ function normalizeProviderRouting(
   provider: ApiProvider,
   routing: ProviderRouting
 ): ProviderRouting {
-  const target = effectiveFallbackTarget(provider, routing);
+  const target = effectiveFallbackTarget(routing);
   if (provider === 'codex')
     return {
       mode: routing.mode,
@@ -182,7 +182,7 @@ function providerSummary(
       ? t(`${SUMMARY}.api_key`, { provider: name, key })
       : t(`${SUMMARY}.api_key_unset`, { provider: name });
   }
-  switch (effectiveFallbackTarget(provider, routing)) {
+  switch (effectiveFallbackTarget(routing)) {
     case 'codex':
       return routing.fallback.mode === 'always'
         ? t(`${SUMMARY}.codex_forced`, { provider: name })

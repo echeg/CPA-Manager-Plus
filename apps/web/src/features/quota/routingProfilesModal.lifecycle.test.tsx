@@ -226,12 +226,14 @@ describe('routing profiles modal rows', () => {
 
     await click(buttonIn(keyRows()[0], 'data-profile-edit'));
     expect(editors()[0].props.providersSupported).toBe(true);
-    expect(editors()[0].props.apiCredentials).toBe(apiCredentials);
-    expect(editors()[0].props.apiKeyConfigs).toBe(apiKeyConfigs);
+    expect(editors()[0].props.apiKeys).toEqual({
+      apiCredentials,
+      providerConfigs: apiKeyConfigs,
+    });
     await click(buttonIn(keyRows()[0], 'data-profile-edit'));
 
     await click(buttonIn(defaultRow(), 'data-profile-edit'));
-    expect(editors()[0].props.apiKeyConfigs).toBe(apiKeyConfigs);
+    expect(editors()[0].props.apiKeys.providerConfigs).toBe(apiKeyConfigs);
   });
 
   test('an old backend reaches the editors as providersSupported: false', async () => {

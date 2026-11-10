@@ -5771,7 +5771,8 @@
       "requires_backend": "Requires an updated CPA backend.",
       "locked": "Home mode or a scheduler plugin manages routing, so mode and fallback cannot be changed here.",
       "errors": {
-        "key_required": "Choose an API key."
+        "key_required": "Choose an API key.",
+        "hidden_mappings": "The hidden Codex mapping table has an invalid row, and CPA rejects it even while unused. Choose Subscription mode and the Codex fallback to fix or remove the row."
       }
     },
     "client_keys": {

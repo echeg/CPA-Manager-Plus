@@ -5766,7 +5766,8 @@
       "requires_backend": "需要更新 CPA 後端。",
       "locked": "路由由 Home 模式或排程外掛管理，因此無法在此變更模式與備援。",
       "errors": {
-        "key_required": "請選擇一個 API 金鑰。"
+        "key_required": "請選擇一個 API 金鑰。",
+        "hidden_mappings": "隱藏的 Codex 對應表中有無效的列，即使未使用，CPA 也會拒絕儲存。請選擇訂閱模式與 Codex 備援，修正或刪除該列。"
       }
     },
     "client_keys": {

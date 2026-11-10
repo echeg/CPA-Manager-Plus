@@ -1,11 +1,10 @@
 import type { TFunction } from 'i18next';
-import { validFallbackSettings } from '@/features/personal-quota-support/services/api/claudeFallback';
 import {
   effectiveFallbackTarget,
+  validClaudeMappings,
   type ApiCredential,
   type ApiCredentials,
   type ApiProvider,
-  type FallbackTarget,
   type ProviderRouting,
   type RoutingProfile,
 } from '@/features/personal-quota-support/services/api/routingProfiles';
@@ -50,11 +49,6 @@ export function summarizeKeyConfigs(configs: ProviderKeyConfig[]): ApiKeyConfigS
   });
 }
 
-/** Fallback targets a provider offers, in display order. Codex cannot fall back to itself. */
-export function fallbackTargets(provider: ApiProvider): FallbackTarget[] {
-  return provider === 'claude' ? ['off', 'codex', 'api'] : ['off', 'api'];
-}
-
 /** The host of a custom base URL; the URL itself when it does not parse. */
 function hostOf(baseUrl: string): string {
   const trimmed = baseUrl.trim();
@@ -68,16 +62,18 @@ function hostOf(baseUrl: string): string {
 
 /**
  * `<name> · <masked key>` (`· <host>` with a custom base URL) for a credential with
- * a matching key config; `<label> · <first 8 characters of auth_index>` without one.
+ * a matching key config; `<label> · <first 8 characters of auth_index>` without one,
+ * or when the matching entry has no key to mask, so two such keys still differ.
  */
 export function apiCredentialLabel(
   credential: ApiCredential,
   configs: ApiKeyConfigSummary[]
 ): string {
   const config = configs.find((item) => item.authIndex === credential.authIndex);
-  const parts = config
-    ? [config.name || credential.label.trim(), config.masked]
-    : [credential.label.trim(), credential.authIndex.slice(0, 8)];
+  const parts = [
+    config?.name || credential.label.trim(),
+    config?.masked || credential.authIndex.slice(0, 8),
+  ];
   parts.push(hostOf(config?.baseUrl || credential.baseUrl));
   return parts.filter(Boolean).join(' · ');
 }
@@ -142,7 +138,10 @@ export function chosenApiKeyLabel(
 export interface ProviderFieldErrors {
   /** API key mode or the API-key fallback has no key chosen. */
   apiCredential?: string;
-  /** The Claude -> Codex mapping table is invalid while the target is Codex. */
+  /**
+   * Claude's mapping table is invalid where CPA checks it: under every target but
+   * API key, so also while the table is hidden (target Off or API key mode).
+   */
   mappings?: string;
 }
 
@@ -152,7 +151,8 @@ const ERRORS = 'quota_management.provider_routing.errors';
 
 /**
  * Save-blocking errors of one provider block. On an older backend API key mode and
- * the API-key fallback cannot be written, so only the mappings are checked.
+ * the API-key fallback cannot be written, so only the mappings are checked. Only
+ * Claude has a mapping table: CPA stores no Codex mode or mappings.
  */
 export function providerFieldErrors(
   provider: ApiProvider,
@@ -160,18 +160,10 @@ export function providerFieldErrors(
   providersSupported: boolean
 ): ProviderFieldErrors {
   const errors: ProviderFieldErrors = {};
-  const target = effectiveFallbackTarget(provider, routing);
-  const needsKey = routing.mode === 'api' || target === 'api';
+  const needsKey = routing.mode === 'api' || effectiveFallbackTarget(routing) === 'api';
   if (providersSupported && needsKey && !routing.apiCredential.trim())
     errors.apiCredential = `${ERRORS}.key_required`;
-  if (
-    target === 'codex' &&
-    !validFallbackSettings({
-      enabled: true,
-      mode: routing.fallback.mode,
-      mappings: routing.fallback.mappings,
-    })
-  )
+  if (provider === 'claude' && !validClaudeMappings(routing, providersSupported))
     errors.mappings = 'quota_management.fallback.invalid';
   return errors;
 }

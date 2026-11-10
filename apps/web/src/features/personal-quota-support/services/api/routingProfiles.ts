@@ -120,37 +120,39 @@ const emptyProfile = (): RoutingProfile => ({
   providers: { claude: defaultProviderRouting(), codex: defaultProviderRouting() },
 });
 
-/** The target CPA applies: API key mode skips the fallback, and Codex cannot fall back to itself. */
-export function effectiveFallbackTarget(
-  provider: ApiProvider,
-  routing: ProviderRouting
-): FallbackTarget {
-  if (routing.mode === 'api') return 'off';
-  if (provider === 'codex' && routing.fallback.target === 'codex') return 'off';
-  return routing.fallback.target;
-}
+/** The target CPA applies: API key mode skips the fallback. */
+export const effectiveFallbackTarget = (routing: ProviderRouting): FallbackTarget =>
+  routing.mode === 'api' ? 'off' : routing.fallback.target;
 
 /** The legacy `claude-fallback` view of a profile: enabled only for the Codex target. */
 export function claudeFallbackOf(profile: RoutingProfile): ClaudeFallbackSettings {
   const claude = profile.providers.claude;
   return {
-    enabled: effectiveFallbackTarget('claude', claude) === 'codex',
+    enabled: effectiveFallbackTarget(claude) === 'codex',
     mode: claude.fallback.mode,
     mappings: claude.fallback.mappings.map((mapping) => ({ ...mapping })),
   };
 }
 
 /**
- * The Claude -> Codex mappings must be valid only while CPA uses them (target Codex);
- * under any other target they are kept as hidden values and CPA ignores them.
+ * Whether CPA accepts Claude's mapping table. It checks the rows under every target
+ * but API key, where it ignores them, so a hidden table under target Off or API key
+ * mode (saved as Off) must be valid too; an older backend checks the `claude-fallback`
+ * rows even when disabled. At least one row is required only for the Codex target.
  */
-export function validProviderFallbacks(profile: RoutingProfile): boolean {
-  const fallback = claudeFallbackOf(profile);
-  return !fallback.enabled || validFallbackSettings(fallback);
+export function validClaudeMappings(routing: ProviderRouting, providersSupported = true): boolean {
+  const target = effectiveFallbackTarget(routing);
+  if (providersSupported && target === 'api') return true;
+  return validFallbackSettings({
+    enabled: target === 'codex',
+    mode: routing.fallback.mode,
+    mappings: routing.fallback.mappings,
+  });
 }
 
 const PROVIDER_MODES: readonly ProviderMode[] = ['subscription', 'api'];
-const FALLBACK_TARGETS: Record<ApiProvider, readonly FallbackTarget[]> = {
+/** Fallback targets per provider, in display order. Codex cannot fall back to itself. */
+export const FALLBACK_TARGETS: Record<ApiProvider, readonly FallbackTarget[]> = {
   claude: ['off', 'codex', 'api'],
   codex: ['off', 'api'],
 };
@@ -462,7 +464,7 @@ export const routingProfilesApi = {
     providersSupported = true
   ): Promise<RoutingProfilesState> {
     const assertCurrent = guardConfigConnection();
-    if (profile && !validProviderFallbacks(profile))
+    if (profile && !validClaudeMappings(profile.providers.claude, providersSupported))
       throw new Error('Invalid Claude fallback mappings');
     try {
       await apiClient.patch(
@@ -493,7 +495,8 @@ export const routingProfilesApi = {
     providersSupported = true
   ): Promise<RoutingProfilesState> {
     const assertCurrent = guardConfigConnection();
-    if (!validProviderFallbacks(profile)) throw new Error('Invalid Claude fallback mappings');
+    if (!validClaudeMappings(profile.providers.claude, providersSupported))
+      throw new Error('Invalid Claude fallback mappings');
     if (ttl !== undefined && invalidTTL(ttl)) throw new Error('Invalid session affinity TTL');
     try {
       await apiClient.patch(

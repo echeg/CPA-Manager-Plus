@@ -11,7 +11,6 @@ import {
   apiCredentialLabel,
   apiCredentialOptions,
   chosenApiKeyLabel,
-  fallbackTargets,
   hasProviderRoutingErrors,
   providerFieldErrors,
   providerRoutingErrors,
@@ -98,13 +97,6 @@ describe('summarizeKeyConfigs', () => {
   });
 });
 
-describe('fallbackTargets', () => {
-  test('Claude can fall back to Codex; Codex cannot fall back to itself', () => {
-    expect(fallbackTargets('claude')).toEqual(['off', 'codex', 'api']);
-    expect(fallbackTargets('codex')).toEqual(['off', 'api']);
-  });
-});
-
 describe('apiCredentialLabel', () => {
   test('a matched key shows its prefix and mask', () => {
     expect(apiCredentialLabel(apiCredentials.claude[0], providerConfigs.claude)).toBe(
@@ -125,6 +117,21 @@ describe('apiCredentialLabel', () => {
     expect(apiCredentialLabel(apiCredentials.claude[1], [])).toBe(
       'claude-apikey · claude-i · relay.example.com'
     );
+  });
+
+  test('a matched entry without a key keeps the index, so two such keys differ', () => {
+    const credentials = [
+      { authIndex: 'empty-one-idx', label: 'claude-apikey', baseUrl: '', disabled: false },
+      { authIndex: 'empty-two-idx', label: 'claude-apikey', baseUrl: '', disabled: false },
+    ];
+    const configs = summarizeKeyConfigs([
+      { apiKey: '', authIndex: 'empty-one-idx' },
+      { apiKey: '  ', authIndex: 'empty-two-idx' },
+    ]);
+    expect(credentials.map((credential) => apiCredentialLabel(credential, configs))).toEqual([
+      'claude-apikey · empty-on',
+      'claude-apikey · empty-tw',
+    ]);
   });
 
   test('a base URL that is not a URL is shown as is', () => {
@@ -268,19 +275,43 @@ describe('providerRoutingErrors', () => {
     expect(providerRoutingErrors(profileWith(valid), true).claude).toEqual({});
   });
 
-  test('a hidden invalid mapping table does not block a save', () => {
-    const hidden = [{ from: '', to: '' }];
+  test('a hidden invalid mapping table blocks a save wherever CPA checks it', () => {
+    const blank = [{ from: '', to: '' }];
+    // Target API key: CPA ignores the table, so it is kept as it is.
     const underApiTarget = routing({
       apiCredential: 'claude-idx-1',
-      fallback: { target: 'api', mode: 'auto', mappings: hidden },
+      fallback: { target: 'api', mode: 'auto', mappings: blank },
     });
+    expect(providerRoutingErrors(profileWith(underApiTarget), true).claude).toEqual({});
+    // Target Off, and API key mode (saved as Off): CPA rejects any invalid row.
+    const underOff = routing({ fallback: { target: 'off', mode: 'auto', mappings: blank } });
     const underApiMode = routing({
       mode: 'api',
       apiCredential: 'claude-idx-1',
-      fallback: { target: 'codex', mode: 'auto', mappings: hidden },
+      fallback: { target: 'api', mode: 'auto', mappings: blank },
     });
-    expect(providerRoutingErrors(profileWith(underApiTarget), true).claude).toEqual({});
-    expect(providerRoutingErrors(profileWith(underApiMode), true).claude).toEqual({});
+    for (const value of [underOff, underApiMode])
+      expect(providerRoutingErrors(profileWith(value), true).claude).toEqual({
+        mappings: mappingsInvalid,
+      });
+  });
+
+  test('an empty hidden table is valid: only the Codex target needs a mapping', () => {
+    const emptyOff = routing({ fallback: { target: 'off', mode: 'auto', mappings: [] } });
+    const emptyApiMode = routing({
+      mode: 'api',
+      apiCredential: 'claude-idx-1',
+      fallback: { target: 'codex', mode: 'auto', mappings: [] },
+    });
+    expect(providerRoutingErrors(profileWith(emptyOff), true).claude).toEqual({});
+    expect(providerRoutingErrors(profileWith(emptyApiMode), true).claude).toEqual({});
+  });
+
+  test('Codex has no mapping table to check', () => {
+    const blank = routing({
+      fallback: { target: 'off', mode: 'auto', mappings: [{ from: '', to: '' }] },
+    });
+    expect(providerRoutingErrors(profileWith(routing(), blank), true).codex).toEqual({});
   });
 
   test('API key mode does not need a key for its hidden fallback target', () => {
@@ -297,7 +328,7 @@ describe('providerRoutingErrors', () => {
     expect(errors.claude).toEqual({});
   });
 
-  test('an older backend checks only the Codex mappings', () => {
+  test('an older backend checks only the mappings', () => {
     const legacy: RoutingProfile = {
       ...profileWith(),
       providers: providersFromClaudeFallback({ enabled: true, mode: 'auto', mappings: [] }),
@@ -308,6 +339,12 @@ describe('providerRoutingErrors', () => {
     });
     const apiDraft = profileWith(routing({ mode: 'api' }), routing({ mode: 'api' }));
     expect(providerRoutingErrors(apiDraft, false)).toEqual({ claude: {}, codex: {} });
+    // Its claude-fallback rows are checked even when disabled, under any target.
+    const blank = [{ from: '', to: '' }];
+    for (const target of ['off', 'api'] as const) {
+      const hidden = profileWith(routing({ fallback: { target, mode: 'auto', mappings: blank } }));
+      expect(providerRoutingErrors(hidden, false).claude).toEqual({ mappings: mappingsInvalid });
+    }
   });
 });
 

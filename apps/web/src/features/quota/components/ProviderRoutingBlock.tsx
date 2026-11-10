@@ -1,13 +1,14 @@
 import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SegmentedTabs, type SegmentedTabItem } from '@/components/ui/SegmentedTabs';
-import type {
-  ApiProvider,
-  FallbackTarget,
-  ProviderMode,
-  ProviderRouting,
+import {
+  FALLBACK_TARGETS,
+  type ApiProvider,
+  type FallbackTarget,
+  type ProviderMode,
+  type ProviderRouting,
 } from '@/features/personal-quota-support/services/api/routingProfiles';
-import { fallbackTargets, providerFieldErrors, type ApiKeyOption } from '../providerRoutingModel';
+import { providerFieldErrors, type ApiKeyOption } from '../providerRoutingModel';
 import { FallbackModeMappings } from './FallbackSettingsEditor';
 import { Select, type SelectOption } from './Select';
 import toolbarStyles from './QuotaSettingsToolbar.module.scss';
@@ -78,13 +79,15 @@ export function ProviderRoutingBlock({
       title: apiUnavailable,
     },
   ];
-  const targetItems: SegmentedTabItem<FallbackTarget>[] = fallbackTargets(provider).map(
+  const targetItems: SegmentedTabItem<FallbackTarget>[] = FALLBACK_TARGETS[provider].map(
     (target) => ({
       id: target,
       label: t(`quota_management.provider_routing.target_${target}`),
       ...(target === 'api' && apiUnavailable ? { disabled: true, title: apiUnavailable } : {}),
     })
   );
+  // The mapping table shows its own error; a hidden one still blocks the save, so say why.
+  const mappingsShown = value.mode !== 'api' && value.fallback.target === 'codex';
 
   const selectedKey = apiKeyOptions.find((option) => option.value === value.apiCredential.trim());
   const keyErrorId = `${id}-key-error`;
@@ -212,7 +215,7 @@ export function ProviderRoutingBlock({
             />
           </div>
 
-          {value.fallback.target === 'codex' && provider === 'claude' && (
+          {mappingsShown && (
             <div className={toolbarStyles.fallbackEditor} data-provider-codex-fallback>
               <FallbackModeMappings
                 value={value.fallback}
@@ -227,6 +230,11 @@ export function ProviderRoutingBlock({
           {value.fallback.target === 'api' &&
             apiKeyField(t('quota_management.provider_routing.api_fallback_hint'))}
         </>
+      )}
+      {errors.mappings && !mappingsShown && (
+        <p role="alert" className={styles.fieldError} data-provider-hidden-mappings-error>
+          {t('quota_management.provider_routing.errors.hidden_mappings')}
+        </p>
       )}
     </section>
   );

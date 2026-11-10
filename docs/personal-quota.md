@@ -7,9 +7,11 @@ at `4f9ee96`. The ported MIT components retain their attribution in `LICENSE`.
 ## Features
 
 The **Quota** navigation item (`#/quota`) includes compact cards, Ledger and timeline
-views; provider totals; a default routing profile (sticky session and its TTL,
-preferred subscriptions, pool selection slots and the Claude → Codex fallback, or the
-legacy routing strategy on older backends); routing profiles per client API key;
+views; provider totals; a default routing profile (sticky session and its TTL, pool
+selection slots, and per provider a Subscription or API key mode, a preferred
+subscription and a fallback to a Codex subscription (Claude only) or to the profile's
+API key, or the legacy routing strategy on older backends); routing profiles per
+client API key;
 adding and deleting client API keys; Codex Fast Mode;
 per-account soft/hard quota reserves; Codex reset credits and Claude reset grants
 with expiry dates; inline reset confirmation; CPA cooldown clearing after a
@@ -17,9 +19,10 @@ confirmed reset; refresh on entry; and privacy masking.
 Reserve editing is available directly on the quota cards.
 
 The **Guide** navigation item (`#/guide`, last sidebar block after System Info) shows
-two interactive diagrams of this fork's routing: request routing by client key (routing
-profile → sticky session → preferred account → pool selection → Claude → Codex
-fallback) and credential selection inside the pool. They are static pages bundled into
+three interactive diagrams of this fork's routing: request routing by client key
+(routing profile → sticky session → preferred account → pool selection → per-provider
+fallback to a Codex subscription or an API key), credential selection inside the pool,
+and routing with API keys (API key mode and the API-key fallback). They are static pages bundled into
 the panel and never call the backend; the behaviour they describe needs the custom
 backend (see [Routing profiles per API key](#routing-profiles-per-api-key)). The
 diagrams are generated with archify from the JSON sources in
@@ -43,7 +46,9 @@ credential fields, subscription routing, per-key routing profiles and selection
 slots, quota API calls and cooldown clearing. A backend without routing profiles
 keeps the legacy Quota toolbar, without the Profiles and Keys buttons. Stock CPA installations
 without these endpoints cannot provide the custom workbench. CPAMP's existing v0
-client and screens remain unchanged.
+client and screens remain unchanged; the Quota page only reads the v0 Claude and Codex
+API-key lists to name upstream API keys (see
+[Per-provider mode and API-key fallback](#per-provider-mode-and-api-key-fallback)).
 
 Credential mutations through v8 reuse CPAMP's mutation locks and manual-action
 ownership handling. A quota reserve, a CPA runtime cooldown, and an account disabled
@@ -90,11 +95,61 @@ the whole reserve. A v8 client cannot silently replace a staged policy with a
 legacy payload that omits its steps. This feature is maintained in CPAMP; the old
 standalone management panel has no staged-reserve editor.
 
+## Per-provider mode and API-key fallback
+
+On a backend with per-provider routing (`routing.providers`), every routing profile
+has one block per provider, Claude and Codex, below the shared stages (sticky
+session and pool selection). Each block sets:
+
+- **Mode.** **Subscription** routes through OAuth subscriptions only; API keys never
+  join the pool. **API key** skips subscriptions: the chosen key serves every request
+  of that provider and is billed for it, and the block shows only the API-key select.
+- **Preferred subscription** (Subscription mode), as before.
+- **Fallback** (Subscription mode). Claude: **Off**, **Codex** or **API key**; Codex:
+  **Off** or **API key**. The Codex target keeps the **Automatic** / **Force Codex
+  now** select and the model mapping table described in
+  [Claude to Codex fallback](#claude-to-codex-fallback). The API-key target is tried
+  only after a subscription round fails, does not bind the session (the next request
+  tries subscriptions again), and is billed to that key.
+
+Values hidden by the current mode or target, such as the mapping table, the chosen
+key and the preferred subscription, stay in the profile, so switching back restores
+them. API key mode is saved with `fallback.target: off`. A mapping table kept under
+the API-key target makes CPA log a "mode and mappings are ignored" warning on each
+config load; CPA still checks a table kept under target Off or in API key mode, so an
+invalid hidden row blocks the save with a message in the block.
+
+**Save is blocked** when API key mode or the API-key fallback has no key chosen, or
+when the Codex target has an invalid mapping table. A provider without a configured
+API key has its API key options disabled, with a link to AI Providers. A chosen key
+that is disabled or no longer configured stays selected, marked `disabled` or
+`unknown`, with a warning; such a profile can still be saved.
+
+**API key labels.** CPA lists the keys it can route to in `api_credentials` of
+`GET /v8/management/routing/profiles`, by `auth_index`. The panel names them from the
+AI Providers key lists (`GET /claude-api-key` and `/codex-api-key` on the v0 API): a
+key with a matching entry is shown as `<prefix or CPA label> · <masked key>`, plus
+`· <host>` with a custom base URL; a key without one, or when those lists fail to
+load, as `<CPA label> · <first 8 characters of auth_index>`. Raw upstream keys are
+reduced to masks as soon as the lists load and never reach the rendered page.
+
+**Chain summary.** The profile list, the Keys modal and the editor footer show one
+entry per provider: `Claude: <preferred or Automatic> → Codex`, `Claude: Codex
+(forced)` (Force Codex now), `<Provider>: <preferred or Automatic> → API key`,
+`<Provider>: API key <label>` (API key mode), `<Provider>: API key not chosen`, and
+`<Provider>: <preferred or Automatic>` when the fallback is off.
+
+On a backend without per-provider routing the panel derives the blocks from
+`claude-fallback` (Subscription mode, target Codex or Off), disables the mode control
+and every API key option with "Requires an updated CPA backend", and saves
+`claude-fallback` as before. The standalone toolbar fallback control is shown only
+there; with per-provider routing the fallback is edited in the profiles.
+
 ## Claude to Codex fallback
 
-On a backend with routing profiles, the fallback is one stage of each routing
-profile: the default profile and every key profile have a fallback block in the
-profile editor (see [Routing profiles per API key](#routing-profiles-per-api-key)),
+On a backend with routing profiles, the fallback is part of each routing profile:
+the Claude block of the default profile and of every key profile has the Codex
+target (see [Per-provider mode and API-key fallback](#per-provider-mode-and-api-key-fallback)),
 saved together with the rest of that profile. On a backend without routing profiles,
 the legacy Quota toolbar includes **Claude → Codex fallback** beside Codex Fast mode;
 its switch applies immediately and preserves the mappings and selected mode when
@@ -127,9 +182,12 @@ Home and scheduler plugins retain ownership of their routing.
 This requires updating both this panel and the custom CPA backend. On an older
 backend without the fallback endpoint the legacy toolbar control stays disabled.
 Capability and model suggestions come from `GET /v8/management/routing/claude-fallback`.
-Settings are saved through the v8 configuration API: the default profile's under
-`routing.claude-fallback`, and a key profile's under
-`routing.key-profiles.<key>.claude-fallback`. The default is disabled.
+Settings are saved through the v8 configuration API: on a backend with per-provider
+routing under `routing.providers.claude.fallback` (the default profile) and
+`routing.key-profiles.<key>.providers.claude.fallback`; on an older backend under
+`routing.claude-fallback` and `routing.key-profiles.<key>.claude-fallback`, the
+legacy block that `/routing/profiles` still reports with `enabled` true only for the
+Codex target. The default is off.
 
 ```yaml
 routing:
@@ -147,9 +205,11 @@ routing:
 
 ## Routing profiles per API key
 
-CPA routes each client API key through a profile of four stages: sticky session,
-preferred subscription for Claude and Codex, pool selection, and the Claude → Codex
-fallback. A key without its own profile uses the default profile, which is the
+CPA routes each client API key through a profile: sticky session and pool selection,
+then for Claude and Codex each the mode, the preferred subscription and the fallback
+(see [Per-provider mode and API-key fallback](#per-provider-mode-and-api-key-fallback);
+an older backend has a preferred subscription per provider and the Claude → Codex
+fallback). A key without its own profile uses the default profile, which is the
 global routing configuration. A key profile is a full copy: nothing is inherited
 from the default.
 
@@ -174,12 +234,14 @@ at a time.
 
 **Profiles modal.** The modal lists:
 
-- **Default**, the profile of every key without its own. Its editor covers all four
-  stages and the sticky-session TTL, which is global: it applies to every profile and
+- **Default**, the profile of every key without its own. Its editor covers the whole
+  profile and the sticky-session TTL, which is global: it applies to every profile and
   is shown, read-only, in the key editors. An empty or invalid TTL is rejected before
   any request. **Save** sends one `PATCH /v8/management/config` with
-  `routing.selection`, `session-affinity`, `preferred-accounts` and
-  `claude-fallback`, plus `session-affinity-ttl` only when it changed. It then reads
+  `routing.selection`, `session-affinity`, `preferred-accounts` and `providers` (the
+  complete block; a cleared `api-credential` is sent as `null`, and the Codex block
+  carries only `fallback.target`; an older backend gets `claude-fallback` instead),
+  plus `session-affinity-ttl` only when it changed. It then reads
   `GET /v8/management/routing/profiles` back and compares the default profile, and
   when the TTL was sent also checks it in the config; it reports an error if CPA did
   not keep the same values. Every Save writes the complete `routing.selection`, even
@@ -188,13 +250,13 @@ at a time.
   Reserves → Round-robin); `routing.strategy` stays in the file but is ignored from
   then on.
 - One row per key with its own profile: its label, a one-line chain summary such as
-  `Sticky session · Claude: work@example.com · Codex: Automatic · reserves →
-  round-robin · Fallback: automatic`, **Edit**, and **Reset to default**. Reset asks
+  `Sticky session · Claude: work@example.com → Codex · Codex: API key team ·
+  sk******yz · reserves → round-robin`, **Edit**, and **Reset to default**. Reset asks
   for confirmation, then deletes the key's profile with a `null` PATCH.
 - **+ Profile for a key**, which picks a key that still uses the default and opens a
-  new profile for it, started from a copy of the default profile. Sticky sessions and
-  the fallback stay as they were until changed; an empty profile would silently turn
-  them off.
+  new profile for it, started from a copy of the default profile. Sticky sessions,
+  the provider modes and the fallbacks stay as they were until changed; an empty
+  profile would silently turn them off.
 
 Only one editor is open at a time. In every editor, pool selection has two slots,
 **Primary** and **On a tie**. Each accepts a narrowing criterion (Priority,
@@ -266,35 +328,54 @@ stay in memory and in request bodies; they are never
 rendered (except in the add form's key field before the key is added), logged,
 placed in an error message, or placed in a request URL, because CPA writes request
 paths to its log. Account names in the summaries follow the email privacy toggle.
+Upstream API keys chosen in the provider blocks are named as described in
+[API key labels](#per-provider-mode-and-api-key-fallback).
 
 **Read-only mode and older backends.** In Home mode or with a scheduler plugin, CPA
 reports `supported: false`: per-key profiles are inactive. The toolbar is still the
 slim one. In the Profiles modal the key rows are read-only and **Reset to default**
-and **+ Profile for a key** are hidden. The Default row stays editable except its
-fallback stage, which CPA ignores in this mode; a Save keeps the stored fallback. In the
+and **+ Profile for a key** are hidden. The Default row stays editable except the
+mode and fallback of both provider blocks, which CPA ignores in this mode; the
+preferred subscriptions stay editable, and a Save keeps the stored mode and fallback. In the
 Keys modal the profile select is read-only, while adding and deleting keys stay
 available. A backend without `GET /v8/management/routing/profiles` (404) keeps
 the legacy toolbar: the legacy strategy select, sticky-session
 settings, preferred subscriptions, the fallback control and Save, with no
-Profiles or Keys button. Keys on such a backend are managed on the Config page.
+Profiles or Keys button. Keys on such a backend are managed on the Config page. A
+backend with routing profiles but without per-provider routing keeps the slim
+toolbar plus the standalone fallback control; its provider blocks offer only
+Subscription mode and the Codex target, and Save writes `claude-fallback`.
 
 This requires the custom CPA backend with per-key routing profiles
 ([echeg/CLIProxyAPI](https://github.com/echeg/CLIProxyAPI) `main` at `ced98b16`
-or later). The Manager Server forwards the new endpoint unchanged. Profiles are
-stored under `routing.key-profiles`, keyed by the exact client key. A
-`claude-fallback` block without `mode` means `auto`:
+or later); API key mode and the API-key fallback also need a build with
+`routing.providers` and `api_credentials`. The Manager Server forwards the new
+endpoint unchanged. Profiles are stored under `routing.key-profiles`, keyed by the
+exact client key. A provider block without `mode` means `subscription`, without a
+fallback `target` means `off`, and a fallback without `mode` means `auto`;
+`api-credential` is a key's `auth_index`:
 
 ```yaml
 routing:
   session-affinity: true
   selection: {primary: reserves, tiebreak: earliest-reset}
+  providers:
+    claude:
+      mode: subscription
+      fallback: {target: codex, mode: auto, mappings: [{from: claude-opus-*, to: gpt-6-astra}]}
+    codex: {mode: api, api-credential: "codex-key-auth-index", fallback: {target: "off"}}
   key-profiles:
     "client-key-a":
       session-affinity: false
       preferred-accounts: {claude: "claude-account-index"}
       selection: {primary: priority, tiebreak: round-robin}
-      claude-fallback: {enabled: false, mode: auto, mappings: []}
+      providers:
+        claude: {api-credential: "claude-key-auth-index", fallback: {target: api}}
 ```
+
+An older backend stores the Claude fallback of a profile as
+`claude-fallback: {enabled: false, mode: auto, mappings: []}` instead of
+`providers`.
 
 ## CPA logs storage
 

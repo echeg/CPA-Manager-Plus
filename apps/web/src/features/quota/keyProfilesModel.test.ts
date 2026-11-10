@@ -196,10 +196,6 @@ describe('normalizeProfile with providers', () => {
       fallback: { target: 'api', mode: 'auto', mappings: [] },
     });
     expect(profileDirty(a, b, options)).toBe(false);
-    expect(
-      normalizeProfile(codex({ target: 'codex', mode: 'auto', mappings: [] }), options).providers
-        .codex.fallback.target
-    ).toBe('off');
   });
 
   test('a change of mode, target or credential is dirty', () => {
@@ -488,13 +484,5 @@ describe('chainSummary', () => {
     expect(chainSummary(unset, files, true, t, apiKeys)).toContain(
       'Codex: API key not chosen · reserves'
     );
-  });
-
-  test('a stored Codex target on Codex reads as fallback off', () => {
-    const value = withProvider(
-      'codex',
-      codexRouting({ fallback: { target: 'codex', mode: 'auto', mappings: [] } })
-    );
-    expect(chainSummary(value, files, true, t)).toContain('Codex: Automatic · reserves');
   });
 });

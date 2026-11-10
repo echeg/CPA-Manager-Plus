@@ -5766,7 +5766,8 @@
       "requires_backend": "需要更新 CPA 后端。",
       "locked": "路由由 Home 模式或调度插件管理，因此无法在此更改模式和回退。",
       "errors": {
-        "key_required": "请选择一个 API 密钥。"
+        "key_required": "请选择一个 API 密钥。",
+        "hidden_mappings": "隐藏的 Codex 映射表中有无效行，即使未使用，CPA 也会拒绝保存。请选择订阅模式和 Codex 回退，修正或删除该行。"
       }
     },
     "client_keys": {

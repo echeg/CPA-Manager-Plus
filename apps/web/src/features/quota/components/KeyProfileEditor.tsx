@@ -4,22 +4,24 @@ import { Button } from '@/components/ui/Button';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { withSuggestions } from '@/features/personal-quota-support/services/api/claudeFallback';
 import type {
-  ApiCredentials,
   RoutingProfile,
   RoutingSelectionOptions,
 } from '@/features/personal-quota-support/services/api/routingProfiles';
 import type { AuthFileItem } from '@/features/personal-quota-support/types';
 import { getQuotaDisplayName } from '@/features/quota/utils/quota/identity';
-import { chainSummary, copyOfShared, profileDirty } from '../keyProfilesModel';
+import {
+  chainSummary,
+  copyOfShared,
+  profileDirty,
+  type ApiKeyLabelSource,
+} from '../keyProfilesModel';
 import { maskQuotaName } from '../ledgerModel';
 import {
   API_PROVIDERS,
   apiCredentialOptions,
-  emptyApiKeyConfigs,
   hasProviderRoutingErrors,
   providerRoutingErrors,
   withApiModeNormalization,
-  type ApiKeyConfigSummaries,
 } from '../providerRoutingModel';
 import {
   preferredAccountOptions,
@@ -30,9 +32,6 @@ import {
 import { ProviderRoutingBlock } from './ProviderRoutingBlock';
 import { Select } from './Select';
 import styles from './KeyProfileEditor.module.scss';
-
-const NO_API_CREDENTIALS: ApiCredentials = { claude: [], codex: [] };
-const NO_API_KEY_CONFIGS: ApiKeyConfigSummaries = emptyApiKeyConfigs();
 
 export interface KeyProfileEditorProps {
   /** The profile to edit: the stored one, or for a new key profile a copy of the shared one. */
@@ -58,10 +57,8 @@ export interface KeyProfileEditorProps {
   fallbackReadOnly?: boolean;
   /** `false` on a backend without `providers`: API key choices are disabled. */
   providersSupported?: boolean;
-  /** The API keys CPA can route to, per provider. */
-  apiCredentials?: ApiCredentials;
-  /** Provider key configs (masked) that name the API keys. */
-  apiKeyConfigs?: ApiKeyConfigSummaries;
+  /** The API keys CPA can route to, per provider, and the masked key configs that name them. */
+  apiKeys: ApiKeyLabelSource;
   /** Saves the complete profile; the TTL is passed only when the default variant changed it. */
   onSave: (profile: RoutingProfile, ttl?: string) => void;
   onCancel: () => void;
@@ -102,8 +99,7 @@ export function KeyProfileEditor({
   readOnly,
   fallbackReadOnly = false,
   providersSupported = true,
-  apiCredentials = NO_API_CREDENTIALS,
-  apiKeyConfigs = NO_API_KEY_CONFIGS,
+  apiKeys,
   onSave,
   onCancel,
 }: KeyProfileEditorProps) {
@@ -150,10 +146,7 @@ export function KeyProfileEditor({
   };
 
   const slots = selectionSlotOptions(t, selectionOptions, draft.selection);
-  const summary = chainSummary(draft, files, showEmails, t, {
-    apiCredentials,
-    providerConfigs: apiKeyConfigs,
-  });
+  const summary = chainSummary(draft, files, showEmails, t, apiKeys);
   const ttlErrorId = `${id}-ttl-error`;
 
   return (
@@ -259,8 +252,8 @@ export function KeyProfileEditor({
               preferredOptions={preferredAccountOptions(provider, files, preferred, displayName, t)}
               apiKeyOptions={apiCredentialOptions(
                 provider,
-                apiCredentials,
-                apiKeyConfigs,
+                apiKeys.apiCredentials,
+                apiKeys.providerConfigs,
                 routing.apiCredential,
                 t
               )}

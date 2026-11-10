@@ -275,5 +275,61 @@ describe('ProviderRoutingBlock', () => {
     const alerts = root().findAll((node) => node.props.role === 'alert');
     expect(alerts).toHaveLength(1);
     expect(alerts[0].children.join('')).toContain('Fill in both model IDs');
+    expect(byData('data-provider-hidden-mappings-error')).toHaveLength(0);
+  });
+
+  test.each([
+    [
+      'target Off',
+      routing({ fallback: { target: 'off', mode: 'auto', mappings: [{ from: '', to: '' }] } }),
+    ],
+    [
+      'API key mode',
+      routing({
+        mode: 'api',
+        fallback: { target: 'codex', mode: 'auto', mappings: [{ from: '', to: '' }] },
+      }),
+    ],
+  ])(
+    'a hidden invalid mapping table explains why the save is blocked: %s',
+    async (_name, value) => {
+      await mount({ value });
+      expect(root().findAllByType(FallbackModeMappings)).toHaveLength(0);
+      const [error] = byData('data-provider-hidden-mappings-error');
+      expect(error.props.role).toBe('alert');
+      expect(error.children.join('')).toContain(
+        'The hidden Codex mapping table has an invalid row'
+      );
+    }
+  );
+
+  test('a hidden mapping table under the API-key target is not checked', async () => {
+    await mount({
+      value: routing({
+        fallback: { target: 'api', mode: 'auto', mappings: [{ from: '', to: '' }] },
+      }),
+    });
+    expect(byData('data-provider-hidden-mappings-error')).toHaveLength(0);
+  });
+
+  test.each([
+    ['API key mode', routing({ mode: 'api', apiCredential: '' })],
+    [
+      'the API-key target',
+      routing({ apiCredential: '', fallback: { target: 'api', mode: 'auto', mappings } }),
+    ],
+  ])('the key select is enabled with keys listed and none chosen: %s', async (_name, value) => {
+    await mount({ value });
+    expect(apiKeySelect()!.props.disabled).toBe(false);
+  });
+
+  test('a stored key stays selectable after the last key is removed', async () => {
+    await mount({ apiKeyOptions: [], value: routing({ mode: 'api', apiCredential: 'key-idx-1' }) });
+    expect(apiKeySelect()!.props.disabled).toBe(false);
+  });
+
+  test('without keys and nothing chosen the key select is disabled', async () => {
+    await mount({ apiKeyOptions: [], value: routing({ mode: 'api', apiCredential: '' }) });
+    expect(apiKeySelect()!.props.disabled).toBe(true);
   });
 });

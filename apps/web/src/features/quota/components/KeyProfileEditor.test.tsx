@@ -15,8 +15,8 @@ import {
 } from '@/features/personal-quota-support/services/api/routingProfiles';
 import { suggestedFallbackMappings } from '@/features/personal-quota-support/services/api/claudeFallback';
 import type { AuthFileItem } from '@/features/personal-quota-support/types';
-import { copyOfShared } from '../keyProfilesModel';
-import type { ApiKeyConfigSummaries } from '../providerRoutingModel';
+import { copyOfShared, type ApiKeyLabelSource } from '../keyProfilesModel';
+import { summarizeKeyConfigs, type ApiKeyConfigSummaries } from '../providerRoutingModel';
 import { FallbackModeMappings, FallbackSettingsEditor } from './FallbackSettingsEditor';
 import { KeyProfileEditor, type KeyProfileEditorProps } from './KeyProfileEditor';
 import { ProviderRoutingBlock } from './ProviderRoutingBlock';
@@ -99,8 +99,7 @@ async function mount(props: Partial<KeyProfileEditorProps> = {}) {
         models: { claude: ['claude-opus-5'], codex: ['gpt-6-astra'] },
         saving: false,
         readOnly: false,
-        apiCredentials,
-        apiKeyConfigs,
+        apiKeys: { apiCredentials, providerConfigs: apiKeyConfigs },
         onSave,
         onCancel,
         ...props,
@@ -360,7 +359,7 @@ describe('KeyProfileEditor', () => {
     expect(saveButton().props.disabled).toBe(false);
   });
 
-  test('invalid mappings stop blocking the save once the target is no longer Codex', async () => {
+  test('an empty mapping table stops blocking the save once the target is no longer Codex', async () => {
     await mount();
     act(() =>
       block('claude')
@@ -371,6 +370,34 @@ describe('KeyProfileEditor', () => {
     setTarget('claude', 'off');
     expect(saveButton().props.disabled).toBe(false);
   });
+
+  test.each([
+    ['target Off', true, () => setTarget('claude', 'off'), true],
+    ['API key mode', true, () => setMode('claude', 'api'), true],
+    ['the API-key target', true, () => setTarget('claude', 'api'), false],
+    ['target Off on an older backend', false, () => setTarget('claude', 'off'), true],
+  ] as const)(
+    'a blank mapping row hidden by %s blocks the save where CPA checks it',
+    async (_name, providersSupported, hide, blocked) => {
+      const { onSave } = await mount({ providersSupported });
+      const table = block('claude').findByType(FallbackModeMappings);
+      // "Add mapping" appends an empty row.
+      act(() =>
+        table.props.onChange({
+          mode: 'auto',
+          mappings: [...table.props.value.mappings, { from: '', to: '' }],
+        })
+      );
+      setKey('claude', 'claude-key-1');
+      hide();
+      expect(saveButton().props.disabled).toBe(blocked);
+      expect(
+        root().findAll((node) => node.props['data-provider-hidden-mappings-error'] !== undefined)
+      ).toHaveLength(blocked ? 1 : 0);
+      click(saveButton());
+      expect(onSave).toHaveBeenCalledTimes(blocked ? 0 : 1);
+    }
+  );
 
   test('a disabled or unknown chosen key warns but can be saved', async () => {
     const { onSave } = await mount();
@@ -522,7 +549,9 @@ describe('KeyProfileEditor', () => {
   });
 
   test('without API keys the API options are disabled and link to AI Providers', async () => {
-    await mount({ apiCredentials: { claude: [], codex: [] } });
+    await mount({
+      apiKeys: { apiCredentials: { claude: [], codex: [] }, providerConfigs: apiKeyConfigs },
+    });
     for (const provider of ['claude', 'codex'] as const) {
       expect(segmentedItems(provider, 0).find((item) => item.id === 'api')?.disabled).toBe(true);
       expect(segmentedItems(provider, 1).find((item) => item.id === 'api')?.disabled).toBe(true);
@@ -547,16 +576,21 @@ describe('KeyProfileEditor', () => {
   });
 
   test('no raw upstream key reaches the rendered output', async () => {
-    await mount({
-      apiKeyConfigs: {
-        claude: [{ authIndex: 'claude-key-1', name: '', masked: 'sk-a...cdef', baseUrl: '' }],
+    // The configs as the hook builds them from the provider key lists.
+    const apiKeys: ApiKeyLabelSource = {
+      apiCredentials,
+      providerConfigs: {
+        claude: summarizeKeyConfigs([
+          { apiKey: RAW_UPSTREAM, prefix: RAW_UPSTREAM, authIndex: 'claude-key-1' },
+        ]),
         codex: [],
       },
-    });
+    };
+    await mount({ apiKeys });
     setMode('claude', 'api');
     setKey('claude', 'claude-key-1');
     const json = JSON.stringify(renderer!.toJSON());
-    expect(json).toContain('sk-a...cdef');
+    expect(json).toContain('sk******ef');
     expect(json).not.toContain(RAW_UPSTREAM);
   });
 

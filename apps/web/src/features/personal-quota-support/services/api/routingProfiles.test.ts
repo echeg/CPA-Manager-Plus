@@ -260,6 +260,7 @@ describe('reading routing profiles', () => {
     ['non-list mappings', { claude: { fallback: { target: 'codex', mappings: 'x' } } }],
     ['a malformed mapping', { claude: { fallback: { target: 'codex', mappings: [{ from: 1 }] } } }],
     ['a non-object provider', { claude: 'subscription' }],
+    ['a non-object fallback', { claude: { fallback: 'off' } }],
   ])('rejects invalid provider settings: %s', (_name, providers) => {
     expect(() => readRoutingProfiles(providersResponse({ providers }))).toThrow(
       'Invalid routing provider settings'
@@ -634,7 +635,7 @@ describe('writing a key profile', () => {
     expect(mocks.patch).not.toHaveBeenCalled();
   });
 
-  it('checks the mappings only while CPA uses them: target Codex in Subscription mode', async () => {
+  it('skips the mapping rows only under target API key, which CPA ignores', async () => {
     mocks.patch.mockResolvedValue({});
     const hidden = providersProfile();
     hidden.providers.claude.fallback.mappings = [{ from: 'claude-*-x*', to: '' }];
@@ -671,6 +672,30 @@ describe('writing a key profile', () => {
     ).rejects.toThrow('did not retain');
     expect(mocks.patch).toHaveBeenCalledTimes(1);
   });
+
+  it.each([
+    ['target off', 'subscription', 'off', true],
+    ['API key mode (saved as off)', 'api', 'api', true],
+    ['an older backend under target off', 'subscription', 'off', false],
+  ] as const)(
+    'refuses a hidden invalid mapping row before writing: %s',
+    async (_name, mode, target, providersSupported) => {
+      const hidden = providersProfile();
+      hidden.providers.claude.mode = mode;
+      hidden.providers.claude.fallback = {
+        target,
+        mode: 'auto',
+        mappings: [{ from: '', to: '' }],
+      };
+      await expect(
+        routingProfilesApi.saveKeyProfile(RAW_KEY, hidden, options, providersSupported)
+      ).rejects.toThrow('Invalid Claude fallback mappings');
+      await expect(
+        routingProfilesApi.saveSharedProfile(hidden, undefined, options, providersSupported)
+      ).rejects.toThrow('Invalid Claude fallback mappings');
+      expect(mocks.patch).not.toHaveBeenCalled();
+    }
+  );
 });
 
 describe('write errors', () => {
@@ -786,6 +811,19 @@ describe('writing the shared profile', () => {
       if (url === '/config') return config;
       throw new Error(`unexpected GET ${url}`);
     });
+
+  it('threads providersSupported into the shared PATCH body', async () => {
+    mocks.patch.mockResolvedValue({});
+    mocks.get.mockResolvedValue(response());
+    await routingProfilesApi.saveSharedProfile(sharedProfile(), undefined, options, false);
+    expect(mocks.patch).toHaveBeenCalledWith(
+      '/config',
+      sharedProfilePatch(sharedProfile(), undefined, options, false)
+    );
+    const body = mocks.patch.mock.calls[0][1].routing;
+    expect(body).toHaveProperty('claude-fallback');
+    expect(body).not.toHaveProperty('providers');
+  });
 
   it('sends the providers block as top-level routing fields', () => {
     expect(sharedProfilePatch(providersProfile(), undefined, options)).toEqual({

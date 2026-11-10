@@ -412,7 +412,8 @@ export function QuotaSettingsBar({
   const models = fallback.state?.models ?? EMPTY_MODELS;
   // The standalone control duplicates the default profile and cannot show the API-key
   // target, so a backend with per-provider routing edits the fallback in the profiles only.
-  const showFallbackControl = !profilesState?.providersSupported;
+  // Like `slim`, it assumes such a backend until a load reports an older one.
+  const showFallbackControl = Boolean(profilesState && !profilesState.providersSupported);
 
   return (
     <>
