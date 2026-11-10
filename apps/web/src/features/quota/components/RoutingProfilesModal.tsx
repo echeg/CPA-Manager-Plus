@@ -27,6 +27,7 @@ export interface RoutingProfilesModalProps {
     | 'reload'
     | 'saveKeyProfile'
     | 'saveShared'
+    | 'apiKeyConfigs'
   >;
   files: AuthFileItem[];
   showEmails: boolean;
@@ -70,6 +71,15 @@ export function RoutingProfilesModal({
   const { state, rows, ttl, loading, saving, error } = keyProfiles;
   const message = showEmails ? error : maskQuotaText(error);
   const readOnly = state ? !state.supported : true;
+  // What the editors and summaries need to name API keys; raw keys never reach it.
+  const apiKeys = state
+    ? { apiCredentials: state.apiCredentials, providerConfigs: keyProfiles.apiKeyConfigs }
+    : undefined;
+  const providerProps = state && {
+    providersSupported: state.providersSupported,
+    apiCredentials: state.apiCredentials,
+    apiKeyConfigs: keyProfiles.apiKeyConfigs,
+  };
 
   const own = rows.filter((row) => row.profile !== null);
   const onDefault = rows.filter((row) => row.profile === null);
@@ -134,6 +144,7 @@ export function RoutingProfilesModal({
         showEmails={showEmails}
         selectionOptions={state.selectionOptions}
         models={models}
+        {...providerProps}
         // A reload keeps the rows on screen; the editor waits for it because the
         // hook refuses a save while the profiles load.
         saving={saving || loading}
@@ -230,7 +241,7 @@ export function RoutingProfilesModal({
                 </Button>
               </div>
               <p className={styles.summary} data-profile-summary>
-                {chainSummary(state.shared, files, showEmails, t)}
+                {chainSummary(state.shared, files, showEmails, t, apiKeys)}
               </p>
               {defaultOpen && (
                 <KeyProfileEditor
@@ -243,9 +254,10 @@ export function RoutingProfilesModal({
                   showEmails={showEmails}
                   selectionOptions={state.selectionOptions}
                   models={models}
+                  {...providerProps}
                   saving={saving || loading}
                   // The shared values stay editable in Home or scheduler-plugin mode,
-                  // except the fallback, which CPA ignores there.
+                  // except the provider mode and fallback, which CPA ignores there.
                   readOnly={false}
                   fallbackReadOnly={readOnly}
                   onSave={(profile, nextTTL) => void saveDefault(profile, nextTTL)}
@@ -306,7 +318,7 @@ export function RoutingProfilesModal({
                         </div>
                       </div>
                       <p className={styles.summary} data-profile-summary>
-                        {chainSummary(row.profile ?? state.shared, files, showEmails, t)}
+                        {chainSummary(row.profile ?? state.shared, files, showEmails, t, apiKeys)}
                       </p>
                       {isOpen && keyEditor(row)}
                     </li>

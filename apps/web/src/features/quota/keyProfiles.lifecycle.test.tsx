@@ -21,7 +21,8 @@ import { sha256Hex } from '@/utils/apiKeyHash';
 import { ClaudeFallbackControl } from './components/ClaudeFallbackControl';
 import { ClientKeysModal } from './components/ClientKeysModal';
 import { KeyProfileEditor } from './components/KeyProfileEditor';
-import { QuotaSettingsBar } from './components/QuotaSettingsToolbar';
+import { ProviderRoutingBlock } from './components/ProviderRoutingBlock';
+import { QuotaSettingsBar, QuotaSettingsToolbar } from './components/QuotaSettingsToolbar';
 import { RoutingProfilesModal } from './components/RoutingProfilesModal';
 import { Select } from './components/Select';
 import { useClaudeFallback } from './hooks/useClaudeFallback';
@@ -257,12 +258,52 @@ describe('quota settings bar on a backend with /routing/profiles', () => {
     expect(keysModal().props.open).toBe(false);
   });
 
+  test('hides the standalone fallback control on a backend with per-provider routing', async () => {
+    await mount();
+    expect(root().findByType(QuotaSettingsToolbar).props.fallbackControl).toBeUndefined();
+    expect(root().findAllByType(ClaudeFallbackControl)).toHaveLength(0);
+  });
+
+  test('keeps the standalone fallback control for a backend without providers', async () => {
+    keyProfiles = makeKeyProfiles(profilesState({ providersSupported: false }));
+    await mount();
+    expect(root().findByType(QuotaSettingsToolbar).props.fallbackControl).toBeDefined();
+  });
+
   test('stays slim with supported: false', async () => {
     keyProfiles = makeKeyProfiles(profilesState({ supported: false }));
     await mount();
     expect(text(keysButton()!)).toBe('Keys · 2');
     expect(profilesButton()!.props.disabled).toBe(false);
     expect(buttonWith('data-routing-save')).toBeUndefined();
+  });
+
+  test('supported: false locks mode and fallback in the default profile and keeps the stored providers', async () => {
+    const stored = shared();
+    stored.providers.codex = {
+      mode: 'api',
+      apiCredential: 'codex-key-1',
+      fallback: { target: 'off', mode: 'auto', mappings: [] },
+    };
+    keyProfiles = makeKeyProfiles(profilesState({ supported: false, shared: stored }));
+    await mount();
+    await click(profilesButton());
+    await finishReload(profilesState({ supported: false, shared: stored }));
+    const defaultRow = root().find((node) => node.props['data-profile-default']);
+    await click(buttonWith('data-profile-edit', defaultRow));
+    const blocks = root().findAllByType(ProviderRoutingBlock);
+    expect(blocks).toHaveLength(2);
+    expect(blocks.every((block) => block.props.modeLocked && !block.props.disabled)).toBe(true);
+
+    const claudePreferred = editors()[0]
+      .findAllByType(Select)
+      .find((select) => select.props.ariaLabel === 'Claude: subscription for new threads')!;
+    await act(async () => claudePreferred.props.onChange(''));
+    await click(buttonWith('data-key-profile-save'));
+    expect(keyProfiles.saveShared).toHaveBeenCalledWith(
+      { ...stored, preferredAccounts: {} },
+      undefined
+    );
   });
 
   test('disables both buttons before the first load and enables them after a failure', async () => {
@@ -396,6 +437,7 @@ describe('quota settings bar on a backend without /routing/profiles', () => {
     expect(keysButton()).toBeUndefined();
     expect(buttonWith('data-routing-save')).toBeDefined();
     expect(root().findAllByType(ClaudeFallbackControl)).toHaveLength(1);
+    expect(root().findByType(QuotaSettingsToolbar).props.fallbackControl).toBeDefined();
     expect(root().findAllByType(RoutingProfilesModal)).toHaveLength(0);
     expect(root().findAllByType(ClientKeysModal)).toHaveLength(0);
     expect(useSubscriptionRouting).toHaveBeenLastCalledWith(false);

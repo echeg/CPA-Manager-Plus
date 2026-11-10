@@ -63,10 +63,6 @@
   color: var(--danger-color);
 }
 
-.account {
-  width: 200px;
-}
-
 .slot {
   width: 160px;
 }
@@ -93,4 +89,12 @@
   display: inline-flex;
   gap: 8px;
   margin-left: auto;
+}
+
+// Stacked, so the Claude mapping table keeps the full editor width.
+.providers {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
 }

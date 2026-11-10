@@ -3,31 +3,36 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { withSuggestions } from '@/features/personal-quota-support/services/api/claudeFallback';
-import {
-  claudeFallbackOf,
-  validProviderFallbacks,
-  type RoutingProfile,
-  type RoutingSelectionOptions,
+import type {
+  ApiCredentials,
+  RoutingProfile,
+  RoutingSelectionOptions,
 } from '@/features/personal-quota-support/services/api/routingProfiles';
 import type { AuthFileItem } from '@/features/personal-quota-support/types';
 import { getQuotaDisplayName } from '@/features/quota/utils/quota/identity';
 import { chainSummary, copyOfShared, profileDirty } from '../keyProfilesModel';
 import { maskQuotaName } from '../ledgerModel';
 import {
+  API_PROVIDERS,
+  apiCredentialOptions,
+  emptyApiKeyConfigs,
+  hasProviderRoutingErrors,
+  providerRoutingErrors,
+  withApiModeNormalization,
+  type ApiKeyConfigSummaries,
+} from '../providerRoutingModel';
+import {
   preferredAccountOptions,
   invalidTTL,
   selectionSlotOptions,
   withPickerRule,
-  type RoutingProvider,
 } from '../routingModel';
-import { FallbackSettingsEditor } from './FallbackSettingsEditor';
+import { ProviderRoutingBlock } from './ProviderRoutingBlock';
 import { Select } from './Select';
 import styles from './KeyProfileEditor.module.scss';
 
-const PROVIDERS: ReadonlyArray<{ id: RoutingProvider; label: string }> = [
-  { id: 'claude', label: 'Claude' },
-  { id: 'codex', label: 'Codex' },
-];
+const NO_API_CREDENTIALS: ApiCredentials = { claude: [], codex: [] };
+const NO_API_KEY_CONFIGS: ApiKeyConfigSummaries = emptyApiKeyConfigs();
 
 export interface KeyProfileEditorProps {
   /** The profile to edit: the stored one, or for a new key profile a copy of the shared one. */
@@ -46,11 +51,17 @@ export interface KeyProfileEditorProps {
   /** Nothing can be changed, for example a key profile when the backend reports `supported: false`. */
   readOnly: boolean;
   /**
-   * Only the fallback stage is locked: CPA ignores it in Home or scheduler-plugin mode
-   * (`supported: false`), where the default profile stays editable. A save keeps the
-   * stored fallback block.
+   * Only the provider mode and fallback are locked: CPA ignores them in Home or
+   * scheduler-plugin mode (`supported: false`), where the default profile stays
+   * editable. A save keeps the stored `providers` block.
    */
   fallbackReadOnly?: boolean;
+  /** `false` on a backend without `providers`: API key choices are disabled. */
+  providersSupported?: boolean;
+  /** The API keys CPA can route to, per provider. */
+  apiCredentials?: ApiCredentials;
+  /** Provider key configs (masked) that name the API keys. */
+  apiKeyConfigs?: ApiKeyConfigSummaries;
   /** Saves the complete profile; the TTL is passed only when the default variant changed it. */
   onSave: (profile: RoutingProfile, ttl?: string) => void;
   onCancel: () => void;
@@ -73,7 +84,11 @@ const withFallbackSuggestions = (profile: RoutingProfile): RoutingProfile => {
   };
 };
 
-/** Editor for one routing profile: the four routing stages, plus the TTL for the default one. */
+/**
+ * Editor for one routing profile: the shared stages (sticky session, pool selection,
+ * plus the TTL for the default profile), then one block per provider with its mode,
+ * preferred subscription, fallback target and API key.
+ */
 export function KeyProfileEditor({
   initial,
   isNew,
@@ -86,6 +101,9 @@ export function KeyProfileEditor({
   saving,
   readOnly,
   fallbackReadOnly = false,
+  providersSupported = true,
+  apiCredentials = NO_API_CREDENTIALS,
+  apiKeyConfigs = NO_API_KEY_CONFIGS,
   onSave,
   onCancel,
 }: KeyProfileEditorProps) {
@@ -110,7 +128,10 @@ export function KeyProfileEditor({
     return showEmails ? name : maskQuotaName(name);
   };
 
-  const invalid = !draft.selection.primary.trim() || !validProviderFallbacks(draft) || ttlInvalid;
+  // A locked block saves the stored providers, so its draft cannot block the save.
+  const routingInvalid =
+    !fallbackReadOnly && hasProviderRoutingErrors(providerRoutingErrors(draft, providersSupported));
+  const invalid = !draft.selection.primary.trim() || routingInvalid || ttlInvalid;
   // Creating a profile is a change even when the copy still equals the shared settings:
   // from then on the key no longer follows the default profile.
   const dirty = !baseline || profileDirty(draft, baseline, selectionOptions) || ttlChanged;
@@ -123,13 +144,16 @@ export function KeyProfileEditor({
     const profile = {
       ...draft,
       selection: withPickerRule(draft.selection, selectionOptions),
-      providers: fallbackReadOnly ? initial.providers : draft.providers,
+      providers: fallbackReadOnly ? initial.providers : withApiModeNormalization(draft.providers),
     };
     onSave(profile, ttlChanged ? ttlDraft.trim() : undefined);
   };
 
   const slots = selectionSlotOptions(t, selectionOptions, draft.selection);
-  const summary = chainSummary(draft, files, showEmails, t);
+  const summary = chainSummary(draft, files, showEmails, t, {
+    apiCredentials,
+    providerConfigs: apiKeyConfigs,
+  });
   const ttlErrorId = `${id}-ttl-error`;
 
   return (
@@ -179,34 +203,6 @@ export function KeyProfileEditor({
         </div>
       </section>
 
-      <section className={styles.stage} aria-labelledby={`${id}-accounts`}>
-        <h4 id={`${id}-accounts`}>{t('quota_management.key_profiles.editor.accounts')}</h4>
-        <div className={styles.row}>
-          {PROVIDERS.map(({ id: provider, label }) => {
-            const selected = draft.preferredAccounts[provider] ?? '';
-            return (
-              <Select
-                key={provider}
-                size="sm"
-                className={styles.account}
-                value={selected}
-                options={preferredAccountOptions(provider, files, selected, displayName, t)}
-                ariaLabel={t('quota_management.routing.preferred_account', {
-                  provider: label,
-                })}
-                disabled={locked}
-                onChange={(value) => {
-                  const preferredAccounts = { ...draft.preferredAccounts };
-                  if (value) preferredAccounts[provider] = value;
-                  else delete preferredAccounts[provider];
-                  update({ preferredAccounts });
-                }}
-              />
-            );
-          })}
-        </div>
-      </section>
-
       <section className={styles.stage} aria-labelledby={`${id}-selection`}>
         <h4 id={`${id}-selection`}>{t('quota_management.key_profiles.editor.selection')}</h4>
         <div className={styles.row}>
@@ -250,33 +246,46 @@ export function KeyProfileEditor({
         </div>
       </section>
 
-      <section className={styles.stage} aria-labelledby={`${id}-fallback`}>
-        <h4 id={`${id}-fallback`}>{t('quota_management.fallback.title')}</h4>
-        {fallbackReadOnly && (
-          <p className={styles.hint} data-key-profile-fallback-locked>
-            {t('quota_management.fallback.unsupported')}
-          </p>
-        )}
-        <FallbackSettingsEditor
-          value={claudeFallbackOf(draft)}
-          models={models}
-          disabled={locked || fallbackReadOnly}
-          onChange={({ enabled, mode, mappings }) => {
-            const claude = draft.providers.claude;
-            const target = enabled
-              ? 'codex'
-              : claude.fallback.target === 'codex'
-                ? 'off'
-                : claude.fallback.target;
-            update({
-              providers: {
-                ...draft.providers,
-                claude: { ...claude, fallback: { target, mode, mappings } },
-              },
-            });
-          }}
-        />
-      </section>
+      <div className={styles.providers}>
+        {API_PROVIDERS.map((provider) => {
+          const routing = draft.providers[provider];
+          const preferred = draft.preferredAccounts[provider] ?? '';
+          return (
+            <ProviderRoutingBlock
+              key={provider}
+              provider={provider}
+              value={routing}
+              preferred={preferred}
+              preferredOptions={preferredAccountOptions(provider, files, preferred, displayName, t)}
+              apiKeyOptions={apiCredentialOptions(
+                provider,
+                apiCredentials,
+                apiKeyConfigs,
+                routing.apiCredential,
+                t
+              )}
+              models={models}
+              disabled={locked}
+              modeLocked={fallbackReadOnly}
+              providersSupported={providersSupported}
+              onChange={(value) =>
+                setDraft((current) => ({
+                  ...current,
+                  providers: { ...current.providers, [provider]: value },
+                }))
+              }
+              onPreferredChange={(value) =>
+                setDraft((current) => {
+                  const preferredAccounts = { ...current.preferredAccounts };
+                  if (value) preferredAccounts[provider] = value;
+                  else delete preferredAccounts[provider];
+                  return { ...current, preferredAccounts };
+                })
+              }
+            />
+          );
+        })}
+      </div>
 
       <div className={styles.footer}>
         <p className={styles.summary} data-key-profile-summary>

@@ -189,3 +189,18 @@ export function providerRoutingErrors(
 
 export const hasProviderRoutingErrors = (errors: ProviderRoutingErrors): boolean =>
   API_PROVIDERS.some((provider) => Object.values(errors[provider]).some(Boolean));
+
+/**
+ * The save form of the provider blocks: API key mode carries `target: off`, as CPA
+ * requires. Everything else, the Claude mapping table and the chosen key included,
+ * is kept, so the stored profile still holds the hidden values.
+ */
+export function withApiModeNormalization(
+  providers: RoutingProfile['providers']
+): RoutingProfile['providers'] {
+  const normalize = (routing: ProviderRouting): ProviderRouting =>
+    routing.mode === 'api'
+      ? { ...routing, fallback: { ...routing.fallback, target: 'off' } }
+      : routing;
+  return { claude: normalize(providers.claude), codex: normalize(providers.codex) };
+}

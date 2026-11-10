@@ -165,13 +165,13 @@
 - [x] run `npm test` in `apps/web` - must pass before task 4
 
 ### Task 4: Integrate into `KeyProfileEditor` and the toolbar
-- [ ] `KeyProfileEditor.tsx`: keep the Sticky session and Pool selection sections, remove the Preferred and fallback sections, render two `ProviderRoutingBlock`s; pass `providersSupported`, `apiCredentials`, and provider configs from `RoutingProfilesModal.tsx`
-- [ ] validation and save: `invalid` uses `providerRoutingErrors`; `save` applies API-mode normalization; with `fallbackReadOnly` (backend `supported: false`) keep the stored `providers` mode and fallback and save only Preferred and the shared stages
-- [ ] keep `withSuggestions` behavior for an empty mapping table (the baseline uses the same suggestions) now applied to `providers.claude.fallback`
-- [ ] hide `ClaudeFallbackControl` in the toolbar wiring when `providersSupported` is true; keep it for old backends
-- [ ] update `KeyProfileEditor.test.tsx` and `keyProfiles.lifecycle.test.tsx`: new layout, Save disabled for each validation error, saved body for API mode and for API fallback, hidden values round trip, `supported: false`, old backend (API options disabled, legacy body sent)
-- [ ] update `keyProfiles.locale.test.ts` for the new keys and a test for the toolbar control visibility
-- [ ] run `npm test` in `apps/web` - must pass before task 5
+- [x] `KeyProfileEditor.tsx`: keep the Sticky session and Pool selection sections, remove the Preferred and fallback sections, render two `ProviderRoutingBlock`s; pass `providersSupported`, `apiCredentials`, and provider configs from `RoutingProfilesModal.tsx`
+- [x] validation and save: `invalid` uses `providerRoutingErrors`; `save` applies API-mode normalization; with `fallbackReadOnly` (backend `supported: false`) keep the stored `providers` mode and fallback and save only Preferred and the shared stages
+- [x] keep `withSuggestions` behavior for an empty mapping table (the baseline uses the same suggestions) now applied to `providers.claude.fallback` (a save still stores the suggested table, as before)
+- [x] hide `ClaudeFallbackControl` in the toolbar wiring when `providersSupported` is true; keep it for old backends
+- [x] update `KeyProfileEditor.test.tsx` and `keyProfiles.lifecycle.test.tsx`: new layout, Save disabled for each validation error, saved body for API mode and for API fallback, hidden values round trip, `supported: false`, old backend (API options disabled, legacy body sent)
+- [x] update `keyProfiles.locale.test.ts` for the new keys and a test for the toolbar control visibility (the visibility tests live in `keyProfiles.lifecycle.test.tsx`; PATCH bodies are checked with the real hook in `profilesKeysFlow.lifecycle.test.tsx`)
+- [x] run `npm test` in `apps/web` - must pass before task 5
 
 ### Task 5: Guide: third tab and updated diagrams
 - [ ] copy byte-for-byte into `apps/web/src/features/guide/diagrams/`: `/Users/echeg/Projects/CPA/diagrams/api-key-routing.html` and `api-key-routing.workflow.json` (new), and replace `key-routing.html`, `key-routing.workflow.json`, `pool-selection.html`, `pool-selection.workflow.json` with the files of the same names from `/Users/echeg/Projects/CPA/diagrams/`

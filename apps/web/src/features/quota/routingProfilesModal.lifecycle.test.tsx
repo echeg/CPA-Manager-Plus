@@ -112,6 +112,7 @@ function makeKeyProfiles(
     reload: vi.fn(),
     saveKeyProfile: vi.fn(async () => true),
     saveShared: vi.fn(async () => true),
+    apiKeyConfigs: { claude: [], codex: [] },
     ...overrides,
   };
 }
@@ -194,6 +195,50 @@ describe('routing profiles modal rows', () => {
     expect(rows).toHaveLength(1);
     expect(text(rows[0])).toContain(chainSummary(betaProfile(), files, false, t));
     expect(editors()).toHaveLength(0);
+  });
+
+  test('summaries and editors name API keys from the credentials and key configs', async () => {
+    const apiCredentials = {
+      claude: [],
+      codex: [{ authIndex: 'codex-key-1', label: 'codex-apikey', baseUrl: '', disabled: false }],
+    };
+    const apiKeyConfigs = {
+      claude: [],
+      codex: [{ authIndex: 'codex-key-1', name: 'billing', masked: 'sk-c...9999', baseUrl: '' }],
+    };
+    const beta: RoutingProfile = {
+      ...betaProfile(),
+      providers: {
+        ...betaProfile().providers,
+        codex: {
+          mode: 'api',
+          apiCredential: 'codex-key-1',
+          fallback: { target: 'off', mode: 'auto', mappings: [] },
+        },
+      },
+    };
+    keyProfiles = makeKeyProfiles(
+      profilesState({ apiCredentials, keys: [{ key: RAW_BETA, profile: beta }] }),
+      { apiKeyConfigs }
+    );
+    await mount();
+    expect(text(keyRows()[0])).toContain('Codex: API key billing · sk-c...9999');
+
+    await click(buttonIn(keyRows()[0], 'data-profile-edit'));
+    expect(editors()[0].props.providersSupported).toBe(true);
+    expect(editors()[0].props.apiCredentials).toBe(apiCredentials);
+    expect(editors()[0].props.apiKeyConfigs).toBe(apiKeyConfigs);
+    await click(buttonIn(keyRows()[0], 'data-profile-edit'));
+
+    await click(buttonIn(defaultRow(), 'data-profile-edit'));
+    expect(editors()[0].props.apiKeyConfigs).toBe(apiKeyConfigs);
+  });
+
+  test('an old backend reaches the editors as providersSupported: false', async () => {
+    keyProfiles = makeKeyProfiles(profilesState({ providersSupported: false }));
+    await mount();
+    await click(buttonIn(defaultRow(), 'data-profile-edit'));
+    expect(editors()[0].props.providersSupported).toBe(false);
   });
 
   test('the default row edits the shared profile and the TTL through saveShared', async () => {
@@ -405,11 +450,13 @@ describe('routing profiles modal states', () => {
     await click(buttonIn(defaultRow(), 'data-profile-edit'));
     expect(editors()[0].props.variant).toBe('default');
     expect(editors()[0].props.readOnly).toBe(false);
-    // CPA ignores the fallback in this mode, so the default editor locks that stage only.
+    // CPA ignores mode and fallback in this mode, so the default editor locks those only.
     expect(editors()[0].props.fallbackReadOnly).toBe(true);
     expect(
-      editors()[0].findAll((node) => node.props['data-key-profile-fallback-locked']).length
-    ).toBeGreaterThan(0);
+      editors()[0].findAll(
+        (node) => node.type === 'p' && node.props['data-provider-routing-locked']
+      )
+    ).toHaveLength(2);
     await act(async () => editors()[0].findAllByType(ToggleSwitch)[0].props.onChange(false));
     await click(editorSave());
     expect(keyProfiles.saveShared).toHaveBeenCalledWith(

@@ -3,7 +3,11 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import i18n from '@/i18n';
 import { Button } from '@/components/ui/Button';
-import { claudeFallbackApi } from '@/features/personal-quota-support/services/api/claudeFallback';
+import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
+import {
+  claudeFallbackApi,
+  suggestedFallbackMappings,
+} from '@/features/personal-quota-support/services/api/claudeFallback';
 import { apiClient } from '@/features/personal-quota-support/services/api/client';
 import { clientKeysApi } from '@/features/personal-quota-support/services/api/clientKeys';
 import {
@@ -13,9 +17,11 @@ import {
   type RoutingProfilesState,
 } from '@/features/personal-quota-support/services/api/routingProfiles';
 import { subscriptionRoutingApi } from '@/features/personal-quota-support/services/api/subscriptionRouting';
+import { providersApi } from '@/services/api/providers';
 import { useConfigStore } from '@/features/personal-quota-support/stores/useConfigStore';
 import type { Config } from '@/features/personal-quota-support/types';
 import { KeyProfileEditor } from './components/KeyProfileEditor';
+import { ProviderRoutingBlock } from './components/ProviderRoutingBlock';
 import { QuotaSettingsBar } from './components/QuotaSettingsToolbar';
 
 // The bar, both modals and the real useKeyProfiles; only the network layer is stubbed.
@@ -45,6 +51,8 @@ vi.mock('@/hooks/useApiKeyAliases', () => ({
 const KEY_A = 'sk-flow-alpha-0123456789';
 const KEY_B = 'sk-flow-bravo-9876543210';
 const KEY_NEW = 'sk-flow-new-000111222333';
+// A raw upstream key as the provider key configs return it; only its mask may render.
+const UPSTREAM_CODEX = 'sk-upstream-codex-RAW-55667788';
 
 const profile = (primary: string): RoutingProfile => ({
   sessionAffinity: false,
@@ -102,6 +110,10 @@ beforeEach(() => {
     models: { claude: [], codex: [] },
   });
   vi.spyOn(subscriptionRoutingApi, 'activity').mockResolvedValue([]);
+  vi.spyOn(providersApi, 'getClaudeConfigs').mockResolvedValue([]);
+  vi.spyOn(providersApi, 'getCodexConfigs').mockResolvedValue([
+    { apiKey: UPSTREAM_CODEX, prefix: 'billing', authIndex: 'codex-key-1' },
+  ]);
 });
 
 afterEach(async () => {
@@ -172,6 +184,157 @@ describe('Profiles and Keys flow with the real key profiles hook', () => {
     expect(keyRows()).toHaveLength(3);
     expect(text(buttonWith('data-open-keys')!)).toContain('3');
     expect(JSON.stringify(renderer!.toJSON())).not.toContain(KEY_NEW);
+  });
+});
+
+describe('provider routing saves with the real key profiles hook', () => {
+  const codexKeys = {
+    claude: [],
+    codex: [{ authIndex: 'codex-key-1', label: 'codex-apikey', baseUrl: '', disabled: false }],
+  };
+  const withProviders = (
+    state: RoutingProfilesState,
+    providersSupported = true
+  ): RoutingProfilesState => ({ ...state, providersSupported, apiCredentials: codexKeys });
+
+  const openProfileEditor = async (rowAttr: 'data-profile-default' | 'data-profile-row') => {
+    await click(buttonWith('data-open-profiles'));
+    const row = root().find((node) => typeof node.type === 'string' && node.props[rowAttr]);
+    await click(buttonWith('data-profile-edit', row));
+    expect(editors()).toHaveLength(1);
+  };
+  // The editor fills an empty Claude mapping table with suggestions, and saves them.
+  const withSuggested = (value: RoutingProfile): RoutingProfile => ({
+    ...value,
+    providers: {
+      ...value.providers,
+      claude: {
+        ...value.providers.claude,
+        fallback: { ...value.providers.claude.fallback, mappings: suggestedFallbackMappings() },
+      },
+    },
+  });
+  const editBlock = async (
+    provider: 'claude' | 'codex',
+    patch: (value: RoutingProfile['providers']['codex']) => RoutingProfile['providers']['codex']
+  ) => {
+    const block = root()
+      .findAllByType(ProviderRoutingBlock)
+      .find((item) => item.props.provider === provider)!;
+    await act(async () => block.props.onChange(patch(block.props.value)));
+  };
+
+  test('a key profile in Codex API key mode sends the providers block', async () => {
+    const before = profile('priority');
+    vi.mocked(routingProfilesApi.get).mockResolvedValue(withProviders(profilesState(before)));
+    const patch = vi.spyOn(apiClient, 'patch').mockResolvedValue({});
+    await mount();
+    await openProfileEditor('data-profile-row');
+
+    await editBlock('codex', (value) => ({ ...value, mode: 'api', apiCredential: 'codex-key-1' }));
+    expect(text(root().find((node) => node.props['data-key-profile-summary']))).toContain(
+      'Codex: API key billing · sk******88'
+    );
+    expect(JSON.stringify(renderer!.toJSON())).not.toContain(UPSTREAM_CODEX);
+
+    const after: RoutingProfile = withSuggested({
+      ...before,
+      providers: {
+        ...before.providers,
+        codex: {
+          mode: 'api',
+          apiCredential: 'codex-key-1',
+          fallback: { target: 'off', mode: 'auto', mappings: [] },
+        },
+      },
+    });
+    vi.mocked(routingProfilesApi.get).mockResolvedValue(withProviders(profilesState(after)));
+    await click(buttonWith('data-key-profile-save'));
+
+    expect(patch).toHaveBeenCalledTimes(1);
+    const body = patch.mock.calls[0][1] as {
+      routing: { 'key-profiles': Record<string, Record<string, unknown>> };
+    };
+    const sent = body.routing['key-profiles'][KEY_B];
+    expect(sent['claude-fallback']).toBeUndefined();
+    expect(sent.providers).toEqual({
+      claude: {
+        mode: 'subscription',
+        'api-credential': null,
+        fallback: { target: 'off', mode: 'auto', mappings: suggestedFallbackMappings() },
+      },
+      codex: { mode: 'api', 'api-credential': 'codex-key-1', fallback: { target: 'off' } },
+    });
+    // The read-back matched, so the editor closed.
+    expect(editors()).toHaveLength(0);
+  });
+
+  test('the default profile with a Codex API-key fallback sends target api and the key', async () => {
+    vi.mocked(routingProfilesApi.get).mockResolvedValue(
+      withProviders(profilesState(profile('priority')))
+    );
+    const patch = vi.spyOn(apiClient, 'patch').mockResolvedValue({});
+    await mount();
+    await openProfileEditor('data-profile-default');
+
+    await editBlock('codex', (value) => ({
+      ...value,
+      apiCredential: 'codex-key-1',
+      fallback: { ...value.fallback, target: 'api' },
+    }));
+    const shared = profilesState(profile('priority')).shared;
+    const after: RoutingProfile = withSuggested({
+      ...shared,
+      providers: {
+        ...shared.providers,
+        codex: {
+          mode: 'subscription',
+          apiCredential: 'codex-key-1',
+          fallback: { target: 'api', mode: 'auto', mappings: [] },
+        },
+      },
+    });
+    vi.mocked(routingProfilesApi.get).mockResolvedValue(
+      withProviders({ ...profilesState(profile('priority')), shared: after })
+    );
+    await click(buttonWith('data-key-profile-save'));
+
+    const body = patch.mock.calls[0][1] as { routing: Record<string, unknown> };
+    expect(body.routing['claude-fallback']).toBeUndefined();
+    expect(body.routing.providers).toMatchObject({
+      codex: { mode: 'subscription', 'api-credential': 'codex-key-1', fallback: { target: 'api' } },
+    });
+    expect(editors()).toHaveLength(0);
+  });
+
+  test('an old backend sends the legacy claude-fallback body', async () => {
+    const before = profile('priority');
+    vi.mocked(routingProfilesApi.get).mockResolvedValue(
+      withProviders(profilesState(before), false)
+    );
+    const patch = vi.spyOn(apiClient, 'patch').mockResolvedValue({});
+    await mount();
+    await openProfileEditor('data-profile-row');
+    expect(editors()[0].props.providersSupported).toBe(false);
+
+    await act(async () => editors()[0].findAllByType(ToggleSwitch)[0].props.onChange(true));
+    vi.mocked(routingProfilesApi.get).mockResolvedValue(
+      withProviders(profilesState(withSuggested({ ...before, sessionAffinity: true })), false)
+    );
+    await click(buttonWith('data-key-profile-save'));
+
+    const body = patch.mock.calls[0][1] as {
+      routing: { 'key-profiles': Record<string, Record<string, unknown>> };
+    };
+    const sent = body.routing['key-profiles'][KEY_B];
+    expect(sent.providers).toBeUndefined();
+    expect(sent['claude-fallback']).toEqual({
+      enabled: false,
+      mode: 'auto',
+      mappings: suggestedFallbackMappings(),
+    });
+    expect(sent['session-affinity']).toBe(true);
+    expect(editors()).toHaveLength(0);
   });
 });
 

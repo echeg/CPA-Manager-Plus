@@ -16,6 +16,7 @@ import {
   providerFieldErrors,
   providerRoutingErrors,
   summarizeKeyConfigs,
+  withApiModeNormalization,
   type ApiKeyConfigSummaries,
 } from './providerRoutingModel';
 
@@ -323,5 +324,40 @@ describe('providerFieldErrors', () => {
       mappings: 'quota_management.fallback.invalid',
     });
     expect(providerFieldErrors('codex', { ...value, mode: 'subscription' }, true)).toEqual({});
+  });
+});
+
+describe('withApiModeNormalization', () => {
+  const mappings = [{ from: 'claude-opus-*', to: 'gpt-6-astra' }];
+
+  test('API key mode saves target off and keeps the key and the mapping table', () => {
+    const claude: ProviderRouting = {
+      mode: 'api',
+      apiCredential: 'claude-key-1',
+      fallback: { target: 'codex', mode: 'always', mappings },
+    };
+    const codex: ProviderRouting = {
+      mode: 'api',
+      apiCredential: 'codex-key-1',
+      fallback: { target: 'api', mode: 'auto', mappings: [] },
+    };
+    expect(withApiModeNormalization({ claude, codex })).toEqual({
+      claude: { ...claude, fallback: { target: 'off', mode: 'always', mappings } },
+      codex: { ...codex, fallback: { target: 'off', mode: 'auto', mappings: [] } },
+    });
+    // The draft itself is not changed.
+    expect(claude.fallback.target).toBe('codex');
+  });
+
+  test('Subscription mode is returned as is', () => {
+    const claude: ProviderRouting = {
+      mode: 'subscription',
+      apiCredential: 'claude-key-1',
+      fallback: { target: 'api', mode: 'auto', mappings },
+    };
+    const codex = defaultProviderRouting();
+    const result = withApiModeNormalization({ claude, codex });
+    expect(result.claude).toBe(claude);
+    expect(result.codex).toBe(codex);
   });
 });
