@@ -100,6 +100,7 @@ function makeKeyProfiles(
     saveKeyProfile: vi.fn(async () => true),
     addKey: vi.fn(async () => ({ ok: true })),
     removeKey: vi.fn(async () => ({ ok: true })),
+    apiKeyConfigs: { claude: [], codex: [] },
     ...overrides,
   };
 }
@@ -194,6 +195,37 @@ describe('client keys modal rows', () => {
     expect(buttonIn(rows[0], 'data-client-key-configure')).toBeUndefined();
     await click(buttonIn(rows[1], 'data-client-key-configure'));
     expect(onOpenProfiles).toHaveBeenCalledExactlyOnceWith(RAW_BETA);
+  });
+
+  test('the summary names an API key by its config label', async () => {
+    const apiProfile: RoutingProfile = {
+      ...betaProfile(),
+      providers: {
+        ...betaProfile().providers,
+        codex: {
+          mode: 'api',
+          apiCredential: 'codex-key-idx',
+          fallback: { target: 'off', mode: 'auto', mappings: [] },
+        },
+      },
+    };
+    const state = profilesState({
+      keys: [{ key: RAW_BETA, profile: apiProfile }],
+      apiCredentials: {
+        claude: [],
+        codex: [{ authIndex: 'codex-key-idx', label: 'codex-apikey', baseUrl: '', disabled: false }],
+      },
+    });
+    keyProfiles = makeKeyProfiles(state, {
+      apiKeyConfigs: {
+        claude: [],
+        codex: [{ authIndex: 'codex-key-idx', name: 'team-a', masked: 'sk-a...6789', baseUrl: '' }],
+      },
+    });
+    await mount();
+    const summary = text(keyRows()[1]);
+    expect(summary).toContain('Codex: API key team-a · sk-a...6789');
+    expect(summary).not.toContain('codex-ke ');
   });
 
   test('"Own profile" opens the Profiles modal and writes nothing', async () => {

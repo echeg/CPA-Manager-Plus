@@ -30,6 +30,7 @@ export interface ClientKeysModalProps {
     | 'saveKeyProfile'
     | 'addKey'
     | 'removeKey'
+    | 'apiKeyConfigs'
   >;
   files: AuthFileItem[];
   showEmails: boolean;
@@ -369,7 +370,10 @@ export function ClientKeysModal({
                         </div>
                       </div>
                       <p className={styles.summary} data-client-key-summary>
-                        {chainSummary(row.profile ?? state.shared, files, showEmails, t)}
+                        {chainSummary(row.profile ?? state.shared, files, showEmails, t, {
+                          apiCredentials: state.apiCredentials,
+                          providerConfigs: keyProfiles.apiKeyConfigs,
+                        })}
                       </p>
                     </li>
                   );

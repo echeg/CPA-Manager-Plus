@@ -69,9 +69,10 @@ async function loadApiKeyConfigs(): Promise<ApiKeyConfigSummaries> {
 }
 
 /**
- * Loads the per-key routing profiles, the client key list and the global sticky
- * TTL of the loaded config, and the provider API-key entries for API-key labels. Saves one key profile or the shared profile at a time,
- * and adds or removes client keys. Results that arrive after the quota connection
+ * Loads the per-key routing profiles, the client key list, the global sticky TTL
+ * of the loaded config, and the provider API-key entries for API-key labels.
+ * Saves one key profile or the shared profile at a time, and adds or removes
+ * client keys. Results that arrive after the quota connection
  * changed, or after unmount, are dropped.
  */
 export function useKeyProfiles(disabled: boolean) {

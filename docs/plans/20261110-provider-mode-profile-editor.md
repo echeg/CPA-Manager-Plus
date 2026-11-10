@@ -182,11 +182,13 @@
 - ➕ `intro_pool_selection` keeps its error sentences unchanged and gains a leading sentence on Subscription mode (OAuth credentials only) and API key mode (the profile's one key); `guideWiring.test.ts` also checks the English tab label and that the intros mention the API-key fallback
 
 ### Task 6: Verify acceptance criteria
-- [ ] verify every item of Decisions against the code: layout, field behavior, labels, summary, old backend, write body, toolbar
-- [ ] verify edge cases: a profile whose stored API credential is unknown; both providers in API key mode; switching Subscription -> API key -> Subscription keeps Preferred, the mapping table and the key; no raw key in the DOM (search rendered output in tests for a sample key)
-- [ ] run the full `apps/web` suite (`npm test`)
-- [ ] run `npm run lint` in `apps/web` - no new warnings
-- [ ] run `npm run build` in `apps/web` and verify `dist/index.html` contains "Routing with API keys"
+- [x] verify every item of Decisions against the code: layout, field behavior, labels, summary, old backend, write body, toolbar
+- [x] verify edge cases: a profile whose stored API credential is unknown; both providers in API key mode; switching Subscription -> API key -> Subscription keeps Preferred, the mapping table and the key; no raw key in the DOM (search rendered output in tests for a sample key)
+- [x] run the full `apps/web` suite (`npm test`)
+- [x] run `npm run lint` in `apps/web` - no new warnings
+- [x] run `npm run build` in `apps/web` and verify `dist/index.html` contains "Routing with API keys"
+- ➕ verification found that `ClientKeysModal` still called `chainSummary` without API-key labels (an API-key-mode profile showed the first 8 index characters there); it now passes `state.apiCredentials` and `apiKeyConfigs` like `RoutingProfilesModal`, with a test in `clientKeysModal.lifecycle.test.tsx`
+- ➕ lint: 0 errors, only the 7 known warnings from `docs/backlog/web-lint-warnings.md`
 
 ### Task 7: Update documentation
 - [ ] update the panel's user-facing docs or README section that describes Routing profiles (if one exists) with the provider blocks and the API-key options
