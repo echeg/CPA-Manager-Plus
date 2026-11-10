@@ -19,6 +19,8 @@ vi.hoisted(() => {
 import { useThemeStore } from '@/stores/useThemeStore';
 import { DiagramFrame } from './DiagramFrame';
 
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
 // Uses the real theme store (not a stub) so the header's Auto / Dark / White modes are
 // checked end to end: theme -> resolvedTheme -> data-theme inside the diagram iframe.
 // The barrel is narrowed to the theme store so unrelated stores are not loaded.
@@ -27,13 +29,17 @@ vi.mock('@/stores', async () => ({
 }));
 
 let prefersDark = false;
+const systemThemeListeners = new Set<() => void>();
+let renderers: ReactTestRenderer[] = [];
 
 const stubBrowserGlobals = () => {
   vi.stubGlobal('window', {
     matchMedia: () => ({
       matches: prefersDark,
-      addEventListener: () => {},
-      removeEventListener: () => {},
+      addEventListener: (_type: string, listener: () => void) =>
+        void systemThemeListeners.add(listener),
+      removeEventListener: (_type: string, listener: () => void) =>
+        void systemThemeListeners.delete(listener),
     }),
   });
   vi.stubGlobal('document', {
@@ -41,23 +47,34 @@ const stubBrowserGlobals = () => {
   });
 };
 
+const changeSystemTheme = (dark: boolean) =>
+  act(() => {
+    prefersDark = dark;
+    systemThemeListeners.forEach((listener) => listener());
+  });
+
 const renderFrame = () => {
-  const setAttribute = vi.fn();
-  const node = { contentDocument: { documentElement: { setAttribute } } };
+  const attributes = new Map<string, string>();
+  const node = {
+    contentDocument: {
+      documentElement: {
+        getAttribute: (name: string) => attributes.get(name) ?? null,
+        setAttribute: (name: string, value: string) => void attributes.set(name, value),
+      },
+    },
+    contentWindow: {},
+  };
   let renderer!: ReactTestRenderer;
   act(() => {
     renderer = create(<DiagramFrame html="<html></html>" title="Diagram" />, {
       createNodeMock: () => node,
     });
   });
+  renderers.push(renderer);
   act(() => {
     renderer.root.findByType('iframe').props.onLoad();
   });
-  const lastTheme = () => {
-    const calls = setAttribute.mock.calls.filter(([name]) => name === 'data-theme');
-    return calls[calls.length - 1]?.[1];
-  };
-  return { renderer, lastTheme };
+  return () => attributes.get('data-theme');
 };
 
 describe('DiagramFrame with the real theme store', () => {
@@ -70,26 +87,27 @@ describe('DiagramFrame with the real theme store', () => {
   });
 
   afterEach(() => {
+    act(() => renderers.forEach((renderer) => renderer.unmount()));
+    renderers = [];
+    systemThemeListeners.clear();
     vi.unstubAllGlobals();
     localStorage.clear();
     vi.restoreAllMocks();
   });
 
   it('follows auto -> dark -> white', () => {
-    const { renderer, lastTheme } = renderFrame();
-    expect(lastTheme()).toBe('light');
+    const diagramTheme = renderFrame();
+    expect(diagramTheme()).toBe('light');
 
     act(() => {
       useThemeStore.getState().setTheme('dark');
     });
-    expect(lastTheme()).toBe('dark');
+    expect(diagramTheme()).toBe('dark');
 
     act(() => {
       useThemeStore.getState().setTheme('white');
     });
-    expect(lastTheme()).toBe('light');
-
-    act(() => renderer.unmount());
+    expect(diagramTheme()).toBe('light');
   });
 
   it('resolves auto to dark when the system prefers dark', () => {
@@ -98,9 +116,34 @@ describe('DiagramFrame with the real theme store', () => {
       useThemeStore.getState().setTheme('auto');
     });
 
-    const { renderer, lastTheme } = renderFrame();
-    expect(lastTheme()).toBe('dark');
+    const diagramTheme = renderFrame();
+    expect(diagramTheme()).toBe('dark');
+  });
 
-    act(() => renderer.unmount());
+  it('follows a live system theme change in auto mode', () => {
+    const stopWatching = useThemeStore.getState().initializeTheme();
+    const diagramTheme = renderFrame();
+    expect(diagramTheme()).toBe('light');
+
+    changeSystemTheme(true);
+
+    expect(diagramTheme()).toBe('dark');
+    expect(localStorage.getItem('archify-theme')).toBe('dark');
+    stopWatching();
+  });
+
+  it('keeps an explicit White theme, and its stored copy, when the system theme changes', () => {
+    act(() => {
+      useThemeStore.getState().setTheme('white');
+    });
+    const stopWatching = useThemeStore.getState().initializeTheme();
+    const diagramTheme = renderFrame();
+
+    changeSystemTheme(true);
+
+    expect(diagramTheme()).toBe('light');
+    // The diagram's own OS-theme listener stays idle while this key holds a value.
+    expect(localStorage.getItem('archify-theme')).toBe('light');
+    stopWatching();
   });
 });

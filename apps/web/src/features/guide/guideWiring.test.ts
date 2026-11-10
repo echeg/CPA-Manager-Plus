@@ -47,6 +47,9 @@ describe('guide app wiring', () => {
     expect(guideItemSource).toContain("label: t('nav.guide')");
     expect(guideItemSource).toContain("shortLabel: navShortLabel('nav.guide', t('nav.guide'))");
     expect(guideItemSource).toContain('icon: sidebarIcons.guide');
+    // Only Guide's own block closes before the sections end: no block follows it.
+    expect(guideItemSource.match(/\],/g)).toHaveLength(1);
+    expect(guideItemSource.match(/path: '/g)).toHaveLength(1);
 
     // Nothing else sits between System Info and Guide: they share the closing block.
     const betweenSystemAndGuide = layoutSource.slice(systemIndex, guideIndex);

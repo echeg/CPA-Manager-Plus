@@ -16,16 +16,24 @@ type GuideTabConfig = {
   html: string;
 };
 
+/**
+ * archify pages load JetBrains Mono from Google Fonts. Dropping those links keeps the Guide
+ * free of third-party requests (the panel makes none elsewhere) and working offline; the
+ * page's font stack falls back to the system monospace font.
+ */
+const withoutRemoteFonts = (html: string) =>
+  html.replace(/<link\b[^>]*fonts\.(?:googleapis|gstatic)\.com[^>]*>/g, '');
+
 const GUIDE_TAB_CONFIG: Record<GuideTab, GuideTabConfig> = {
   'key-routing': {
     labelKey: 'guide.tab_key_routing',
     introKey: 'guide.intro_key_routing',
-    html: keyRoutingHtml,
+    html: withoutRemoteFonts(keyRoutingHtml),
   },
   'pool-selection': {
     labelKey: 'guide.tab_pool_selection',
     introKey: 'guide.intro_pool_selection',
-    html: poolSelectionHtml,
+    html: withoutRemoteFonts(poolSelectionHtml),
   },
 };
 

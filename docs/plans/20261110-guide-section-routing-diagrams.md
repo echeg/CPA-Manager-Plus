@@ -102,7 +102,7 @@
 - [x] run `npm run build` in `apps/web` and verify `dist/index.html` contains both strings "Request routing by client key" and "Credential selection inside the pool"; note the resulting `dist/index.html` size in the plan (expected ≈ 8.3 MB) — both strings found (4 matches each); `dist/index.html` is 8,296,075 bytes (≈ 8.3 MB, gzip ≈ 2.1 MB)
 
 ### Task 5: Update documentation
-- [x] add a short "Guide" entry to the panel's user-facing docs if a features list exists (README or `docs/`), stating that the diagrams are generated with archify from the JSON sources in `src/features/guide/diagrams/` (new manual pages `apps/docs/en/manual/guide.md` and `apps/docs/manual/guide.md`, linked in the VitePress sidebar after System)
+- [x] add a short "Guide" entry to the panel's user-facing docs if a features list exists (README or `docs/`), stating that the diagrams are generated with archify from the JSON sources in `src/features/guide/diagrams/` (new manual pages `apps/docs/en/manual/guide.md` and `apps/docs/manual/guide.md`, linked in the VitePress sidebar after System; the fork's feature list in `docs/personal-quota.md` gained a Guide paragraph during code review)
 - [x] update project knowledge docs (CLAUDE.md or equivalent) with the pattern "bundled self-contained HTML via `?raw` + `iframe srcDoc` with theme sync" if no such note exists (no CLAUDE.md in this repo; added `docs/development/bundled-html-frames.md` and linked it from `CONTRIBUTING.md`)
 
 ## Technical Details
@@ -114,6 +114,7 @@
   useEffect(apply, [resolvedTheme]);           // theme changes after load
   <iframe ref={iframeRef} onLoad={apply} srcDoc={html} title={title} sandbox="allow-scripts allow-same-origin" />
   ```
+- **Code review changes**: the sandbox also allows `allow-downloads allow-modals` (archify export and its error alerts); the panel theme is also written to `localStorage['archify-theme']` from a layout effect so archify paints the right theme first and ignores OS changes, and a post-load mismatch goes through `Archify.theme.toggle()` so the viewer's toolbar label follows; `GuidePage` strips the Google Fonts `<link>`s from the diagram HTML.
 - **Tabs**: ids `key-routing` and `pool-selection`; only the active diagram's iframe is mounted.
 - **i18n keys**: `nav.guide`, `guide.title`, `guide.subtitle`, `guide.tabs_label`, `guide.tab_key_routing`, `guide.tab_pool_selection`, `guide.intro_key_routing`, `guide.intro_pool_selection`.
 - **Nav placement**: last `navSections` block, after `/system`.
@@ -122,7 +123,9 @@
 *Items requiring manual intervention or external systems - no checkboxes, informational only*
 
 **Manual verification**:
-- Open `/guide` in the running panel, switch Light/Dark/Auto in the header and confirm the diagram follows; use the diagram's own focus/zoom/export controls; check the page on a ~1280px wide window.
+- Open `/guide` in the running panel, switch Light/Dark/Auto in the header and confirm the diagram follows (including the diagram toolbar's theme label); use the diagram's own focus/zoom controls and export a PNG to confirm the download starts; check the page on a ~1280px wide window.
+- Check a tablet/mobile width: no horizontal page overflow, the tab strip scrolls, and the frame height drops to 680/560px.
+- Confirm the browser makes no request to `fonts.googleapis.com` / `fonts.gstatic.com` when the Guide opens.
 - Confirm the sidebar shows "Guide"/"Гайд"/"指南" when switching the panel language.
 
 **Deployment**:

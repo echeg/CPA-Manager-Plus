@@ -1,6 +1,10 @@
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GuidePage } from './GuidePage';
+import keyRoutingHtml from './diagrams/key-routing.html?raw';
+import poolSelectionHtml from './diagrams/pool-selection.html?raw';
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
@@ -18,17 +22,18 @@ vi.mock('@/stores', async () => {
 });
 
 const getText = (node: ReactTestInstance): string =>
-  node.children
-    .map((child) => (typeof child === 'string' ? child : getText(child)))
-    .join('');
+  node.children.map((child) => (typeof child === 'string' ? child : getText(child))).join('');
+
+let renderers: ReactTestRenderer[] = [];
 
 const renderPage = () => {
   let renderer!: ReactTestRenderer;
   act(() => {
     renderer = create(<GuidePage />, {
-      createNodeMock: () => ({ contentDocument: null }),
+      createNodeMock: () => ({ contentDocument: null, contentWindow: null }),
     });
   });
+  renderers.push(renderer);
   return renderer;
 };
 
@@ -36,6 +41,16 @@ const findTab = (renderer: ReactTestRenderer, id: string) =>
   renderer.root.find((node) => node.props.role === 'tab' && node.props.id === `guide-tab-${id}`);
 
 describe('GuidePage', () => {
+  beforeEach(() => {
+    vi.stubGlobal('localStorage', { setItem: () => {} });
+  });
+
+  afterEach(() => {
+    act(() => renderers.forEach((renderer) => renderer.unmount()));
+    renderers = [];
+    vi.unstubAllGlobals();
+  });
+
   it('renders the title, subtitle and both tab labels', () => {
     const renderer = renderPage();
 
@@ -89,5 +104,40 @@ describe('GuidePage', () => {
     const backIframes = renderer.root.findAllByType('iframe');
     expect(backIframes).toHaveLength(1);
     expect(backIframes[0].props.srcDoc).toContain('Request routing by client key');
+  });
+
+  it('strips the Google Fonts links so the Guide makes no third-party requests', () => {
+    const renderer = renderPage();
+    const keyRoutingDoc = renderer.root.findByType('iframe').props.srcDoc as string;
+    act(() => {
+      findTab(renderer, 'pool-selection').props.onClick({ preventDefault: () => {} });
+    });
+    const poolSelectionDoc = renderer.root.findByType('iframe').props.srcDoc as string;
+
+    for (const doc of [keyRoutingDoc, poolSelectionDoc]) {
+      expect(doc).not.toMatch(/fonts\.(googleapis|gstatic)\.com/);
+      expect(doc).toContain('<style>');
+    }
+  });
+});
+
+// DiagramFrame relies on these parts of the generated archify pages. A regenerated page
+// that drops one of them would silently stop following the panel theme.
+describe.each([
+  ['key-routing.html', keyRoutingHtml],
+  ['pool-selection.html', poolSelectionHtml],
+])('%s theme contract', (_name, html) => {
+  it('reads the stored archify-theme before first paint', () => {
+    expect(html).toContain("localStorage.getItem('archify-theme')");
+  });
+
+  it('styles both light and dark data-theme values', () => {
+    expect(html).toContain('[data-theme="light"]');
+    expect(html).toContain('[data-theme="dark"]');
+  });
+
+  it('exposes the viewer theme toggle on the Archify global', () => {
+    expect(html).toContain('var Archify = {};');
+    expect(html).toContain('return { toggle: toggle };');
   });
 });

@@ -5249,7 +5249,7 @@
     "tabs_label": "Guide diagrams",
     "tab_key_routing": "Request routing by client key",
     "tab_pool_selection": "Credential selection inside the pool",
-    "intro_key_routing": "Every request first resolves the routing profile of its client key (its own or the shared one). CPA then checks the sticky session binding, then the preferred account, and only then selects a credential from the pool. If the Claude round fails with 429, 5xx or cooldown, the request can fall back to a Codex subscription.",
+    "intro_key_routing": "Every request first resolves the routing profile of its client key (its own or the shared one). CPA then checks the sticky session binding, then the preferred account, and only then selects a credential from the pool. If the Claude round fails (for example with 429, 5xx or cooldown), the request can fall back to a Codex subscription.",
     "intro_pool_selection": "Inside a provider pool, CPA first drops credentials that are disabled, cooling down or do not support the model. A usable preferred account is taken right away; otherwise the primary and tiebreak slots narrow the set to the best group, and the picker (round-robin by default) chooses one credential. If nothing is left, the request gets a cooldown error with Retry-After."
   },
   "notification": {
