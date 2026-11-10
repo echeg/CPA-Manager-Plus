@@ -139,6 +139,23 @@ export function ProviderRoutingBlock({
     </div>
   );
 
+  const preferredRow = (
+    <div className={styles.row}>
+      <span className={styles.caption} id={`${id}-preferred`}>
+        {t('quota_management.key_profiles.editor.accounts')}
+      </span>
+      <Select
+        size="sm"
+        className={styles.select}
+        value={preferred}
+        options={preferredOptions}
+        ariaLabel={t('quota_management.routing.preferred_account', { provider: label })}
+        disabled={disabled}
+        onChange={onPreferredChange}
+      />
+    </div>
+  );
+
   return (
     <section
       className={styles.block}
@@ -179,23 +196,14 @@ export function ProviderRoutingBlock({
       </div>
 
       {value.mode === 'api' ? (
-        apiKeyField(t('quota_management.provider_routing.api_mode_hint'))
+        <>
+          {/* CPA ignores the mode while it is locked, so the subscription still routes. */}
+          {modeLocked && preferredRow}
+          {apiKeyField(t('quota_management.provider_routing.api_mode_hint'))}
+        </>
       ) : (
         <>
-          <div className={styles.row}>
-            <span className={styles.caption} id={`${id}-preferred`}>
-              {t('quota_management.key_profiles.editor.accounts')}
-            </span>
-            <Select
-              size="sm"
-              className={styles.select}
-              value={preferred}
-              options={preferredOptions}
-              ariaLabel={t('quota_management.routing.preferred_account', { provider: label })}
-              disabled={disabled}
-              onChange={onPreferredChange}
-            />
-          </div>
+          {preferredRow}
 
           <div className={styles.row}>
             <span className={styles.caption}>

@@ -208,6 +208,18 @@ describe('ProviderRoutingBlock', () => {
     expect(byData('data-provider-routing-locked')).toHaveLength(1);
   });
 
+  test('modeLocked keeps Preferred editable while the stored mode is API key', async () => {
+    const { onPreferredChange } = await mount({
+      modeLocked: true,
+      value: routing({ mode: 'api' }),
+    });
+    expect(modeTabs()!.props.disabled).toBe(true);
+    expect(apiKeySelect()!.props.disabled).toBe(true);
+    expect(preferredSelect()!.props.disabled).toBe(false);
+    act(() => preferredSelect()!.props.onChange('acc-1'));
+    expect(onPreferredChange).toHaveBeenCalledWith('acc-1');
+  });
+
   test('an older backend allows only Subscription mode and the Codex target', async () => {
     await mount({ providersSupported: false, apiKeyOptions: [] });
     const hint = 'Requires an updated CPA backend.';
