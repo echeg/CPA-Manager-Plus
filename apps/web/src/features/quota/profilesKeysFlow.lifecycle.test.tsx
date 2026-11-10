@@ -263,7 +263,11 @@ describe('provider routing saves with the real key profiles hook', () => {
         'api-credential': null,
         fallback: { target: 'off', mode: 'auto', mappings: suggestedFallbackMappings() },
       },
-      codex: { mode: 'api', 'api-credential': 'codex-key-1', fallback: { target: 'off' } },
+      codex: {
+        mode: 'api',
+        'api-credential': 'codex-key-1',
+        fallback: { target: 'off', mode: null, mappings: null },
+      },
     });
     // The read-back matched, so the editor closed.
     expect(editors()).toHaveLength(0);

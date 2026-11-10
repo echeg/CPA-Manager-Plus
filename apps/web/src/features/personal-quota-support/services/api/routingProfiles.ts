@@ -357,7 +357,8 @@ const noSelectionOptions: RoutingSelectionOptions = { narrowing: [], pickers: []
  * a cleared API credential and an empty or picker-blocked tiebreak are `null`,
  * and mappings replace the list. A backend with `providers` gets the complete
  * `providers` block (API key mode carries `target: off`; the Codex fallback is its
- * target only); an older one gets the `claude-fallback` block instead.
+ * target, with mode and mappings cleared); an older one gets the `claude-fallback`
+ * block instead.
  */
 export function profileBody(
   profile: RoutingProfile,
@@ -391,7 +392,9 @@ export function profileBody(
       codex: {
         mode: codex.mode,
         'api-credential': codex.apiCredential || null,
-        fallback: { target: codex.fallback.target },
+        // CPA accepts any stored mode and mapping rows under target api but checks
+        // them under off, so they are cleared rather than left to the merge.
+        fallback: { target: codex.fallback.target, mode: null, mappings: null },
       },
     };
   } else {

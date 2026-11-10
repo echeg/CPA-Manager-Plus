@@ -53,7 +53,7 @@
   - `<Provider>: <preferred or Automatic>` (fallback off)
   Example: `Sticky session · Claude: Automatic → Codex · Codex: API key codex-1 · reserves → earliest-reset`.
 - **Chosen approach — old backend**: one layout, not two. A response without `providers` on the shared profile marks the backend as old (`providersSupported: false`). The panel then derives `providers` from `claude-fallback` (mode Subscription, target Codex or Off), disables the mode control and every "API key" option with the hint "Requires an updated CPA backend", and writes the previous body with `claude-fallback`.
-- **Chosen approach — write body on a new backend**: the complete `providers` block and no `claude-fallback`; a cleared `api-credential` is sent as `null` so the merge-PATCH does not keep the old value; the Codex block sends only `fallback.target`.
+- **Chosen approach — write body on a new backend**: the complete `providers` block and no `claude-fallback`; a cleared `api-credential` is sent as `null` so the merge-PATCH does not keep the old value; the Codex block sends `fallback.target` with `mode` and `mappings` as `null` (CPA accepts any stored Codex mode and mapping rows under target api but checks them under off, so the merge must not keep them).
 - **Chosen approach — toolbar**: the standalone "Configure Claude fallback" control (`ClaudeFallbackControl`) duplicates the Default profile and cannot show the API-key target, so it is hidden when `providersSupported` is true.
 - **Known consequence**: keeping the mapping table under `target: api` makes the backend log a warning on each config load ("mode/mappings ignored"). Accepted in exchange for not losing the table.
 - **Rejected alternatives**:
@@ -135,7 +135,7 @@
 - [x] in `routingProfiles.ts` add types `ProviderRouting { mode: 'subscription' | 'api'; apiCredential: string; fallback: { target: 'off' | 'codex' | 'api'; mode: 'auto' | 'always'; mappings: {from, to}[] } }`, `RoutingProfile.providers: { claude, codex }`, `ApiCredential { authIndex, label, baseUrl, disabled }`, and on `RoutingProfilesState`: `providersSupported: boolean`, `apiCredentials: { claude: ApiCredential[]; codex: ApiCredential[] }`
 - [x] `readProfile`: read `providers` when present (validate enums, default missing values to `subscription` / `off` / `auto` / `[]`); when absent derive it from `claude-fallback`; remove `claudeFallback` from `RoutingProfile` and update every reader (`claude` fallback now lives in `providers.claude.fallback`)
 - [x] `readRoutingProfiles`: set `providersSupported` from the shared profile and read `api_credentials` (absent -> empty lists); update `emptyProfile` and `unsupportedRoutingProfiles`
-- [x] `profileBody(profile, selectionOptions, providersSupported)`: on a new backend send the complete `providers` block (cleared `api-credential` as `null`, Codex block with `fallback.target` only, API key mode forces `target: off`) and no `claude-fallback`; on an old backend send the previous body with `claude-fallback` built from `providers.claude.fallback`; thread the flag through `keyProfilePatch`, `sharedProfilePatch`, `saveKeyProfile`, `saveSharedProfile`
+- [x] `profileBody(profile, selectionOptions, providersSupported)`: on a new backend send the complete `providers` block (cleared `api-credential` as `null`, Codex block with `fallback.target` and `mode`/`mappings` as `null`, API key mode forces `target: off`) and no `claude-fallback`; on an old backend send the previous body with `claude-fallback` built from `providers.claude.fallback`; thread the flag through `keyProfilePatch`, `sharedProfilePatch`, `saveKeyProfile`, `saveSharedProfile`
 - [x] update `normalizeProfile`, `profileDirty`, `copyOfShared` in `keyProfilesModel.ts` for `providers` (trimmed credential, canonical key order, Codex fallback mode and mappings ignored, mappings normalized as today) so the read-back check compares what the backend keeps
 - [x] write tests in `routingProfiles.test.ts`: reading a new response, an old response (derived providers, flag false), invalid enum values; PATCH bodies for both backends including `null` credential and API-mode normalization; read-back equality and inequality
 - [x] write tests in the model tests for `normalizeProfile` / `profileDirty` / `copyOfShared` with `providers` (independence of copies, hidden values kept)
@@ -207,7 +207,7 @@
     "providers": {
       "claude": {"mode": "subscription", "api-credential": "idx-or-null",
                  "fallback": {"target": "api", "mode": "auto", "mappings": [{"from": "claude-opus-*", "to": "gpt-6-astra"}]}},
-      "codex":  {"mode": "api", "api-credential": "idx", "fallback": {"target": "off"}}
+      "codex":  {"mode": "api", "api-credential": "idx", "fallback": {"target": "off", "mode": null, "mappings": null}}
     }
   }}}}
   ```

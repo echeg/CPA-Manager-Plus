@@ -241,7 +241,9 @@ at a time.
   any request. **Save** sends one `PATCH /v8/management/config` with
   `routing.selection`, `session-affinity`, `preferred-accounts` and `providers` (the
   complete block; a cleared `api-credential` is sent as `null`, and the Codex block
-  carries only `fallback.target`; an older backend gets `claude-fallback` instead),
+  carries `fallback.target` with `mode` and `mappings` as `null`, since CPA checks a
+  stored Codex mode and mapping list under target off; an older backend gets
+  `claude-fallback` instead),
   plus `session-affinity-ttl` only when it changed. It then reads
   `GET /v8/management/routing/profiles` back and compares the default profile, and
   when the TTL was sent also checks it in the config; it reports an error if CPA did

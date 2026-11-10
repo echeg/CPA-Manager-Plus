@@ -484,8 +484,12 @@ describe('writing a key profile', () => {
                   mappings: [{ from: 'claude-opus-*', to: 'gpt-6-astra' }],
                 },
               },
-              // API key mode carries target off; the Codex fallback is its target only.
-              codex: { mode: 'api', 'api-credential': 'codex-idx', fallback: { target: 'off' } },
+              // API key mode carries target off; the Codex fallback clears mode and mappings.
+              codex: {
+                mode: 'api',
+                'api-credential': 'codex-idx',
+                fallback: { target: 'off', mode: null, mappings: null },
+              },
             },
           },
         },
@@ -508,6 +512,29 @@ describe('writing a key profile', () => {
       },
     });
     expect(body).not.toHaveProperty('claude-fallback');
+  });
+
+  it('clears a stored Codex fallback mode and mappings, which CPA checks under target off', () => {
+    // CPA accepts any Codex mode and mapping rows under target api; the merge-PATCH
+    // would keep them and fail the switch to off unless the body clears them.
+    const state = readRoutingProfiles(
+      providersResponse({
+        providers: {
+          codex: {
+            'api-credential': 'codex-idx',
+            fallback: { target: 'api', mode: 'bogus', mappings: [{ from: '', to: '' }] },
+          },
+        },
+      })
+    );
+    const profile = state.shared;
+    profile.providers.codex.fallback.target = 'off';
+    const body = profileBody(profile, options) as { providers: { codex: unknown } };
+    expect(body.providers.codex).toEqual({
+      mode: 'subscription',
+      'api-credential': 'codex-idx',
+      fallback: { target: 'off', mode: null, mappings: null },
+    });
   });
 
   it('an older backend gets claude-fallback enabled only for the Codex target', () => {
@@ -870,7 +897,11 @@ describe('writing the shared profile', () => {
               mappings: [{ from: 'claude-opus-*', to: 'gpt-6-astra' }],
             },
           },
-          codex: { mode: 'api', 'api-credential': 'codex-idx', fallback: { target: 'off' } },
+          codex: {
+            mode: 'api',
+            'api-credential': 'codex-idx',
+            fallback: { target: 'off', mode: null, mappings: null },
+          },
         },
       },
     });
