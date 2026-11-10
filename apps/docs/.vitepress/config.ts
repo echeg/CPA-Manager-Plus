@@ -51,6 +51,7 @@ const zhSidebar: DefaultTheme.Sidebar = [
       { text: '请求监控为空', link: '/troubleshooting/request-monitoring' },
       { text: '日志查看', link: '/manual/logs' },
       { text: '系统信息', link: '/manual/system' },
+      { text: '指南', link: '/manual/guide' },
     ],
   },
   {
@@ -120,6 +121,7 @@ const enSidebar: DefaultTheme.Sidebar = [
       },
       { text: 'Logs', link: '/en/manual/logs' },
       { text: 'System', link: '/en/manual/system' },
+      { text: 'Guide', link: '/en/manual/guide' },
     ],
   },
   {

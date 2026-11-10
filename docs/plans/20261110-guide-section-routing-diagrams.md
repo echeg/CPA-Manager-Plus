@@ -102,8 +102,8 @@
 - [x] run `npm run build` in `apps/web` and verify `dist/index.html` contains both strings "Request routing by client key" and "Credential selection inside the pool"; note the resulting `dist/index.html` size in the plan (expected ≈ 8.3 MB) — both strings found (4 matches each); `dist/index.html` is 8,296,075 bytes (≈ 8.3 MB, gzip ≈ 2.1 MB)
 
 ### Task 5: Update documentation
-- [ ] add a short "Guide" entry to the panel's user-facing docs if a features list exists (README or `docs/`), stating that the diagrams are generated with archify from the JSON sources in `src/features/guide/diagrams/`
-- [ ] update project knowledge docs (CLAUDE.md or equivalent) with the pattern "bundled self-contained HTML via `?raw` + `iframe srcDoc` with theme sync" if no such note exists
+- [x] add a short "Guide" entry to the panel's user-facing docs if a features list exists (README or `docs/`), stating that the diagrams are generated with archify from the JSON sources in `src/features/guide/diagrams/` (new manual pages `apps/docs/en/manual/guide.md` and `apps/docs/manual/guide.md`, linked in the VitePress sidebar after System)
+- [x] update project knowledge docs (CLAUDE.md or equivalent) with the pattern "bundled self-contained HTML via `?raw` + `iframe srcDoc` with theme sync" if no such note exists (no CLAUDE.md in this repo; added `docs/development/bundled-html-frames.md` and linked it from `CONTRIBUTING.md`)
 
 ## Technical Details
 - **Assets**: `apps/web/src/features/guide/diagrams/{key-routing,pool-selection}.html` (~713 KB each) imported as strings via `?raw`; Vite inlines them into the single-file bundle.
