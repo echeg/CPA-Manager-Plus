@@ -80,12 +80,12 @@
 - [x] run `npm test` in `apps/web` - must pass before task 2
 
 ### Task 2: Build `GuidePage` with two tabs
-- [ ] create `apps/web/src/features/guide/GuidePage.tsx`: page title + subtitle from i18n, a tab strip with two tabs (`key-routing`, `pool-selection`), the active tab's intro paragraph (i18n), and a `DiagramFrame` with the matching `?raw` import (`import keyRoutingHtml from './diagrams/key-routing.html?raw'`); follow the markup/style conventions of an existing tabbed feature page (see `src/features/usage-analytics/UsageAnalyticsPage.tsx` tab strip) and reuse existing tab components/classes when available instead of new ones
-- [ ] keep only the active tab's iframe mounted (so one archify runtime runs at a time); remember the selected tab in component state only (no persistence)
-- [ ] create `apps/web/src/pages/GuidePage.tsx` re-exporting `GuidePage` from the feature, matching `src/pages/SystemPage.tsx`
-- [ ] add i18n keys to all four locale files: `nav.guide` (en "Guide", ru "Гайд", zh-CN "指南", zh-TW "指南") and `guide.title`, `guide.subtitle`, `guide.tabs_label`, `guide.tab_key_routing`, `guide.tab_pool_selection`, `guide.intro_key_routing`, `guide.intro_pool_selection`; intro texts summarise the stages shown in each diagram in two or three sentences (ru written in natural Russian, zh-CN/zh-TW in natural Chinese)
-- [ ] write `GuidePage.test.tsx`: renders title and both tab labels; the first tab shows an iframe whose `srcdoc` contains "Request routing by client key"; clicking the second tab swaps it for an iframe whose `srcdoc` contains "Credential selection inside the pool"; only one iframe is in the document at a time
-- [ ] run `npm test` in `apps/web` - must pass before task 3
+- [x] create `apps/web/src/features/guide/GuidePage.tsx`: page title + subtitle from i18n, a tab strip with two tabs (`key-routing`, `pool-selection`), the active tab's intro paragraph (i18n), and a `DiagramFrame` with the matching `?raw` import (`import keyRoutingHtml from './diagrams/key-routing.html?raw'`); follow the markup/style conventions of an existing tabbed feature page (see `src/features/usage-analytics/UsageAnalyticsPage.tsx` tab strip) and reuse existing tab components/classes when available instead of new ones
+- [x] keep only the active tab's iframe mounted (so one archify runtime runs at a time); remember the selected tab in component state only (no persistence)
+- [x] create `apps/web/src/pages/GuidePage.tsx` re-exporting `GuidePage` from the feature, matching `src/pages/SystemPage.tsx`
+- [x] add i18n keys to all four locale files: `nav.guide` (en "Guide", ru "Гайд", zh-CN "指南", zh-TW "指南") and `guide.title`, `guide.subtitle`, `guide.tabs_label`, `guide.tab_key_routing`, `guide.tab_pool_selection`, `guide.intro_key_routing`, `guide.intro_pool_selection`; intro texts summarise the stages shown in each diagram in two or three sentences (ru written in natural Russian, zh-CN/zh-TW in natural Chinese)
+- [x] write `GuidePage.test.tsx`: renders title and both tab labels; the first tab shows an iframe whose `srcdoc` contains "Request routing by client key"; clicking the second tab swaps it for an iframe whose `srcdoc` contains "Credential selection inside the pool"; only one iframe is in the document at a time
+- [x] run `npm test` in `apps/web` - must pass before task 3
 
 ### Task 3: Wire the nav item and route
 - [ ] add a `guide` book icon to `sidebarIcons` in `apps/web/src/components/layout/MainLayout.tsx` (inline SVG in the same style and size as the neighbours)
