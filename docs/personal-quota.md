@@ -18,6 +18,19 @@ with expiry dates; inline reset confirmation; CPA cooldown clearing after a
 confirmed reset; refresh on entry; and privacy masking.
 Reserve editing is available directly on the quota cards.
 
+A Claude account can hold several reset grants at once, for example a full limit
+reset and a few model-launch resets. When there are at least two grants and at least
+one can be used, the **Use a reset…** confirm step lists them as radio options under
+**Reset to use**, soonest expiry first. The grant Anthropic recommends is marked
+"recommended" and preselected when it can be used (otherwise the usable grant with
+the lowest id is), so confirming without a change spends the same grant as before. Grants that cannot be used now are shown disabled with the reason (paused,
+not usable right now, only usable at a limit, not started yet). The confirmation text
+names the chosen grant; the "N left" note still counts every grant on the account.
+Cancel or Esc drops the choice, so the next open starts from the recommended grant.
+With one grant, with no usable grant, or while a pending claim is retried, the step
+has no list; a retry always stays on its original grant. Codex has no such choice:
+OpenAI decides which reset credit is spent.
+
 The **Guide** navigation item (`#/guide`, last sidebar block after System Info) shows
 three interactive diagrams of this fork's routing: request routing by client key
 (routing profile → sticky session → preferred account → pool selection → per-provider

@@ -151,8 +151,8 @@
 - [x] run `npm run lint` and `npx tsc --noEmit` - all issues fixed (tsc clean; lint 0 errors, 7 warnings all in files this branch does not touch)
 
 ### Task 7: [Final] Update documentation
-- [ ] update the user-facing docs or README section on resets if one describes "Use a reset…" (none found during planning)
-- [ ] update project knowledge docs if new patterns were discovered
+- [x] update the user-facing docs or README section on resets if one describes "Use a reset…" (none found during planning) - README only covers upstream features; added a reset grant picker paragraph to the fork feature doc `docs/personal-quota.md` (Features)
+- [x] update project knowledge docs if new patterns were discovered - no CLAUDE.md/AGENTS.md in the repo and no new pattern: lifecycle tests and shared helpers in `resetActions.ts` follow existing practice
 
 ## Technical Details
 - `ResetGrantChoice = { grant: AnthropicResetGrant; usable: boolean; reason?: ResetGrantChoiceReason; recommended: boolean }`
