@@ -116,12 +116,12 @@
 - [x] run tests - must pass before next task
 
 ### Task 3: Choice state in `useClaudeResetGrants`
-- [ ] add `chosenGrantId` state and `choose(id | undefined)` to `apps/web/src/features/quota/providers/claude/ClaudeResetGrants.tsx`
-- [ ] compute `selected` through `resolveSelectedGrantId`; `execute()` keeps passing `selected` to `resetGrantOperations.run`
-- [ ] return `choices` (from `resetGrantChoices`) only when there is no pending operation; keep every existing return field unchanged
-- [ ] write `apps/web/src/features/quota/claudeResetChoice.lifecycle.test.tsx` with `react-test-renderer` `create`/`act`: mock `readClaudeResetGrants` to return two usable grants with `nextGrantId` = B and spy on `resetGrantOperations.run`; success: `choose('A')` then `execute()` calls `run` with `'A'`; default: without `choose`, `run` gets `'B'`
-- [ ] write error/edge cases in the same file: refresh fallback (choose A, bump `refreshToken`, status now has A at `resetsLeft: 0` → `selectedGrant.id` is B); pending pinning (`inspect` returns a pending C → `choices` undefined and `choose('A')` does not change the id sent to `run`); `choose(undefined)` restores the default
-- [ ] run tests - must pass before next task
+- [x] add `chosenGrantId` state and `choose(id | undefined)` to `apps/web/src/features/quota/providers/claude/ClaudeResetGrants.tsx`
+- [x] compute `selected` through `resolveSelectedGrantId`; `execute()` keeps passing `selected` to `resetGrantOperations.run`
+- [x] return `choices` (from `resetGrantChoices`) only when there is no pending operation; keep every existing return field unchanged
+- [x] write `apps/web/src/features/quota/claudeResetChoice.lifecycle.test.tsx` with `react-test-renderer` `create`/`act`: mock `readClaudeResetGrants` to return two usable grants with `nextGrantId` = B and spy on `resetGrantOperations.run`; success: `choose('A')` then `execute()` calls `run` with `'A'`; default: without `choose`, `run` gets `'B'`
+- [x] write error/edge cases in the same file: refresh fallback (choose A, bump `refreshToken`, status now has A at `resetsLeft: 0` → `selectedGrant.id` is B); pending pinning (`inspect` returns a pending C → `choices` undefined and `choose('A')` does not change the id sent to `run`); `choose(undefined)` restores the default
+- [x] run tests - must pass before next task
 
 ### Task 4: Choices in `ResetAction` / `claudeResetAction`
 - [ ] move `itemLabel` and the `claude_left` detail builder from `components/QuotaLedgerResets.tsx` into `apps/web/src/features/quota/resetActions.ts` (React-free) and use them from `ResetLine`, so the list and the picker share one label and detail

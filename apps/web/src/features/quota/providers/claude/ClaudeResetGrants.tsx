@@ -16,7 +16,11 @@ import {
   resetGrantOperations,
   RETRY_WINDOW_MS,
 } from './resetGrantOperations';
-import { resetGrantBlockReason, selectResetGrant } from './selectResetGrant';
+import {
+  resetGrantBlockReason,
+  resetGrantChoices,
+  resolveSelectedGrantId,
+} from './selectResetGrant';
 
 /** Card-owned reads; the session-scoped journal owns spending and ambiguous retries. */
 export function useClaudeResetGrants(
@@ -41,6 +45,8 @@ export function useClaudeResetGrants(
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [reload, setReload] = useState(0);
+  /** The user's pick in the confirm step; undefined = the default grant. */
+  const [chosenGrantId, setChosenGrantId] = useState<string | undefined>(undefined);
   const lock = useRef(false);
   const generation = useRef(0);
   useEffect(() => {
@@ -70,7 +76,14 @@ export function useClaudeResetGrants(
   const operation = resetGrantOperations.inspect(key);
   const pending = operation && !operation.code ? operation : undefined;
   const expired = Boolean(pending && now - pending.createdAt >= RETRY_WINDOW_MS);
-  const selected = pending?.grantId ?? (status ? selectResetGrant(status, now)?.id : undefined);
+  // A pending retry stays pinned to its grant; a chosen grant that a refresh
+  // removed or blocked silently falls back to the default.
+  const selected = resolveSelectedGrantId({
+    status,
+    pendingGrantId: pending?.grantId,
+    chosenGrantId,
+    now,
+  });
   const blocked = disabled || !sessionActive || !authIndex || busy || expired || !selected;
   const confirmMessage = t(pending ? 'claude_reset.retry_confirm' : 'claude_reset.confirm_text', {
     name: displayName,
@@ -128,5 +141,9 @@ export function useClaudeResetGrants(
     /** Why a loaded status offers no grant to spend; a `claude_reset.*` key. */
     blockReason: !pending && status && !selected ? resetGrantBlockReason(status, now) : undefined,
     buttonLabel: pending ? 'retry' : 'use',
+    /** Grants the user may pick from; absent before the read and while a claim is pending. */
+    choices: !pending && status ? resetGrantChoices(status, now) : undefined,
+    /** Picks the grant to spend; undefined restores the default. */
+    choose: (id: string | undefined) => setChosenGrantId(id),
   };
 }
