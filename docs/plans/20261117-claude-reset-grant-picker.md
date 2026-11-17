@@ -143,12 +143,12 @@
 - [x] run tests - must pass before next task
 
 ### Task 6: Verify acceptance criteria
-- [ ] verify: with two or more grants and at least one usable, the confirm step shows the radio list with the recommended grant preselected; picking another grant changes the consequence and the id sent to `run`
-- [ ] verify: one grant, no usable grant, and a pending retry render as before
-- [ ] verify: unusable grants are visible, disabled and carry a reason
-- [ ] verify: works in the Ledger drawer and the compact card; reopening the confirm step in the drawer starts from the default
-- [ ] run full test suite from `apps/web` (`npm test`)
-- [ ] run `npm run lint` and `npx tsc --noEmit` - all issues fixed
+- [x] verify: with two or more grants and at least one usable, the confirm step shows the radio list with the recommended grant preselected; picking another grant changes the consequence and the id sent to `run` (`resetActions.test.ts` selected/recommended + consequence, `claudeResetChoice.lifecycle.test.tsx` spends the chosen grant)
+- [x] verify: one grant, no usable grant, and a pending retry render as before (`resetActions.test.ts` no-choices cases, `resetChoiceList.test.tsx` plain confirm step without choices)
+- [x] verify: unusable grants are visible, disabled and carry a reason (`resetChoiceList.test.tsx`, `selectResetGrant.test.ts` reasons)
+- [x] verify: works in the Ledger drawer and the compact card; reopening the confirm step in the drawer starts from the default (both mounts pass `claudeResetAction` into the shared `ResetActionFooter`; markup tested for both variants; close → `onClearChoice` → `choose(undefined)` restores the default, covered in `resetChoiceList.test.tsx` and the lifecycle test; live browser check left to Post-Completion)
+- [x] run full test suite from `apps/web` (`npm test`) - 323 files, 5400 tests passed
+- [x] run `npm run lint` and `npx tsc --noEmit` - all issues fixed (tsc clean; lint 0 errors, 7 warnings all in files this branch does not touch)
 
 ### Task 7: [Final] Update documentation
 - [ ] update the user-facing docs or README section on resets if one describes "Use a reset…" (none found during planning)
