@@ -134,13 +134,13 @@
 - [x] run tests - must pass before next task
 
 ### Task 5: Radio list in `QuotaLedgerResetsConfirm`
-- [ ] in `apps/web/src/features/quota/components/QuotaLedgerResets.tsx`, pass `choices`/`onChoose` from `ResetActionFooter` into `QuotaLedgerResetsConfirm`, and call `action.onClearChoice?.()` from the footer's `close()` (Cancel, Esc, finished claim)
-- [ ] render a `fieldset` with a `legend` and one radio per choice (label, detail, "recommended" badge); unusable radios are `disabled` and show their reason; keep initial focus on Cancel and Esc-to-cancel
-- [ ] wire `ClaudeResetActionMount` so `onChoose` → `choose(id)` and `onClearChoice` → `choose(undefined)`
-- [ ] add styles in `QuotaLedgerResets.module.scss` for both the drawer and `card` variants (narrow card width, long labels truncate with a title)
-- [ ] write `renderToStaticMarkup` tests rendering `ResetActionFooter` directly with a hand-built `ResetAction` and `initialConfirming`, for `variant="card"` and `variant="drawer"`: fieldset and legend present, exactly one `checked` radio on the selected choice, the unusable choice `disabled` with its reason, no `<fieldset` without `choices`
-- [ ] write a `react-test-renderer` case: firing `onChange` on radio A calls `onChoose('A')`; Cancel calls `onClearChoice`
-- [ ] run tests - must pass before next task
+- [x] in `apps/web/src/features/quota/components/QuotaLedgerResets.tsx`, pass `choices`/`onChoose` from `ResetActionFooter` into `QuotaLedgerResetsConfirm`, and call `action.onClearChoice?.()` from the footer's `close()` (Cancel, Esc, finished claim)
+- [x] render a `fieldset` with a `legend` and one radio per choice (label, detail, "recommended" badge); unusable radios are `disabled` and show their reason; keep initial focus on Cancel and Esc-to-cancel
+- [x] wire `ClaudeResetActionMount` so `onChoose` → `choose(id)` and `onClearChoice` → `choose(undefined)` (already done by `claudeResetAction` in Task 4; the mount passes its action through unchanged)
+- [x] add styles in `QuotaLedgerResets.module.scss` for both the drawer and `card` variants (narrow card width, long labels truncate with a title)
+- [x] write `renderToStaticMarkup` tests rendering `ResetActionFooter` directly with a hand-built `ResetAction` and `initialConfirming`, for `variant="card"` and `variant="drawer"`: fieldset and legend present, exactly one `checked` radio on the selected choice, the unusable choice `disabled` with its reason, no `<fieldset` without `choices`
+- [x] write a `react-test-renderer` case: firing `onChange` on radio A calls `onChoose('A')`; Cancel calls `onClearChoice`
+- [x] run tests - must pass before next task
 
 ### Task 6: Verify acceptance criteria
 - [ ] verify: with two or more grants and at least one usable, the confirm step shows the radio list with the recommended grant preselected; picking another grant changes the consequence and the id sent to `run`

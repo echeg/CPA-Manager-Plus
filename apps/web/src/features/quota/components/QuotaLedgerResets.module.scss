@@ -145,6 +145,74 @@
   border-radius: 8px;
   background: var(--amber-10);
 }
+.choices {
+  min-width: 0;
+  margin: 0 0 10px;
+  padding: 0;
+  border: 0;
+}
+.choicesLegend {
+  margin-bottom: 4px;
+  padding: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  padding: 5px 0;
+  cursor: pointer;
+  input {
+    flex: none;
+    margin: 2px 0 0;
+    accent-color: var(--primary-color);
+  }
+  &[data-disabled] {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+}
+.choiceBody {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.choiceHeading {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.choiceLabel {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.recommended {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.choiceDetail,
+.choiceReason {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.choiceReason {
+  color: var(--amber-text);
+}
 .consequence {
   margin: 0;
   color: var(--text-primary);

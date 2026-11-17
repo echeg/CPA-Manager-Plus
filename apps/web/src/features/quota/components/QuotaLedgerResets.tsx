@@ -13,7 +13,7 @@
  * `ClaudeLedgerResetsDrawer` mounts only while its drawer is open.
  */
 
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import type { AuthFileItem } from '@/features/personal-quota-support/types';
@@ -29,6 +29,7 @@ import {
   formatMonthDay,
   resetItemLabel,
   type ResetAction,
+  type ResetActionChoice,
 } from '../resetActions';
 import type { ResetInventory, ResetInventoryItem } from '../resetInventory';
 import styles from './QuotaLedgerResets.module.scss';
@@ -137,9 +138,59 @@ type ConfirmProps = {
   busy: boolean;
   /** Blocks the confirm button without the busy label (e.g. a stale Claude read). */
   blocked?: boolean;
+  /** Claude grants to pick from; the radio list renders only when present. */
+  choices?: ResetActionChoice[];
+  onChoose?: (id: string) => void;
   onConfirm: () => void;
   onCancel: () => void;
 };
+
+/** One radio per grant; unusable ones stay visible, disabled, with their reason. */
+function ResetChoiceList({
+  choices,
+  onChoose,
+}: {
+  choices: ResetActionChoice[];
+  onChoose?: (id: string) => void;
+}) {
+  const { t } = useTranslation();
+  const name = useId();
+  return (
+    <fieldset className={styles.choices} data-resets-choices="">
+      <legend className={styles.choicesLegend}>{t('quota_management.resets.choice.legend')}</legend>
+      {choices.map((choice) => (
+        <label
+          key={choice.id}
+          className={styles.choice}
+          data-disabled={choice.usable ? undefined : ''}
+        >
+          <input
+            type="radio"
+            name={name}
+            value={choice.id}
+            checked={choice.selected}
+            disabled={!choice.usable}
+            onChange={() => onChoose?.(choice.id)}
+          />
+          <span className={styles.choiceBody}>
+            <span className={styles.choiceHeading}>
+              <span className={styles.choiceLabel} title={choice.label}>
+                {choice.label}
+              </span>
+              {choice.recommended && (
+                <span className={styles.recommended}>
+                  {t('quota_management.resets.choice.recommended')}
+                </span>
+              )}
+            </span>
+            {choice.detail && <span className={styles.choiceDetail}>{choice.detail}</span>}
+            {choice.reason && <span className={styles.choiceReason}>{choice.reason}</span>}
+          </span>
+        </label>
+      ))}
+    </fieldset>
+  );
+}
 
 /** The second, amber step: Cancel takes focus, Esc cancels. */
 export function QuotaLedgerResetsConfirm({
@@ -148,6 +199,8 @@ export function QuotaLedgerResetsConfirm({
   confirmLabel,
   busy,
   blocked = false,
+  choices,
+  onChoose,
   onConfirm,
   onCancel,
 }: ConfirmProps) {
@@ -164,6 +217,7 @@ export function QuotaLedgerResetsConfirm({
 
   return (
     <div ref={ref} className={styles.confirm} data-resets-confirm="" onKeyDown={onKeyDown}>
+      {choices && <ResetChoiceList choices={choices} onChoose={onChoose} />}
       <p className={styles.consequence}>{consequence}</p>
       {note && <p className={styles.confirmNote}>{note}</p>}
       <div className={styles.confirmActions}>
@@ -213,6 +267,7 @@ export function ResetActionFooter({
   const close = () => {
     returnFocus.current = true;
     setConfirming(false);
+    action.onClearChoice?.();
     onClose?.();
   };
   const confirm = () => {
@@ -233,6 +288,8 @@ export function ResetActionFooter({
           confirmLabel={action.confirmLabel}
           busy={action.busy}
           blocked={action.blocked}
+          choices={action.choices}
+          onChoose={action.onChoose}
           onConfirm={confirm}
           onCancel={close}
         />
