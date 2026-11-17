@@ -111,9 +111,9 @@
 - [x] run tests - must pass before next task
 
 ### Task 2: i18n keys for the picker
-- [ ] add `quota_management.resets.choice.legend`, `quota_management.resets.choice.recommended` and short per-grant reasons `quota_management.resets.choice.reason.{paused,not_usable,not_limited,not_started}` to `apps/web/src/i18n/locales/en.json`, `ru.json`, `zh-CN.json`, `zh-TW.json`
-- [ ] write a new `apps/web/src/features/quota/resetChoices.locale.test.ts` following `keyProfiles.locale.test.ts`: the `quota_management.resets.choice` subtree has identical key sets and non-empty strings in all four locales
-- [ ] run tests - must pass before next task
+- [x] add `quota_management.resets.choice.legend`, `quota_management.resets.choice.recommended` and short per-grant reasons `quota_management.resets.choice.reason.{paused,not_usable,not_limited,not_started}` to `apps/web/src/i18n/locales/en.json`, `ru.json`, `zh-CN.json`, `zh-TW.json`
+- [x] write a new `apps/web/src/features/quota/resetChoices.locale.test.ts` following `keyProfiles.locale.test.ts`: the `quota_management.resets.choice` subtree has identical key sets and non-empty strings in all four locales
+- [x] run tests - must pass before next task
 
 ### Task 3: Choice state in `useClaudeResetGrants`
 - [ ] add `chosenGrantId` state and `choose(id | undefined)` to `apps/web/src/features/quota/providers/claude/ClaudeResetGrants.tsx`

@@ -5561,6 +5561,16 @@
         "seven_day_overage_included": "7 天（含超额）"
       },
       "codex_choice_note": "由 OpenAI 决定兑换哪一次重置",
+      "choice": {
+        "legend": "要使用的重置",
+        "recommended": "推荐",
+        "reason": {
+          "paused": "已暂停",
+          "not_usable": "当前不可用",
+          "not_limited": "仅在达到限制时可用",
+          "not_started": "尚未开始"
+        }
+      },
       "use": "使用重置…",
       "confirm_codex": "OpenAI 将兑换你 {{count}} 次重置中的一次；Codex 速率限制将被清除，该账号的代理冷却也将被清除",
       "confirm_codex_last": "OpenAI 将兑换你的最后一次重置；Codex 速率限制将被清除，该账号的代理冷却也将被清除",

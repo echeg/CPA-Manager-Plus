@@ -5566,6 +5566,16 @@
         "seven_day_overage_included": "7-day incl. overage"
       },
       "codex_choice_note": "OpenAI chooses which reset is redeemed",
+      "choice": {
+        "legend": "Reset to use",
+        "recommended": "recommended",
+        "reason": {
+          "paused": "Paused",
+          "not_usable": "Not usable right now",
+          "not_limited": "Only usable at a limit",
+          "not_started": "Not started yet"
+        }
+      },
       "use": "Use a reset…",
       "confirm_codex": "OpenAI redeems one of your {{count}} resets; your Codex rate limits are cleared and the proxy cooldown for this account is cleared",
       "confirm_codex_last": "OpenAI redeems your last reset; your Codex rate limits are cleared and the proxy cooldown for this account is cleared",
