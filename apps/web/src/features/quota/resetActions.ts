@@ -10,7 +10,7 @@ import type {
 } from '@/features/personal-quota-support/services/api/claudeResetGrants';
 import { parseIsoToMs } from '@/features/quota/utils/quota';
 import { maskQuotaText } from './ledgerModel';
-import type { ResetGrantChoice, ResetGrantChoiceReason } from './providers/claude/selectResetGrant';
+import type { ResetGrantChoice } from './providers/claude/selectResetGrant';
 import type { ResetInventoryItem } from './resetInventory';
 
 /** Resets a subscription holds: a Codex credit is one, a Claude grant counts its `left`. */
@@ -124,21 +124,6 @@ const remainingNote = (t: TFunction, remaining: number): string =>
         { count: remaining }
       );
 
-/** Per-grant reasons have short keys; account-wide ones reuse the `claude_reset.*` sentences. */
-const PER_GRANT_REASONS: ReadonlySet<ResetGrantChoiceReason> = new Set([
-  'paused',
-  'not_usable',
-  'not_limited',
-  'not_started',
-]);
-
-const choiceReason = (t: TFunction, reason: ResetGrantChoiceReason | undefined) => {
-  if (!reason) return undefined;
-  return PER_GRANT_REASONS.has(reason)
-    ? t(`quota_management.resets.choice.reason.${reason}`)
-    : t(`claude_reset.${reason}`);
-};
-
 /** Codex spends one credit per subscription; OpenAI picks which, so there is no per-line action. */
 export function codexResetAction(t: TFunction, count: number, state: ActionState): ResetAction {
   return {
@@ -210,7 +195,11 @@ export function claudeResetAction(
                   clears: choice.grant.clears,
                 }) ?? '',
               usable: choice.usable,
-              ...(choice.reason ? { reason: choiceReason(t, choice.reason) } : {}),
+              // Only per-grant reasons get here: account-wide ones (cooldown,
+              // ineligible) make every choice unusable, which hides the list.
+              ...(choice.reason
+                ? { reason: t(`quota_management.resets.choice.reason.${choice.reason}`) }
+                : {}),
               recommended: choice.recommended,
               selected: choice.grant.id === grant?.id,
             })

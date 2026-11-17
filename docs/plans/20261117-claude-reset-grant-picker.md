@@ -18,7 +18,7 @@
 - **Rejected alternatives** (not judged by the user; open to critique): a backend endpoint in CLIProxyAPI; Codex support; a global store or persisting the choice across opens; defaulting to the soonest-expiring grant instead of the upstream recommendation; hiding unusable grants; always showing the radio list for a single grant; letting a retry switch grants; a custom dropdown; separate picker components per location.
 - **Verified facts**:
   - The claim already sends `grant_id`: `apps/web/src/features/personal-quota-support/services/api/claudeResetGrants.ts` `claimClaudeResetGrant(authIndex, organization, grantId, requestId)`, through the management api-call proxy.
-  - `apps/web/src/features/quota/providers/claude/resetGrantOperations.ts:59` `run(key, authIndex, grantId)` re-reads fresh status and re-validates the given grant before dispatch (around lines 79-89). A pending operation with a different `grantId` throws `expired` (around line 70), so a retry must stay on the same grant. `run` records the operation as soon as validation passes (around lines 92-93), so the hook sees it as pending while the claim is still in flight.
+  - `apps/web/src/features/quota/providers/claude/resetGrantOperations.ts:59` `run(key, authIndex, grantId)` re-reads fresh status and re-validates the given grant before dispatch (around lines 79-89). A pending operation with a different `grantId` throws `expired` (around line 70), so a retry must stay on the same grant. `run` records the operation as soon as validation passes (around lines 92-93), after two awaited reads; the journal is a plain map that triggers no re-render, so the hook does not see the claim as pending while it is in flight (corrected in review: the radio list locks while busy).
   - `selectResetGrant.ts:6`: "Prefer the upstream recommendation; otherwise use stable ID ordering." Cooldown short-circuits before any per-grant check (`selectResetGrant.ts:8`).
   - `anthropicResetGrantBlocker` (`claudeResetGrants.ts` ~226-238) checks ineligible → unknown_grant → paused → not_usable → exhausted → not_limited.
   - `resetActions.ts` `codexResetAction`: OpenAI picks which credit is spent, so Codex has no per-credit choice.
@@ -96,6 +96,7 @@
 - 2026-11-17 grill: **accepted** - Task 3, Task 5: closing the confirm step (Cancel, Esc, finished claim) clears the choice, so reopening in the Ledger drawer starts from the default - decided by grill: the drawer keeps the hook mounted (`QuotaLedgerResets.tsx` ~217-220, ~402) and persisting the choice across opens is a rejected alternative.
 - 2026-11-17 grill: **accepted** - Task 5: dropped "all radios disabled while busy" and "confirm disabled when the selected grant is blocked"; the list disappears once the claim is journaled, as the pending/retry branch already does, and the existing `blocked` flag already disables Confirm - decided by grill: `resetGrantOperations.ts` ~92-93 records the operation before dispatch, the hook reads it every render (`ClaudeResetGrants.tsx` ~70-71), `QuotaLedgerResets.tsx` ~183.
 - 2026-11-17 grill: **accepted** - Task order: i18n keys moved to Task 2, before the tasks that use them, as short keys under `quota_management.resets.choice.*` with a parity test following `keyProfiles.locale.test.ts` - decided by grill: the existing `claude_reset.*` reasons are full sentences (`en.json` ~5843-5846) and `paused`/`not_usable`/`not_started` keys do not exist.
+- 2026-11-17 review: **reversed** - Task 5: radios are disabled while busy after all, and the choice is also cleared on open - decided by review: `resetGrantOperations.ts` ~75-93 awaits `readOrganization` and `readStatus` before journaling and the journal is not React state, so the list stayed up mid-claim; `QuotaLedgerResetsDrawer` unmounts the footer while `loading`, skipping `close()`.
 
 ## Implementation Steps
 
@@ -128,7 +129,7 @@
 - [x] extend `ClaudeResetHandle` with `choices`, `choose`; add optional `choices?: { id, label, detail, usable, reason?, recommended, selected }[]`, `onChoose?(id)` and `onClearChoice?()` to `ResetAction`
 - [x] in `claudeResetAction`, fill them only when there are at least two choices, at least one is usable, and this is not a retry; unnamed choices are numbered by position; the consequence uses the same label as the selected radio; `reason` translated from `quota_management.resets.choice.reason.*`; the note stays account-wide
 - [x] keep `codexResetAction` unchanged
-- ➕ `onClearChoice` is set on every Claude action (also with no list and for a retry), so a stale pick cannot come back after a refresh restores its grant; `onChoose`/`choices` follow the rule above
+- [x] ➕ `onClearChoice` is set on every Claude action (also with no list and for a retry), so a stale pick cannot come back after a refresh restores its grant; `onChoose`/`choices` follow the rule above
 - [x] write tests in a new `apps/web/src/features/quota/resetActions.test.ts`: no `choices` for one grant, for no usable grant, or for a retry; one usable + one paused grant gives two choices; `selected`/`recommended` set correctly; consequence names the selected grant; two unnamed grants with the second selected show "… 2" in both radio and consequence; labels masked when `showEmails` is false; the note does not change when the choice changes
 - [x] update `ResetLine` expectations in existing tests if the moved helpers change any markup (they should not)
 - [x] run tests - must pass before next task
@@ -140,6 +141,9 @@
 - [x] add styles in `QuotaLedgerResets.module.scss` for both the drawer and `card` variants (narrow card width, long labels truncate with a title)
 - [x] write `renderToStaticMarkup` tests rendering `ResetActionFooter` directly with a hand-built `ResetAction` and `initialConfirming`, for `variant="card"` and `variant="drawer"`: fieldset and legend present, exactly one `checked` radio on the selected choice, the unusable choice `disabled` with its reason, no `<fieldset` without `choices`
 - [x] write a `react-test-renderer` case: firing `onChange` on radio A calls `onChoose('A')`; Cancel calls `onClearChoice`
+- [x] ➕ (review) lock the radio `fieldset` while `busy`: the claim is journaled only after two status reads and the journal does not re-render, so the list stayed clickable mid-claim and a late pick relabelled the grant being spent
+- [x] ➕ (review) also clear the choice when "Use a reset…" opens the confirm step: a drawer refresh unmounts the footer mid-confirm without `close()` while the hook keeps the pick
+- [x] ➕ (review) end-to-end `react-test-renderer` tests mounting `ClaudeLedgerResetsDrawer` with the real hook: picked radio drives consequence and spent id, list locks in flight, refresh mid-confirm reopens on the default
 - [x] run tests - must pass before next task
 
 ### Task 6: Verify acceptance criteria
@@ -156,9 +160,9 @@
 
 ## Technical Details
 - `ResetGrantChoice = { grant: AnthropicResetGrant; usable: boolean; reason?: ResetGrantChoiceReason; recommended: boolean }`
-- `ResetGrantChoiceReason = 'cooldown' | 'ineligible' | 'paused' | 'not_usable' | 'not_limited' | 'not_started'`. `cooldown` and `ineligible` make every choice unusable, so the picker is hidden and the existing account-level message shows; only the four per-grant reasons have UI keys. `exhausted`/`unknown_grant` cannot occur after the `resetsLeft > 0` filter.
+- `ResetGrantChoiceReason = 'cooldown' | 'ineligible' | 'paused' | 'not_usable' | 'not_limited' | 'not_started' | 'exhausted' | 'unknown_grant'`. `cooldown` and `ineligible` make every choice unusable, so the picker is hidden and the existing account-level message shows; only the four per-grant reasons have UI keys. `exhausted`/`unknown_grant` cannot occur after the `resetsLeft > 0` filter.
 - `ResetAction.choices[i] = { id, label, detail, usable, reason?, recommended, selected }`; `onChoose(id)`; `onClearChoice()`.
-- Flow: "Use a reset…" → hook mounts → fresh `readClaudeResetGrants` → `choices` → radio → `choose(id)` → consequence recomputed → Confirm → `resetGrantOperations.run(key, authIndex, selected)` → `run` journals the operation (the picker disappears, as the pending branch does today) and re-validates against fresh status → close clears the choice.
+- Flow: "Use a reset…" → hook mounts → fresh `readClaudeResetGrants` → `choices` → radio → `choose(id)` → consequence recomputed → Confirm → `resetGrantOperations.run(key, authIndex, selected)` → the radio list locks while `busy` → `run` re-validates against fresh status and journals the operation → close clears the choice, and the next open clears it again.
 - A refresh that removes or blocks the chosen grant silently returns to the default selection.
 
 ## Post-Completion

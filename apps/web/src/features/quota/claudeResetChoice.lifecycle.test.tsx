@@ -1,5 +1,5 @@
 import { createElement } from 'react';
-import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import i18n from '@/i18n';
 import { apiClient } from '@/features/personal-quota-support/services/api/client';
@@ -10,6 +10,7 @@ import {
   type AnthropicResetGrantStatus,
 } from '@/features/personal-quota-support/services/api/claudeResetGrants';
 import type { AuthFileItem } from '@/features/personal-quota-support/types';
+import { ClaudeLedgerResetsDrawer } from './components/QuotaLedgerResets';
 import { useClaudeResetGrants } from './providers/claude/ClaudeResetGrants';
 import { resetGrantOperations } from './providers/claude/resetGrantOperations';
 
@@ -157,5 +158,95 @@ describe('useClaudeResetGrants grant choice', () => {
     expect(hook.choices?.find((choice) => choice.grant.id === 'A')?.usable).toBe(false);
     await act(async () => hook.choose('A'));
     expect(hook.selectedGrant?.id).toBe('B');
+  });
+});
+
+describe('Ledger drawer grant picker', () => {
+  const onBusyChange = vi.fn();
+  const drawer = (props: { loading?: boolean; refreshToken?: number } = {}) =>
+    createElement(ClaudeLedgerResetsDrawer, {
+      id: 'resets',
+      inventory: {
+        items: [
+          { id: 'A', expiresAtMs: null, label: 'Full reset', left: 1 },
+          { id: 'B', expiresAtMs: null, label: 'Fable reset', left: 1 },
+        ],
+      },
+      loading: props.loading ?? false,
+      showEmails: true,
+      now: Date.now(),
+      file,
+      refreshToken: props.refreshToken ?? 0,
+      enabled: true,
+      disabled: false,
+      displayName: 'claude-a',
+      onRefresh: () => {},
+      onBusyChange,
+    });
+  const find = (match: (node: ReactTestInstance) => boolean) => renderer!.root.find(match);
+  const useButton = () =>
+    find((node) => node.type === 'button' && node.props['data-resets-use'] === '');
+  const radio = (id: string) => find((node) => node.type === 'input' && node.props.value === id);
+  const confirmButton = () =>
+    find((node) => node.type === 'button' && String(node.props.className).includes('btn-primary'));
+  const text = () => JSON.stringify(renderer!.toJSON());
+
+  beforeEach(() => {
+    vi.mocked(readClaudeResetGrants).mockResolvedValue(
+      status([
+        grant({ id: 'A', label: 'Full reset' }),
+        grant({ id: 'B', label: 'Fable reset', endsAt: iso(60 * DAY) }),
+      ])
+    );
+  });
+
+  test('a picked radio drives the consequence and the spent grant', async () => {
+    await act(async () => {
+      renderer = create(drawer());
+    });
+    act(() => useButton().props.onClick());
+    expect(radio('B').props.checked).toBe(true);
+    expect(text()).toContain('Spends 1 reset from Fable reset');
+    act(() => radio('A').props.onChange());
+    expect(radio('A').props.checked).toBe(true);
+    expect(text()).toContain('Spends 1 reset from Full reset');
+    await act(async () => confirmButton().props.onClick());
+    expect(resetGrantOperations.run).toHaveBeenCalledWith(expect.any(String), '1', 'A');
+  });
+
+  test('the list locks while the claim is in flight', async () => {
+    let finish!: (value: Awaited<ReturnType<typeof resetGrantOperations.run>>) => void;
+    vi.mocked(resetGrantOperations.run).mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve;
+      })
+    );
+    await act(async () => {
+      renderer = create(drawer());
+    });
+    act(() => useButton().props.onClick());
+    act(() => radio('A').props.onChange());
+    await act(async () => confirmButton().props.onClick());
+    expect(find((node) => node.type === 'fieldset').props.disabled).toBe(true);
+    expect(text()).toContain('Spends 1 reset from Full reset');
+    await act(async () => {
+      finish({ code: 'reset', unresolved: false });
+    });
+    expect(resetGrantOperations.run).toHaveBeenCalledWith(expect.any(String), '1', 'A');
+  });
+
+  test('a refresh during the confirm step does not keep the pick for the next open', async () => {
+    await act(async () => {
+      renderer = create(drawer());
+    });
+    act(() => useButton().props.onClick());
+    act(() => radio('A').props.onChange());
+    expect(radio('A').props.checked).toBe(true);
+    // A row refresh hides the footer without Cancel, then a fresh read brings it back.
+    await act(async () => renderer!.update(drawer({ loading: true })));
+    await act(async () => renderer!.update(drawer({ refreshToken: 1 })));
+    act(() => useButton().props.onClick());
+    expect(radio('B').props.checked).toBe(true);
+    expect(text()).toContain('Spends 1 reset from Fable reset');
   });
 });

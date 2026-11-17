@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, beforeAll, describe, expect, test, vi } from 'vitest';
 import i18n from '@/i18n';
-import { ResetActionFooter } from './components/QuotaLedgerResets';
+import { QuotaLedgerResetsDrawer, ResetActionFooter } from './components/QuotaLedgerResets';
 import type { ResetAction, ResetActionChoice } from './resetActions';
 
 (
@@ -44,7 +44,12 @@ const resetAction = (overrides: Partial<ResetAction> = {}): ResetAction => ({
 
 const markup = (action: ResetAction, variant: 'drawer' | 'card') =>
   renderToStaticMarkup(
-    createElement(ResetActionFooter, { provider: 'claude', action, initialConfirming: true, variant })
+    createElement(ResetActionFooter, {
+      provider: 'claude',
+      action,
+      initialConfirming: true,
+      variant,
+    })
   );
 
 const radioTag = (html: string, id: string) =>
@@ -79,6 +84,35 @@ describe.each(['drawer', 'card'] as const)('ResetActionFooter choices (%s)', (va
     const html = markup(resetAction({ choices: undefined, onChoose: undefined }), variant);
     expect(html).not.toContain('<fieldset');
     expect(html).toContain('Spends Grant B');
+  });
+
+  test('locks the whole list while a claim is in flight', () => {
+    expect(markup(resetAction(), variant)).not.toMatch(/<fieldset[^>]*disabled=""/);
+    expect(markup(resetAction({ busy: true }), variant)).toMatch(/<fieldset[^>]*disabled=""/);
+  });
+});
+
+describe('QuotaLedgerResetsDrawer list', () => {
+  test('numbers unnamed grants and shows the shared detail', () => {
+    const html = renderToStaticMarkup(
+      createElement(QuotaLedgerResetsDrawer, {
+        id: 'resets',
+        provider: 'claude',
+        inventory: {
+          items: [
+            { id: 'A', expiresAtMs: null, left: 1, total: 2, clears: ['five_hour', 'seven_day'] },
+            { id: 'B', expiresAtMs: null, label: 'Fable reset', left: 3 },
+          ],
+        },
+        loading: false,
+        showEmails: true,
+        now: 0,
+      })
+    );
+    expect(html).toContain(i18n.t('quota_management.resets.unnamed', { index: 1 }));
+    expect(html).toContain('1 of 2 left · clears 5-hour + 7-day');
+    expect(html).toContain('Fable reset');
+    expect(html).toContain('3 of 3 left');
   });
 });
 
@@ -136,6 +170,19 @@ describe('ResetActionFooter choice handlers', () => {
     );
     act(() => confirm.props.onKeyDown({ key: 'Escape', stopPropagation: () => {} }));
     expect(action.onClearChoice).toHaveBeenCalledTimes(1);
+  });
+
+  test('opening the confirm step clears a pick left from an unmounted footer', () => {
+    const action = resetAction();
+    act(() => {
+      renderer = create(createElement(ResetActionFooter, { provider: 'claude', action }));
+    });
+    const use = renderer!.root.find(
+      (node) => node.type === 'button' && node.props['data-resets-use'] === ''
+    );
+    act(() => use.props.onClick());
+    expect(action.onClearChoice).toHaveBeenCalledTimes(1);
+    expect(renderer!.root.findAll((node) => node.type === 'fieldset')).toHaveLength(1);
   });
 
   test('a finished claim clears the choice', async () => {

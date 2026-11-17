@@ -76,10 +76,13 @@ const action = (h: ClaudeResetHandle, showEmails = true) =>
   claudeResetAction(t as never, h, { showEmails });
 
 describe('claudeResetAction choices', () => {
-  test('no choices for a single grant', () => {
-    const result = action(handle(status([grant('A')])));
+  test('no choices for a single grant, but closing still clears a pick', () => {
+    const h = handle(status([grant('A')]));
+    const result = action(h);
     expect(result.choices).toBeUndefined();
     expect(result.onChoose).toBeUndefined();
+    result.onClearChoice!();
+    expect(h.choose).toHaveBeenCalledWith(undefined);
   });
 
   test('no choices when no grant is usable', () => {
@@ -89,17 +92,19 @@ describe('claudeResetAction choices', () => {
     expect(result.choices).toBeUndefined();
   });
 
-  test('no choices for a retry', () => {
+  test('no choices for a retry, but closing still clears a pick', () => {
     const value = status([grant('A'), grant('B')]);
-    const result = action(
-      handle(value, undefined, {
-        buttonLabel: 'retry',
-        selectedGrant: undefined,
-        message: 'unknown',
-      })
-    );
+    const h = handle(value, undefined, {
+      buttonLabel: 'retry',
+      selectedGrant: undefined,
+      message: 'unknown',
+    });
+    const result = action(h);
     expect(result.retry).toBe(true);
     expect(result.choices).toBeUndefined();
+    expect(result.onChoose).toBeUndefined();
+    result.onClearChoice!();
+    expect(h.choose).toHaveBeenCalledWith(undefined);
   });
 
   test('one usable and one paused grant give two choices', () => {
@@ -118,9 +123,7 @@ describe('claudeResetAction choices', () => {
       selected: false,
       reason: i18n.t('quota_management.resets.choice.reason.paused'),
     });
-    expect(a.detail).toBe(
-      claudeResetDetail(t as never, { left: 1, total: 2, clears: ['five_hour', 'seven_day'] })
-    );
+    expect(a.detail).toBe('1 of 2 left · clears 5-hour + 7-day');
   });
 
   test('selected and recommended follow the hook', () => {
@@ -210,8 +213,13 @@ describe('shared label and detail helpers', () => {
 
   test('claudeResetDetail', () => {
     expect(claudeResetDetail(t as never, {})).toBeNull();
-    expect(claudeResetDetail(t as never, { left: 1, total: 2 })).toBe(
-      i18n.t('quota_management.resets.claude_left_only', { left: 1, total: 2 })
+    expect(claudeResetDetail(t as never, { left: 1, total: 2 })).toBe('1 of 2 left');
+    expect(
+      claudeResetDetail(t as never, { left: 1, total: 2, clears: ['five_hour', 'seven_day'] })
+    ).toBe('1 of 2 left · clears 5-hour + 7-day');
+    // Without a total the grant counts as untouched.
+    expect(claudeResetDetail(t as never, { left: 3, clears: ['five_hour'] })).toBe(
+      '3 of 3 left · clears 5-hour'
     );
   });
 });

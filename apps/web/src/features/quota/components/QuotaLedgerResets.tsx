@@ -145,18 +145,25 @@ type ConfirmProps = {
   onCancel: () => void;
 };
 
-/** One radio per grant; unusable ones stay visible, disabled, with their reason. */
+/**
+ * One radio per grant; unusable ones stay visible, disabled, with their reason.
+ * The whole list locks while a claim is in flight: the claim is journaled only
+ * after two status reads, and the journal does not re-render, so the list stays
+ * up and a late pick would relabel a claim already spending another grant.
+ */
 function ResetChoiceList({
   choices,
+  busy,
   onChoose,
 }: {
   choices: ResetActionChoice[];
+  busy: boolean;
   onChoose?: (id: string) => void;
 }) {
   const { t } = useTranslation();
   const name = useId();
   return (
-    <fieldset className={styles.choices} data-resets-choices="">
+    <fieldset className={styles.choices} data-resets-choices="" disabled={busy}>
       <legend className={styles.choicesLegend}>{t('quota_management.resets.choice.legend')}</legend>
       {choices.map((choice) => (
         <label
@@ -217,7 +224,7 @@ export function QuotaLedgerResetsConfirm({
 
   return (
     <div ref={ref} className={styles.confirm} data-resets-confirm="" onKeyDown={onKeyDown}>
-      {choices && <ResetChoiceList choices={choices} onChoose={onChoose} />}
+      {choices && <ResetChoiceList choices={choices} busy={busy} onChoose={onChoose} />}
       <p className={styles.consequence}>{consequence}</p>
       {note && <p className={styles.confirmNote}>{note}</p>}
       <div className={styles.confirmActions}>
@@ -304,7 +311,12 @@ export function ResetActionFooter({
               ? t('quota_management.resets.codex_choice_note')
               : undefined
           }
-          onClick={() => setConfirming(true)}
+          onClick={() => {
+            // Also cleared on open: a refresh in the drawer unmounts this
+            // footer mid-confirm without `close()`, while the hook keeps the pick.
+            action.onClearChoice?.();
+            setConfirming(true);
+          }}
         >
           {action.label}
         </Button>
