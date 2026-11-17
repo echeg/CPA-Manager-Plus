@@ -124,13 +124,14 @@
 - [x] run tests - must pass before next task
 
 ### Task 4: Choices in `ResetAction` / `claudeResetAction`
-- [ ] move `itemLabel` and the `claude_left` detail builder from `components/QuotaLedgerResets.tsx` into `apps/web/src/features/quota/resetActions.ts` (React-free) and use them from `ResetLine`, so the list and the picker share one label and detail
-- [ ] extend `ClaudeResetHandle` with `choices`, `choose`; add optional `choices?: { id, label, detail, usable, reason?, recommended, selected }[]`, `onChoose?(id)` and `onClearChoice?()` to `ResetAction`
-- [ ] in `claudeResetAction`, fill them only when there are at least two choices, at least one is usable, and this is not a retry; unnamed choices are numbered by position; the consequence uses the same label as the selected radio; `reason` translated from `quota_management.resets.choice.reason.*`; the note stays account-wide
-- [ ] keep `codexResetAction` unchanged
-- [ ] write tests in a new `apps/web/src/features/quota/resetActions.test.ts`: no `choices` for one grant, for no usable grant, or for a retry; one usable + one paused grant gives two choices; `selected`/`recommended` set correctly; consequence names the selected grant; two unnamed grants with the second selected show "… 2" in both radio and consequence; labels masked when `showEmails` is false; the note does not change when the choice changes
-- [ ] update `ResetLine` expectations in existing tests if the moved helpers change any markup (they should not)
-- [ ] run tests - must pass before next task
+- [x] move `itemLabel` and the `claude_left` detail builder from `components/QuotaLedgerResets.tsx` into `apps/web/src/features/quota/resetActions.ts` (React-free) and use them from `ResetLine`, so the list and the picker share one label and detail
+- [x] extend `ClaudeResetHandle` with `choices`, `choose`; add optional `choices?: { id, label, detail, usable, reason?, recommended, selected }[]`, `onChoose?(id)` and `onClearChoice?()` to `ResetAction`
+- [x] in `claudeResetAction`, fill them only when there are at least two choices, at least one is usable, and this is not a retry; unnamed choices are numbered by position; the consequence uses the same label as the selected radio; `reason` translated from `quota_management.resets.choice.reason.*`; the note stays account-wide
+- [x] keep `codexResetAction` unchanged
+- ➕ `onClearChoice` is set on every Claude action (also with no list and for a retry), so a stale pick cannot come back after a refresh restores its grant; `onChoose`/`choices` follow the rule above
+- [x] write tests in a new `apps/web/src/features/quota/resetActions.test.ts`: no `choices` for one grant, for no usable grant, or for a retry; one usable + one paused grant gives two choices; `selected`/`recommended` set correctly; consequence names the selected grant; two unnamed grants with the second selected show "… 2" in both radio and consequence; labels masked when `showEmails` is false; the note does not change when the choice changes
+- [x] update `ResetLine` expectations in existing tests if the moved helpers change any markup (they should not)
+- [x] run tests - must pass before next task
 
 ### Task 5: Radio list in `QuotaLedgerResetsConfirm`
 - [ ] in `apps/web/src/features/quota/components/QuotaLedgerResets.tsx`, pass `choices`/`onChoose` from `ResetActionFooter` into `QuotaLedgerResetsConfirm`, and call `action.onClearChoice?.()` from the footer's `close()` (Cancel, Esc, finished claim)

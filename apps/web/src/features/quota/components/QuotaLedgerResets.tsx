@@ -15,7 +15,6 @@
 
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { TFunction } from 'i18next';
 import { Button } from '@/components/ui/Button';
 import type { AuthFileItem } from '@/features/personal-quota-support/types';
 import { buildResetDisplay, formatInstantShort } from '@/features/quota/utils/quota';
@@ -23,22 +22,19 @@ import { DAY_MS } from '@/features/quota/utils/time/durations';
 import { maskQuotaText } from '../ledgerModel';
 import { useClaudeResetGrants } from '../providers/claude/ClaudeResetGrants';
 import type { QuotaProviderType } from '../providers/types';
-import { claudeResetAction, countResets, formatMonthDay, type ResetAction } from '../resetActions';
+import {
+  claudeResetAction,
+  claudeResetDetail,
+  countResets,
+  formatMonthDay,
+  resetItemLabel,
+  type ResetAction,
+} from '../resetActions';
 import type { ResetInventory, ResetInventoryItem } from '../resetInventory';
 import styles from './QuotaLedgerResets.module.scss';
 
 /** The chip turns amber when the soonest reset lapses within this window. */
 const EXPIRY_WARNING_MS = 3 * DAY_MS;
-
-const itemLabel = (
-  t: TFunction,
-  item: ResetInventoryItem,
-  index: number,
-  showEmails: boolean
-): string => {
-  if (!item.label) return t('quota_management.resets.unnamed', { index: index + 1 });
-  return showEmails ? item.label : maskQuotaText(item.label);
-};
 
 type ChipProps = {
   inventory: ResetInventory | null;
@@ -287,23 +283,12 @@ function ResetLine({
     item.expiresAtMs === null
       ? null
       : buildResetDisplay(null, item.expiresAtMs, now, i18n.resolvedLanguage);
-  const windows = (item.clears ?? [])
-    .map((window) => t(`quota_management.resets.windows.${window}`))
-    .join(' + ');
-  const claudeDetail =
-    item.left === undefined
-      ? null
-      : t(
-          windows
-            ? 'quota_management.resets.claude_left'
-            : 'quota_management.resets.claude_left_only',
-          { left: item.left, total: item.total ?? item.left, windows }
-        );
+  const claudeDetail = claudeResetDetail(t, item);
 
   return (
     <li className={styles.line}>
       <div className={styles.lineHeading}>
-        <span className={styles.label}>{itemLabel(t, item, index, showEmails)}</span>
+        <span className={styles.label}>{resetItemLabel(t, item, index, showEmails)}</span>
         {index === 0 && (
           <span className={styles.soonest}>{t('quota_management.resets.soonest')}</span>
         )}
