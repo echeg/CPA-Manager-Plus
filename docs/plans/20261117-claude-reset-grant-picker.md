@@ -100,15 +100,15 @@
 ## Implementation Steps
 
 ### Task 1: Pure grant choices and selection rule
-- [ ] export a comparator from `apps/web/src/features/quota/resetInventory.ts` (e.g. `compareResetExpiry(aMs | null, aId, bMs | null, bId)`) and use it in `compareItems`, so the picker and the "Resets expire" list share one order
-- [ ] in `apps/web/src/features/quota/providers/claude/selectResetGrant.ts`, add a shared per-grant predicate returning `undefined` (usable) or a reason with precedence `cooldown` (account-wide) → `anthropicResetGrantBlocker` result → `not_started`
-- [ ] add `resetGrantChoices(status, now)`: grants with `resetsLeft > 0` and an `endsAt` that is absent or readable and in the future, each with `usable`, `reason`, `recommended` (`id === status.nextGrantId`), sorted with the shared comparator
-- [ ] switch `selectResetGrant` to the shared predicate while keeping its rule (recommended usable grant, else the usable grant with the lowest id); `resetGrantBlockReason` unchanged
-- [ ] add pure `resolveSelectedGrantId({ status, pendingGrantId, chosenGrantId, now })`: a pending id wins even without a status; a chosen id is used only when it is a usable choice in `status`; otherwise `selectResetGrant`
-- [ ] write tests in a new `apps/web/src/features/quota/selectResetGrant.test.ts`: ordering equals `buildResetInventory` order on the same grants; recommended flag; each reason and the precedence (cooldown marks every choice unusable; paused + not started reports `paused`); `resetsLeft = 0`, expired and unreadable `endsAt` filtered out
-- [ ] write tests for `selectResetGrant`: recommended usable grant wins; fallback is the lowest usable id even when another usable grant expires sooner; cooldown → undefined
-- [ ] write tests for `resolveSelectedGrantId`: pending pins the grant with and without a status; a usable chosen id wins; a missing or unusable chosen id falls back; no status and no pending → undefined
-- [ ] run tests - must pass before next task
+- [x] export a comparator from `apps/web/src/features/quota/resetInventory.ts` (e.g. `compareResetExpiry(aMs | null, aId, bMs | null, bId)`) and use it in `compareItems`, so the picker and the "Resets expire" list share one order
+- [x] in `apps/web/src/features/quota/providers/claude/selectResetGrant.ts`, add a shared per-grant predicate returning `undefined` (usable) or a reason with precedence `cooldown` (account-wide) → `anthropicResetGrantBlocker` result → `not_started`
+- [x] add `resetGrantChoices(status, now)`: grants with `resetsLeft > 0` and an `endsAt` that is absent or readable and in the future, each with `usable`, `reason`, `recommended` (`id === status.nextGrantId`), sorted with the shared comparator
+- [x] switch `selectResetGrant` to the shared predicate while keeping its rule (recommended usable grant, else the usable grant with the lowest id); `resetGrantBlockReason` unchanged
+- [x] add pure `resolveSelectedGrantId({ status, pendingGrantId, chosenGrantId, now })`: a pending id wins even without a status; a chosen id is used only when it is a usable choice in `status`; otherwise `selectResetGrant`
+- [x] write tests in a new `apps/web/src/features/quota/selectResetGrant.test.ts`: ordering equals `buildResetInventory` order on the same grants; recommended flag; each reason and the precedence (cooldown marks every choice unusable; paused + not started reports `paused`); `resetsLeft = 0`, expired and unreadable `endsAt` filtered out
+- [x] write tests for `selectResetGrant`: recommended usable grant wins; fallback is the lowest usable id even when another usable grant expires sooner; cooldown → undefined
+- [x] write tests for `resolveSelectedGrantId`: pending pins the grant with and without a status; a usable chosen id wins; a missing or unusable chosen id falls back; no status and no pending → undefined
+- [x] run tests - must pass before next task
 
 ### Task 2: i18n keys for the picker
 - [ ] add `quota_management.resets.choice.legend`, `quota_management.resets.choice.recommended` and short per-grant reasons `quota_management.resets.choice.reason.{paused,not_usable,not_limited,not_started}` to `apps/web/src/i18n/locales/en.json`, `ru.json`, `zh-CN.json`, `zh-TW.json`

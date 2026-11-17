@@ -47,15 +47,27 @@ export interface ResetInventory {
   error?: string;
 }
 
-/** Soonest first; open-ended last; ties on id so the order is deterministic. */
-const compareItems = (a: ResetInventoryItem, b: ResetInventoryItem): number => {
-  if (a.expiresAtMs !== b.expiresAtMs) {
-    if (a.expiresAtMs === null) return 1;
-    if (b.expiresAtMs === null) return -1;
-    return a.expiresAtMs - b.expiresAtMs;
+/**
+ * Soonest first; open-ended (null) last; ties on id so the order is
+ * deterministic. Shared with the Claude reset picker so it lists grants in the
+ * same order as the "Resets expire" list.
+ */
+export function compareResetExpiry(
+  aMs: number | null,
+  aId: string,
+  bMs: number | null,
+  bId: string
+): number {
+  if (aMs !== bMs) {
+    if (aMs === null) return 1;
+    if (bMs === null) return -1;
+    return aMs - bMs;
   }
-  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
-};
+  return aId < bId ? -1 : aId > bId ? 1 : 0;
+}
+
+const compareItems = (a: ResetInventoryItem, b: ResetInventoryItem): number =>
+  compareResetExpiry(a.expiresAtMs, a.id, b.expiresAtMs, b.id);
 
 const codexItems = (
   credits: readonly CodexRateLimitResetCredit[],
