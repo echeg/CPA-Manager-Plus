@@ -112,6 +112,30 @@ describe('key profiles and client keys locales', () => {
     }
   });
 
+  it('keeps the {{placeholders}} of every string in every locale', () => {
+    // A dropped `{{label}}` gives every row's controls the same accessible name, and a
+    // dropped `{{speed}}` empties the toolbar button.
+    const placeholders = (value: unknown): string[] =>
+      typeof value === 'string'
+        ? [...value.matchAll(/\{\{\s*([\w.]+)\s*\}\}/g)].map((match) => match[1]).sort()
+        : [];
+    let checked = 0;
+    for (const subtree of subtrees) {
+      const enTree = locales.en.quota_management[subtree];
+      for (const path of leafPaths(enTree)) {
+        const expected = placeholders(lookup(enTree, path));
+        if (expected.length > 0) checked += 1;
+        for (const [name, locale] of Object.entries(locales)) {
+          expect(
+            placeholders(lookup(locale.quota_management[subtree], path)),
+            `${name} ${subtree}.${path}`
+          ).toEqual(expected);
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(5);
+  });
+
   it('drops the keys of the old per-key profiles toolbar', () => {
     for (const [name, locale] of Object.entries(locales)) {
       const paths = new Set(leafPaths(locale.quota_management.key_profiles));

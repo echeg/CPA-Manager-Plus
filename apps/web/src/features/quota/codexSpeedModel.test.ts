@@ -52,21 +52,26 @@ const keyRows = (own: Partial<Record<string, RoutingProfile>> = {}) =>
 
 describe('buildSpeedRows', () => {
   test('the Default row comes first, then the keys in list order', () => {
-    const rows = buildSpeedRows(state(), keyRows());
-    expect(rows.map((row) => row.kind)).toEqual(['default', 'key', 'key', 'key']);
-    expect(rows[0]).toMatchObject({ id: 'default', key: null, profile: null, disabledReason: '' });
-    expect(rows.slice(1).map((row) => row.key)).toEqual([RAW_ALPHA, RAW_BETA, RAW_GAMMA]);
-    expect(rows[1]).toMatchObject({ label: 'Laptop', hasAlias: true });
-    expect(rows[2].hasAlias).toBe(false);
+    const display = keyRows();
+    const rows = buildSpeedRows(state(), display);
+    expect(rows[0]).toMatchObject({ id: 'default', keyRow: null, disabledReason: '' });
+    // Each key row carries its display row as is, so labels match the Keys modal.
+    expect(rows.slice(1).map((row) => row.keyRow)).toEqual(display);
+    expect(rows.slice(1).map((row) => row.keyRow?.key)).toEqual([RAW_ALPHA, RAW_BETA, RAW_GAMMA]);
+    expect(rows[1].keyRow).toMatchObject({ label: 'Laptop', hasAlias: true });
+    expect(rows[2].keyRow?.hasAlias).toBe(false);
   });
 
   test('a key without its own profile shows the Default values; one with a profile shows its own', () => {
     const own = profile(codex({ speed: 'ultrafast', ignoreClientTier: false }), 'priority');
     const rows = buildSpeedRows(state(), keyRows({ [RAW_BETA]: own }));
     expect(rows[0]).toMatchObject({ speed: 'fast', ignoreClientTier: true });
-    expect(rows[1]).toMatchObject({ speed: 'fast', ignoreClientTier: true, profile: null });
-    expect(rows[2]).toMatchObject({ speed: 'ultrafast', ignoreClientTier: false, profile: own });
-    expect(rows[3]).toMatchObject({ speed: 'fast', ignoreClientTier: true, profile: null });
+    expect(rows[1]).toMatchObject({ speed: 'fast', ignoreClientTier: true });
+    expect(rows[1].keyRow?.profile).toBeNull();
+    expect(rows[2]).toMatchObject({ speed: 'ultrafast', ignoreClientTier: false });
+    expect(rows[2].keyRow?.profile).toBe(own);
+    expect(rows[3]).toMatchObject({ speed: 'fast', ignoreClientTier: true });
+    expect(rows[3].keyRow?.profile).toBeNull();
   });
 
   test('a key row is api_mode when its effective Codex mode is API key', () => {
@@ -108,8 +113,8 @@ describe('buildSpeedRows', () => {
     for (const row of rows) {
       for (const raw of [RAW_ALPHA, RAW_BETA, RAW_GAMMA]) {
         expect(row.id).not.toContain(raw);
-        expect(row.label).not.toContain(raw);
-        expect(row.masked).not.toContain(raw);
+        expect(row.keyRow?.label ?? '').not.toContain(raw);
+        expect(row.keyRow?.masked ?? '').not.toContain(raw);
       }
     }
     expect(new Set(rows.map((row) => row.id)).size).toBe(rows.length);

@@ -1,4 +1,4 @@
-import { useId, useMemo, type KeyboardEvent } from 'react';
+import { useId, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -48,14 +48,15 @@ export function CodexSpeedModal({ open, onClose, keyProfiles, showEmails }: Code
 
   const write = (row: SpeedRow, patch: CodexSpeedPatch) => {
     if (!state || busy || row.disabledReason) return;
-    if (row.kind === 'default') {
+    const { keyRow } = row;
+    if (!keyRow) {
       void keyProfiles.saveShared(withCodexSpeed(state.shared, patch));
       return;
     }
     // A key profile replaces the Default profile completely, so a new one is a full copy.
     void keyProfiles.saveKeyProfile(
-      row.key!,
-      withCodexSpeed(row.profile ?? copyOfShared(state.shared), patch)
+      keyRow.key,
+      withCodexSpeed(keyRow.profile ?? copyOfShared(state.shared), patch)
     );
   };
 
@@ -67,20 +68,8 @@ export function CodexSpeedModal({ open, onClose, keyProfiles, showEmails }: Code
     if (ignoreClientTier !== row.ignoreClientTier) write(row, { ignoreClientTier });
   };
 
-  // Activation by Enter or Space only; arrow keys move nothing, because every change
-  // here is a write. The native click that would follow is prevented.
-  const activateOnKey = (event: KeyboardEvent<HTMLButtonElement>, activate: () => void) => {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      activate();
-    }
-  };
-  const suppressSpaceClick = (event: KeyboardEvent<HTMLButtonElement>) => {
-    if (event.key === ' ') event.preventDefault();
-  };
-
   const rowLabel = (row: SpeedRow) =>
-    row.kind === 'default' ? t('quota_management.codex_speed.table_default_row') : row.label;
+    row.keyRow ? row.keyRow.label : t('quota_management.codex_speed.table_default_row');
 
   const reasonText = (row: SpeedRow) =>
     row.disabledReason === 'read_only'
@@ -94,18 +83,19 @@ export function CodexSpeedModal({ open, onClose, keyProfiles, showEmails }: Code
     const disabled = busy || Boolean(row.disabledReason);
     const reason = reasonText(row);
     const reasonId = `${baseId}-${row.id}-reason`;
+    const { keyRow } = row;
     return (
-      <tr key={row.id} className={styles.row} data-speed-row={row.kind}>
+      <tr key={row.id} className={styles.row} data-speed-row={keyRow ? 'key' : 'default'}>
         <th scope="row" className={styles.labelCell}>
           <span className={styles.labelLine}>
             <span className={styles.label}>{label}</span>
-            {row.hasAlias && <code className={styles.masked}>{row.masked}</code>}
-            {row.kind === 'key' && (
+            {keyRow?.hasAlias && <code className={styles.masked}>{keyRow.masked}</code>}
+            {keyRow && (
               <span
-                className={row.profile ? styles.badgeOwn : styles.badge}
-                data-speed-badge={row.profile ? 'own' : 'default'}
+                className={keyRow.profile ? styles.badgeOwn : styles.badge}
+                data-speed-badge={keyRow.profile ? 'own' : 'default'}
               >
-                {row.profile
+                {keyRow.profile
                   ? t('quota_management.codex_speed.table_badge_own')
                   : t('quota_management.codex_speed.table_badge_default')}
               </span>
@@ -140,9 +130,9 @@ export function CodexSpeedModal({ open, onClose, keyProfiles, showEmails }: Code
                   })}
                   disabled={disabled}
                   data-speed-option={speed}
+                  // A native button: a click, Enter or Space activates it, and arrow
+                  // keys do nothing, so moving around the table never writes.
                   onClick={() => chooseSpeed(row, speed)}
-                  onKeyDown={(event) => activateOnKey(event, () => chooseSpeed(row, speed))}
-                  onKeyUp={suppressSpaceClick}
                 >
                   {name}
                 </button>
@@ -191,6 +181,12 @@ export function CodexSpeedModal({ open, onClose, keyProfiles, showEmails }: Code
           loading && (
             <p className={styles.hint}>{t('quota_management.codex_speed.table_loading')}</p>
           )
+        ) : !state.speedSupported ? (
+          // A reload reported a backend without speed. The toolbar button is gone, and
+          // a save there would carry no speed, so the open table shows no controls.
+          <p className={styles.notice} role="note" data-codex-speed-unsupported>
+            {t('quota_management.codex_speed.table_unsupported')}
+          </p>
         ) : (
           <>
             {!state.supported && rows.length > 0 && (

@@ -162,7 +162,9 @@ block of every profile editor has a **Speed** row below the fallback:
 
 The row is disabled in API key mode, with an explanation: requests billed to an API
 key never get a speed tier. The stored values stay in the profile and are shown, so
-switching back to Subscription restores them. Subscription mode with an API-key
+switching back to Subscription restores them. In Home mode or with a scheduler plugin
+(`supported: false`) the Default profile's row stays enabled even with a stored API
+key mode, because CPA ignores the mode there and keeps applying the default speed. Subscription mode with an API-key
 fallback keeps the row enabled. The Claude block has no speed. Both fields are saved
 as `speed` and `ignore-client-tier` in the Codex block, together with the rest of the
 profile. A profile that does not set them runs Codex at Standard with the client's
@@ -246,7 +248,8 @@ routing:
 ## Routing profiles per API key
 
 CPA routes each client API key through a profile: sticky session and pool selection,
-then for Claude and Codex each the mode, the preferred subscription and the fallback
+then for Claude and Codex each the mode, the preferred subscription and the fallback,
+plus the Codex speed and the ignore-client-tier flag
 (see [Per-provider mode and API-key fallback](#per-provider-mode-and-api-key-fallback);
 an older backend has a preferred subscription per provider and the Claude → Codex
 fallback). A key without its own profile uses the default profile, which is the
@@ -269,10 +272,12 @@ modal, where N is the number of client keys in `access.api-keys`. The
 shared-profile controls (selection slots, session
 affinity, TTL, preferred subscriptions, fallback switch and Save) are no longer in
 the toolbar; the default profile is edited only in the Profiles modal, so it has a
-single writer. The buttons are disabled until the first profiles load finishes. If
-that load fails, they are enabled anyway, so the modal can show the error and a
-retry button. Opening any of the three modals reloads the profiles, and only one
-modal is open at a time.
+single writer. **Profiles** and **Keys** are disabled until the first profiles load
+finishes. If that load fails, they are enabled anyway, so the modal can show the
+error and a retry button. The **Codex speed** button appears only once a load has
+reported `speed`, so it is missing before the first load and after a failed one.
+Opening any of the three modals reloads the profiles, and only one modal is open at
+a time.
 
 **Profiles modal.** The modal lists:
 
@@ -299,8 +304,9 @@ modal is open at a time.
   for confirmation, then deletes the key's profile with a `null` PATCH.
 - **+ Profile for a key**, which picks a key that still uses the default and opens a
   new profile for it, started from a copy of the default profile. Sticky sessions,
-  the provider modes and the fallbacks stay as they were until changed; an empty
-  profile would silently turn them off.
+  the provider modes, the fallbacks and the Codex speed and flag stay as they were
+  until changed; an empty profile would silently turn them off and run Codex at
+  Standard.
 
 Only one editor is open at a time. In every editor, pool selection has two slots,
 **Primary** and **On a tie**. Each accepts a narrowing criterion (Priority,
@@ -328,8 +334,9 @@ select, the chain summary, **Configure…** for a key with its own profile, and
   alias. The last client key cannot be deleted. A key is not deleted while the
   panel host is still being checked or cannot be confirmed, or, on a panel served by
   the Manager Server, while the alias list is loading or did not load. Such a refused
-  delete, **Refresh**, and opening either modal load an alias list that did not load
-  again, so a retry passes once the Manager Server answers.
+  delete, **Refresh**, and opening any of the three modals (Profiles, Keys, Codex
+  speed) load an alias list that did not load again, so a retry passes once the
+  Manager Server answers.
 - The **Add a key** form at the bottom has a key field (hidden by default, with a
   show toggle), **Generate**, **Copy**, an optional **Alias**, and **Add**. A key may
   contain only visible ASCII characters without spaces, and a key already in the
@@ -400,7 +407,9 @@ shown above the table and the row keeps its stored speed. A row whose Codex mode
 API key is disabled with the reason. In Home mode or with a scheduler plugin
 (`supported: false`) the key rows are read-only, while the Default row stays
 editable, also with a stored API key mode, because CPA ignores the mode there and
-keeps applying the default profile's speed.
+keeps applying the default profile's speed. If a reload while the table is open
+reports a backend without `speed`, the table shows a note in place of its rows and
+offers no control, since a save there could not carry the speed.
 
 **Read-only mode and older backends.** In Home mode or with a scheduler plugin, CPA
 reports `supported: false`: per-key profiles are inactive. The toolbar is still the

@@ -20,10 +20,12 @@ import { subscriptionRoutingApi } from '@/features/personal-quota-support/servic
 import { providersApi } from '@/services/api/providers';
 import { useConfigStore } from '@/features/personal-quota-support/stores/useConfigStore';
 import type { Config } from '@/features/personal-quota-support/types';
+import { withCodexSpeed } from './codexSpeedModel';
 import { KeyProfileEditor } from './components/KeyProfileEditor';
 import { ProviderRoutingBlock } from './components/ProviderRoutingBlock';
 import { QuotaSettingsBar } from './components/QuotaSettingsToolbar';
 import { Select } from './components/Select';
+import { copyOfShared } from './keyProfilesModel';
 
 // The bar, both modals and the real useKeyProfiles; only the network layer is stubbed.
 vi.mock('@/components/ui/Modal', () => ({
@@ -420,6 +422,7 @@ describe('provider routing saves with the real key profiles hook', () => {
     await act(async () => add.props.onChange(add.props.options[0].value));
     expect(editors()).toHaveLength(1);
     expect(editors()[0].props.isNew).toBe(true);
+    expect(codexBlock().props.speedSupported).toBe(true);
     expect(codexBlock().props.value).toMatchObject({ speed: 'fast', ignoreClientTier: true });
 
     await click(buttonWith('data-key-profile-save'));
@@ -499,13 +502,64 @@ describe('Codex speed button and table with the real key profiles hook', () => {
     await click(speedOption('default', 'ultrafast'));
 
     // The click wrote the Default profile through the routing PATCH.
-    expect(patch).toHaveBeenCalledTimes(1);
+    expect(patch).toHaveBeenCalledExactlyOnceWith('/config', expect.any(Object));
+    const body = patch.mock.calls[0][1] as { routing: { providers: Record<string, unknown> } };
+    expect(body.routing.providers.codex).toMatchObject({
+      mode: 'subscription',
+      speed: 'ultrafast',
+      'ignore-client-tier': false,
+    });
+    expect(root().findAll((node) => node.props['data-codex-speed-error'])).toHaveLength(0);
     expect(text(buttonWith('data-open-speed')!)).toBe('Codex speed: Ultrafast');
     for (const spy of [get, put, patch]) {
       for (const call of spy.mock.calls) {
         expect(String(call[0])).not.toContain('fast-mode');
       }
     }
+  });
+
+  test('a click on a key on the Default profile saves a full copy with the new speed', async () => {
+    const state = withSharedSpeed(profilesState(profile('priority')), 'fast');
+    vi.mocked(routingProfilesApi.get).mockResolvedValue(state);
+    const copy = withCodexSpeed(copyOfShared(state.shared), { speed: 'ultrafast' });
+    // The backend stores the new key profile, so the read-back and the reload see it.
+    const patch = vi.spyOn(apiClient, 'patch').mockImplementation(async () => {
+      vi.mocked(routingProfilesApi.get).mockResolvedValue({
+        ...state,
+        keys: [...state.keys, { key: KEY_A, profile: copy }],
+      });
+      return {};
+    });
+    await mount();
+    await click(buttonWith('data-open-speed'));
+    // The first key row is KEY_A, which still uses the Default profile.
+    const badge = () =>
+      root().findAll((node) => node.type === 'span' && node.props['data-speed-badge'])[0].props[
+        'data-speed-badge'
+      ];
+    expect(badge()).toBe('default');
+    await click(speedOption('key', 'ultrafast'));
+
+    expect(patch).toHaveBeenCalledTimes(1);
+    const body = patch.mock.calls[0][1] as {
+      routing: { 'key-profiles': Record<string, Record<string, unknown>> };
+    };
+    const sent = body.routing['key-profiles'][KEY_A];
+    // A complete copy of the Default profile, not only the changed field.
+    expect(sent['session-affinity']).toBe(state.shared.sessionAffinity);
+    expect(sent.selection).toEqual({ primary: 'reserves', tiebreak: 'round-robin' });
+    expect(sent.providers).toMatchObject({
+      claude: {
+        mode: state.shared.providers.claude.mode,
+        fallback: { target: state.shared.providers.claude.fallback.target },
+      },
+      codex: { mode: 'subscription', speed: 'ultrafast', 'ignore-client-tier': false },
+    });
+    // The read-back matched: no error, and the key now has its own profile.
+    expect(root().findAll((node) => node.props['data-codex-speed-error'])).toHaveLength(0);
+    expect(badge()).toBe('own');
+    expect(speedOption('key', 'ultrafast').props['aria-pressed']).toBe(true);
+    expect(JSON.stringify(renderer!.toJSON())).not.toContain(KEY_A);
   });
 });
 

@@ -5661,6 +5661,7 @@
       "table_default_hint": "修改標示為「預設」的金鑰會為其建立獨立設定檔：預設設定檔的完整副本加上新值。",
       "table_loading": "正在載入設定檔…",
       "table_empty": "還沒有用戶端金鑰。",
+      "table_unsupported": "此 CPA 版本不支援 Codex 速度，因此這裡沒有可變更的內容。",
       "button": "Codex 速度：{{speed}}",
       "button_hint": "預設設定檔和每個用戶端金鑰的 Codex 速度：按一下即可變更。"
     },

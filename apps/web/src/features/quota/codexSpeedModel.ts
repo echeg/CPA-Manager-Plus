@@ -14,20 +14,12 @@ import type { KeyDisplayRow } from './keyProfilesModel';
  */
 export type SpeedDisabledReason = '' | 'read_only' | 'api_mode';
 
-/** One row of the speed table. `key` is raw and only for saving; never render it. */
+/** One row of the speed table. */
 export interface SpeedRow {
   /** Stable id: `default`, or `key-` and the key's hash. Never the raw key. */
   id: string;
-  kind: 'default' | 'key';
-  /** The raw client key of a key row; `null` for the Default row. */
-  key: string | null;
-  /** Display label of a key row (alias, CP name or masked key); `''` for the Default row. */
-  label: string;
-  masked: string;
-  /** The label is a name, so the masked key is shown beside it. */
-  hasAlias: boolean;
-  /** The key's own profile; `null` for a key on the Default profile and for the Default row. */
-  profile: RoutingProfile | null;
+  /** The client key the row is for; `null` for the Default row. Its `key` is raw: never render it. */
+  keyRow: KeyDisplayRow | null;
   /** Effective Codex values: the key's own profile, else the Default profile. */
   speed: CodexSpeed;
   ignoreClientTier: boolean;
@@ -46,12 +38,7 @@ export function buildSpeedRows(state: RoutingProfilesState, rows: KeyDisplayRow[
   // speed still applies, so the Default row stays editable in API key mode there.
   const defaultRow: SpeedRow = {
     id: 'default',
-    kind: 'default',
-    key: null,
-    label: '',
-    masked: '',
-    hasAlias: false,
-    profile: null,
+    keyRow: null,
     speed: shared.speed,
     ignoreClientTier: shared.ignoreClientTier,
     disabledReason: state.supported && shared.mode === 'api' ? 'api_mode' : '',
@@ -65,12 +52,7 @@ export function buildSpeedRows(state: RoutingProfilesState, rows: KeyDisplayRow[
         : '';
     return {
       id: `key-${sha256Hex(row.key).toLowerCase()}`,
-      kind: 'key',
-      key: row.key,
-      label: row.label,
-      masked: row.masked,
-      hasAlias: row.hasAlias,
-      profile: row.profile,
+      keyRow: row,
       speed: codex.speed,
       ignoreClientTier: codex.ignoreClientTier,
       disabledReason,

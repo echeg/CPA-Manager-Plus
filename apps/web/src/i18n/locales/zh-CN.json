@@ -5661,6 +5661,7 @@
       "table_default_hint": "修改标记为“默认”的密钥会为其创建独立配置：默认配置的完整副本加上新值。",
       "table_loading": "正在加载配置…",
       "table_empty": "还没有客户端密钥。",
+      "table_unsupported": "此 CPA 版本不支持 Codex 速度，因此这里没有可更改的内容。",
       "button": "Codex 速度：{{speed}}",
       "button_hint": "默认配置和每个客户端密钥的 Codex 速度：单击即可更改。"
     },

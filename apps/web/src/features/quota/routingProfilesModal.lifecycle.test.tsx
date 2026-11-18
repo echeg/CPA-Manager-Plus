@@ -246,6 +246,24 @@ describe('routing profiles modal rows', () => {
     expect(editors()[0].props.providersSupported).toBe(false);
   });
 
+  test('the speed support of the backend reaches the default and the key editors', async () => {
+    await mount();
+    await click(buttonIn(defaultRow(), 'data-profile-edit'));
+    expect(editors()[0].props.variant).toBe('default');
+    expect(editors()[0].props.speedSupported).toBe(true);
+    await click(buttonIn(keyRows()[0], 'data-profile-edit'));
+    expect(editors()[0].props.variant).toBe('key');
+    expect(editors()[0].props.speedSupported).toBe(true);
+
+    keyProfiles = makeKeyProfiles(profilesState({ speedSupported: false }));
+    await rerender();
+    expect(editors()[0].props.variant).toBe('key');
+    expect(editors()[0].props.speedSupported).toBe(false);
+    await click(buttonIn(defaultRow(), 'data-profile-edit'));
+    expect(editors()[0].props.variant).toBe('default');
+    expect(editors()[0].props.speedSupported).toBe(false);
+  });
+
   test('the default row edits the shared profile and the TTL through saveShared', async () => {
     await mount();
     await click(buttonIn(defaultRow(), 'data-profile-edit'));

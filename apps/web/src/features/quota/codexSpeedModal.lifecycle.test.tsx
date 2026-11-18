@@ -2,6 +2,8 @@ import { createElement, type ReactNode } from 'react';
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import i18n from '@/i18n';
+import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import {
   providersFromClaudeFallback,
@@ -113,6 +115,7 @@ function makeKeyProfiles(
 let keyProfiles: ModalHook;
 let renderer: ReactTestRenderer | undefined;
 let showEmails: boolean;
+let onClose: () => void;
 
 beforeAll(async () => {
   await i18n.changeLanguage('en');
@@ -121,6 +124,7 @@ beforeAll(async () => {
 beforeEach(() => {
   keyProfiles = makeKeyProfiles();
   showEmails = false;
+  onClose = vi.fn();
 });
 
 afterEach(async () => {
@@ -129,7 +133,7 @@ afterEach(async () => {
 });
 
 const modal = () =>
-  createElement(CodexSpeedModal, { open: true, onClose: vi.fn(), keyProfiles, showEmails });
+  createElement(CodexSpeedModal, { open: true, onClose, keyProfiles, showEmails });
 
 async function mount() {
   await act(async () => {
@@ -163,11 +167,6 @@ const badge = (row: ReactTestInstance) =>
   ];
 const click = async (button: ReactTestInstance) => {
   await act(async () => button.props.onClick());
-};
-const keyDown = async (button: ReactTestInstance, key: string) => {
-  const preventDefault = vi.fn();
-  await act(async () => button.props.onKeyDown({ key, preventDefault }));
-  return preventDefault;
 };
 const allControls = () => [...rows().flatMap(speedButtons), ...rows().map((row) => flag(row))];
 
@@ -272,24 +271,15 @@ describe('codex speed modal writes', () => {
     expect(keyProfiles.saveKeyProfile).not.toHaveBeenCalled();
   });
 
-  test('arrow keys save nothing; Enter and Space save', async () => {
+  test('speed options are plain buttons, so only a click, Enter or Space writes', async () => {
     await mount();
-    for (const key of ['ArrowRight', 'ArrowLeft', 'Home', 'End', 'Tab']) {
-      const prevent = await keyDown(speedButton(rows()[0], 'standard'), key);
-      expect(prevent).not.toHaveBeenCalled();
+    for (const button of rows().flatMap(speedButtons)) {
+      expect(button.props.type).toBe('button');
+      // No key handler: the browser turns Enter and Space into a click, and arrow keys
+      // do nothing, so moving through the table never writes.
+      expect(button.props.onKeyDown).toBeUndefined();
+      expect(button.props.onKeyUp).toBeUndefined();
     }
-    expect(keyProfiles.saveShared).not.toHaveBeenCalled();
-    const prevent = await keyDown(speedButton(rows()[0], 'standard'), 'Enter');
-    // The native click that would follow is prevented, so Enter writes once.
-    expect(prevent).toHaveBeenCalled();
-    expect(keyProfiles.saveShared).toHaveBeenCalledExactlyOnceWith(
-      shared(codex({ speed: 'standard' }))
-    );
-    await keyDown(speedButton(rows()[2], 'standard'), ' ');
-    expect(keyProfiles.saveKeyProfile).toHaveBeenCalledExactlyOnceWith(
-      RAW_BETA,
-      betaProfile(codex({ speed: 'standard' }))
-    );
   });
 });
 
@@ -363,6 +353,43 @@ describe('codex speed modal failure and disabled paths', () => {
     expect(text(root().find((node) => Boolean(node.props['data-codex-speed-error'])))).toContain(
       error
     );
+  });
+
+  test('a reload from a backend without speed leaves no speed controls', async () => {
+    await mount();
+    expect(rows()).toHaveLength(3);
+    keyProfiles = makeKeyProfiles(profilesState({ speedSupported: false }));
+    await rerender();
+    expect(rows()).toHaveLength(0);
+    expect(root().findAll((node) => Boolean(node.props['data-speed-option']))).toHaveLength(0);
+    expect(root().findAllByType(ToggleSwitch)).toHaveLength(0);
+    const note = root().find((node) => Boolean(node.props['data-codex-speed-unsupported']));
+    expect(text(note)).toBe(i18n.t('quota_management.codex_speed.table_unsupported'));
+  });
+
+  test('Close closes unless a write runs; Refresh in the error reloads', async () => {
+    await mount();
+    const closeButton = () =>
+      root()
+        .findAllByType(Button)
+        .find((button) => text(button) === i18n.t('common.close'))!;
+    await click(closeButton());
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    keyProfiles = makeKeyProfiles(profilesState(), { saving: true });
+    await rerender();
+    expect(closeButton().props.disabled).toBe(true);
+    expect(root().findByType(Modal).props.closeDisabled).toBe(true);
+    // Neither the footer button nor the modal's own close (Escape, backdrop) closes it.
+    await click(closeButton());
+    await act(async () => root().findByType(Modal).props.onClose());
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    keyProfiles = makeKeyProfiles(profilesState(), { error: 'Load failed' });
+    await rerender();
+    const alert = root().find((node) => Boolean(node.props['data-codex-speed-error']));
+    await click(alert.findByType(Button));
+    expect(keyProfiles.reload).toHaveBeenCalledTimes(1);
   });
 
   test('a row disappears when the reloaded rows no longer hold its key', async () => {

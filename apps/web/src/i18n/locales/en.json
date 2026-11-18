@@ -5666,6 +5666,7 @@
       "table_default_hint": "A change on a key marked Default gives the key its own profile: a full copy of the Default profile with the new value.",
       "table_loading": "Loading profiles…",
       "table_empty": "No client keys yet.",
+      "table_unsupported": "This CPA build does not support the Codex speed, so there is nothing to change here.",
       "button": "Codex speed: {{speed}}",
       "button_hint": "Codex speed of the Default profile and of every client key: change it with one click."
     },
