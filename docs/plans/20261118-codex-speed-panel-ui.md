@@ -176,12 +176,12 @@
 - [x] run `npm run test:web` and `npm run type-check` - must pass before task 3
 
 ### Task 3: Name the Codex speed in the chain summary
-- [ ] add the three speed names (`quota_management.codex_speed.speed_standard`, `speed_fast`, `speed_ultrafast`) and `quota_management.key_profiles.summary.provider_speed` (`{{provider}} ({{speed}})`) to all four locales
-- [ ] `providerSummary` in `keyProfilesModel.ts`: for Codex in Subscription mode with speed `fast` or `ultrafast` use the provider name with the speed; no change for `standard`, for API key mode and for Claude
-- [ ] in `keyProfiles.locale.test.ts` add `codex_speed` to `subtrees` and add `key_profiles.summary.provider_speed` and the three speed-name keys to `dynamicProviderRoutingKeys`, because the summary builds them at run time and the source scan cannot find them
-- [ ] write tests for `chainSummary`: Fast, Ultrafast, Standard, API key mode, Subscription with an API-key fallback, and Claude unchanged
-- [ ] update the existing literal summary assertions only where a fixture now carries a non-standard speed
-- [ ] run `npm run test:web` and `npm run type-check` - must pass before task 4
+- [x] add the three speed names (`quota_management.codex_speed.speed_standard`, `speed_fast`, `speed_ultrafast`) and `quota_management.key_profiles.summary.provider_speed` (`{{provider}} ({{speed}})`) to all four locales
+- [x] `providerSummary` in `keyProfilesModel.ts`: for Codex in Subscription mode with speed `fast` or `ultrafast` use the provider name with the speed; no change for `standard`, for API key mode and for Claude
+- [x] in `keyProfiles.locale.test.ts` add `codex_speed` to `subtrees` and add `key_profiles.summary.provider_speed` and the three speed-name keys to `dynamicProviderRoutingKeys`, because the summary builds them at run time and the source scan cannot find them
+- [x] write tests for `chainSummary`: Fast, Ultrafast, Standard, API key mode, Subscription with an API-key fallback, and Claude unchanged
+- [x] update the existing literal summary assertions only where a fixture now carries a non-standard speed
+- [x] run `npm run test:web` and `npm run type-check` - must pass before task 4
 
 ### Task 4: Speed controls in the Codex block of the profile editor
 - [ ] in `apps/web/src/features/quota/components/ProviderRoutingBlock.tsx` add a `speedSupported` prop and, for `provider === 'codex'` with the flag true, a "Speed" row below the fallback row: `SegmentedTabs` with Standard / Fast / Ultrafast (pass an `idBase` from `useId`, like the mode and target controls), a `ToggleSwitch` "Ignore the tier the client sends" with a hint, and the Ultrafast hint

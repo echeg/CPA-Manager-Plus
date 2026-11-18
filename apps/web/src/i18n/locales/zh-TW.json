@@ -5642,6 +5642,11 @@
       "off": "已關閉",
       "description": "為支援的模型上的 Codex 訂閱請求申請優先服務層級（priority），與 Codex CLI 的 Fast 模式相同。回應更快，但訂閱額度消耗也更快。對新請求立即生效；用戶端指定的層級與 payload 規則優先。不影響 API 金鑰。"
     },
+    "codex_speed": {
+      "speed_standard": "標準",
+      "speed_fast": "快速",
+      "speed_ultrafast": "極速"
+    },
     "search_label": "搜尋帳號",
     "search_placeholder": "依檔案名稱或電子郵件搜尋",
     "search_empty_title": "沒有符合的帳號",
@@ -5718,7 +5723,8 @@
         "codex_forced": "{{provider}}：強制使用 Codex",
         "to_api_key": "{{provider}}：{{account}} → API 金鑰",
         "api_key": "{{provider}}：API 金鑰 {{key}}",
-        "api_key_unset": "{{provider}}：尚未選擇 API 金鑰"
+        "api_key_unset": "{{provider}}：尚未選擇 API 金鑰",
+        "provider_speed": "{{provider}}（{{speed}}）"
       },
       "errors": {
         "unknown_key": "此金鑰已在設定頁面中刪除，金鑰清單已重新載入。"

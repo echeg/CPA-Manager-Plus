@@ -168,6 +168,7 @@ const noApiKeyLabels: ApiKeyLabelSource = {
 };
 
 const SUMMARY = 'quota_management.key_profiles.summary';
+const CODEX_SPEED = 'quota_management.codex_speed';
 
 /** One provider's leg of the chain: preferred account and fallback, or its API key. */
 function providerSummary(
@@ -190,15 +191,23 @@ function providerSummary(
       ? t(`${SUMMARY}.api_key`, { provider: name, key })
       : t(`${SUMMARY}.api_key_unset`, { provider: name });
   }
+  // Subscription mode: a Codex speed above Standard is named with the provider.
+  const label =
+    provider === 'codex' && routing.speed !== 'standard'
+      ? t(`${SUMMARY}.provider_speed`, {
+          provider: name,
+          speed: t(`${CODEX_SPEED}.speed_${routing.speed}`),
+        })
+      : name;
   switch (effectiveFallbackTarget(routing)) {
     case 'codex':
       return routing.fallback.mode === 'always'
-        ? t(`${SUMMARY}.codex_forced`, { provider: name })
-        : t(`${SUMMARY}.to_codex`, { provider: name, account });
+        ? t(`${SUMMARY}.codex_forced`, { provider: label })
+        : t(`${SUMMARY}.to_codex`, { provider: label, account });
     case 'api':
-      return t(`${SUMMARY}.to_api_key`, { provider: name, account });
+      return t(`${SUMMARY}.to_api_key`, { provider: label, account });
     default:
-      return t(`${SUMMARY}.account`, { provider: name, account });
+      return t(`${SUMMARY}.account`, { provider: label, account });
   }
 }
 

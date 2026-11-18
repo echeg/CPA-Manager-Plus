@@ -15,7 +15,7 @@ const locales = { en, ru, 'zh-CN': zhCN, 'zh-TW': zhTW } as unknown as Record<
   { quota_management: Record<string, LocaleTree> }
 >;
 
-const subtrees = ['key_profiles', 'client_keys', 'provider_routing'] as const;
+const subtrees = ['key_profiles', 'client_keys', 'provider_routing', 'codex_speed'] as const;
 
 // Keys of the old per-key profiles toolbar that the Profiles and Keys modals replaced.
 const removedKeyProfileKeys = [
@@ -50,7 +50,11 @@ const dynamicProviderRoutingKeys = [
     'to_api_key',
     'api_key',
     'api_key_unset',
+    'provider_speed',
   ].map((key) => `quota_management.key_profiles.summary.${key}`),
+  ...['speed_standard', 'speed_fast', 'speed_ultrafast'].map(
+    (key) => `quota_management.codex_speed.${key}`
+  ),
 ];
 
 /** Complete `quota_management.*` keys written as string literals in a source file. */
@@ -114,8 +118,9 @@ describe('key profiles and client keys locales', () => {
     const prefixes = new Set([
       'quota_management.provider_routing.errors',
       'quota_management.key_profiles.summary',
+      'quota_management.codex_speed',
     ]);
-    // Prefix constants (`ERRORS`, `SUMMARY`) are listed with their leaves above.
+    // Prefix constants (`ERRORS`, `SUMMARY`, `CODEX_SPEED`) are listed with their leaves above.
     const used = new Set(
       [
         ...literalKeys(keyProfileEditorSource),

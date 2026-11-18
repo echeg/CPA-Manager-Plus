@@ -5646,6 +5646,11 @@
       "off": "Выключен",
       "description": "Запрашивает приоритетный уровень обслуживания (priority) для запросов Codex по подписке на поддерживающих его моделях — как режим Fast в Codex CLI. Ответы быстрее, но лимиты подписки расходуются быстрее. Применяется к новым запросам сразу; уровень, выбранный клиентом, и правила payload имеют приоритет. API-ключи не затрагиваются."
     },
+    "codex_speed": {
+      "speed_standard": "Стандартная",
+      "speed_fast": "Быстрая",
+      "speed_ultrafast": "Сверхбыстрая"
+    },
     "search_label": "Поиск аккаунтов",
     "search_placeholder": "Поиск по имени файла или электронной почте",
     "search_empty_title": "Аккаунты не найдены",
@@ -5722,7 +5727,8 @@
         "codex_forced": "{{provider}}: сразу Codex",
         "to_api_key": "{{provider}}: {{account}} → API-ключ",
         "api_key": "{{provider}}: API-ключ {{key}}",
-        "api_key_unset": "{{provider}}: API-ключ не выбран"
+        "api_key_unset": "{{provider}}: API-ключ не выбран",
+        "provider_speed": "{{provider}} ({{speed}})"
       },
       "errors": {
         "unknown_key": "Этот ключ удалён на странице конфигурации. Список ключей обновлён."

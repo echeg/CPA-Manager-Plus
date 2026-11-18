@@ -5647,6 +5647,11 @@
       "off": "Off",
       "description": "Requests the priority service tier for Codex subscription requests on models that support it, like Fast in the Codex CLI. Responses are faster, but subscription limits are consumed faster. Applies to new requests immediately; a tier chosen by the client and payload rules take precedence. API keys are not affected."
     },
+    "codex_speed": {
+      "speed_standard": "Standard",
+      "speed_fast": "Fast",
+      "speed_ultrafast": "Ultrafast"
+    },
     "search_label": "Search accounts",
     "search_placeholder": "Search by filename or email",
     "search_empty_title": "No matching accounts",
@@ -5723,7 +5728,8 @@
         "codex_forced": "{{provider}}: Codex (forced)",
         "to_api_key": "{{provider}}: {{account}} → API key",
         "api_key": "{{provider}}: API key {{key}}",
-        "api_key_unset": "{{provider}}: API key not chosen"
+        "api_key_unset": "{{provider}}: API key not chosen",
+        "provider_speed": "{{provider}} ({{speed}})"
       },
       "errors": {
         "unknown_key": "This key was removed on the Config page. The key list was reloaded."

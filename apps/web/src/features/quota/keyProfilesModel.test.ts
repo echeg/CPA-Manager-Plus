@@ -550,6 +550,52 @@ describe('chainSummary', () => {
     );
   });
 
+  test('Codex in Subscription mode names a Fast or Ultrafast speed', () => {
+    const fast = withProvider('codex', codexRouting({ speed: 'fast' }));
+    expect(chainSummary(fast, files, true, t)).toBe(
+      'Sticky session · Claude: claude-bob@example.com.json → Codex · Codex (Fast): Automatic · reserves → round-robin'
+    );
+    const ultrafast = withProvider('codex', codexRouting({ speed: 'ultrafast' }));
+    expect(chainSummary(ultrafast, files, true, t)).toContain('· Codex (Ultrafast): Automatic ·');
+  });
+
+  test('Standard speed leaves the Codex name unchanged', () => {
+    const standard = withProvider('codex', codexRouting({ speed: 'standard' }));
+    expect(chainSummary(standard, files, true, t)).toContain('· Codex: Automatic ·');
+    expect(chainSummary(standard, files, true, t)).not.toContain('Standard');
+  });
+
+  test('Codex API key mode does not name the speed', () => {
+    const value = withProvider(
+      'codex',
+      codexRouting({ mode: 'api', apiCredential: 'codex-key-1', speed: 'fast' })
+    );
+    const summary = chainSummary(value, files, true, t, apiKeys);
+    expect(summary).toContain('· Codex: API key codex-1 · sk******yz ·');
+    expect(summary).not.toContain('Fast');
+  });
+
+  test('Subscription with an API-key fallback names the speed', () => {
+    const value = withProvider(
+      'codex',
+      codexRouting({
+        apiCredential: 'codex-key-1',
+        fallback: { target: 'api', mode: 'auto', mappings: [] },
+        speed: 'fast',
+      })
+    );
+    expect(chainSummary(value, files, true, t, apiKeys)).toContain(
+      '· Codex (Fast): Automatic → API key ·'
+    );
+  });
+
+  test('the Claude leg never names a speed', () => {
+    const value = withProvider('codex', codexRouting({ speed: 'ultrafast' }));
+    const summary = chainSummary(value, files, true, t);
+    expect(summary).toContain('Sticky session · Claude: claude-bob@example.com.json → Codex ·');
+    expect(summary).not.toContain('Claude (');
+  });
+
   test('API key mode without label sources, with an unknown key, and with no key', () => {
     const known = withProvider(
       'codex',
