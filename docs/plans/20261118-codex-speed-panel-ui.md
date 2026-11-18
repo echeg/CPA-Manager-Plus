@@ -236,7 +236,7 @@
 - [x] confirm `apps/manager-server` has no changes in this branch
 
 ### Task 9: Update documentation
-- [ ] update `docs/personal-quota.md`: replace the Codex Fast mode description and the toolbar sketch with the speed button, describe the Speed row of the Codex block and the speed table, and state that a key profile is a full copy, so a click on a "Default" key in the table gives the key its own profile
+- [x] update `docs/personal-quota.md`: replace the Codex Fast mode description and the toolbar sketch with the speed button, describe the Speed row of the Codex block and the speed table, and state that a key profile is a full copy, so a click on a "Default" key in the table gives the key its own profile
 
 ## Technical Details
 - **Capability flag**: `speedSupported = isRecord(raw.shared?.providers?.codex) && 'speed' in raw.shared.providers.codex`. The backend view always includes the key, with `standard` for a profile that does not set it.
