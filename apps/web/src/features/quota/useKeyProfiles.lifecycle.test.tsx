@@ -119,7 +119,6 @@ const profilesState = (keys: RoutingProfilesState['keys'] = []): RoutingProfiles
 });
 const config = (keys: string[] = [KEY_A, KEY_B], ttl?: string): Config => ({
   raw: { access: { 'api-keys': keys } },
-  codexFastMode: false,
   ...(ttl === undefined ? {} : { routingSessionAffinityTTL: ttl }),
 });
 

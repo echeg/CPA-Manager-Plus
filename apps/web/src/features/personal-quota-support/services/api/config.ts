@@ -15,9 +15,6 @@ const booleanValue = (value: unknown): boolean | undefined => {
 export const normalizeConfigResponse = (raw: unknown): Config => {
   if (!isRecord(raw)) throw new Error('Invalid management configuration response');
   const routing = isRecord(raw.routing) ? raw.routing : {};
-  const oauth = isRecord(raw.oauth) ? raw.oauth : {};
-  const providers = isRecord(oauth.providers) ? oauth.providers : {};
-  const codex = isRecord(providers.codex) ? providers.codex : {};
   const preferred = routing['preferred-accounts'];
   return {
     raw,
@@ -34,12 +31,9 @@ export const normalizeConfigResponse = (raw: unknown): Config => {
           )
         )
       : {},
-    codexFastMode: booleanValue(codex['fast-mode']) ?? false,
   };
 };
 
 export const configApi = {
   getConfig: async (): Promise<Config> => normalizeConfigResponse(await apiClient.get('/config')),
-  updateCodexFastMode: (enabled: boolean) =>
-    apiClient.put('/config/oauth/providers/codex/fast-mode', enabled),
 };

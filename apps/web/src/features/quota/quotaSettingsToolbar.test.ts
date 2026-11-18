@@ -139,7 +139,7 @@ describe('quota settings toolbar', () => {
 
   test('the legacy toolbar has no Fast mode switch and no speed control', () => {
     const markup = render();
-    expect(markup).not.toContain('data-switch="fast-mode"');
+    expect(markup.match(/data-switch="[^"]*"/g)).toEqual(['data-switch="affinity"']);
     expect(markup).not.toContain('data-open-speed');
     expect(markup).not.toContain('Fast mode');
   });
@@ -183,7 +183,7 @@ describe('quota settings toolbar', () => {
         'data-routing-save',
         'data-fallback-control',
         'data-switch="affinity"',
-        'data-switch="fast-mode"',
+        'data-switch=',
         i18n.t('quota_management.toolbar.switching'),
         i18n.t('config_management.visual.sections.network.session_affinity_ttl'),
         'value="24h"',

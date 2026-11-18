@@ -98,7 +98,6 @@ beforeEach(() => {
     fetchConfig: vi.fn(
       async (): Promise<Config> => ({
         raw: { access: { 'api-keys': [...storedKeys] } },
-        codexFastMode: false,
         routingSessionAffinityTTL: '1h',
       })
     ),

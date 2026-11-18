@@ -219,14 +219,14 @@
 - [x] run `npm run test:web` and `npm run type-check` - must pass before task 7
 
 ### Task 7: Delete the Fast mode code, strings and tests
-- [ ] delete `apps/web/src/features/quota/hooks/useCodexFastMode.ts`, `apps/web/src/features/quota/components/CodexFastMode.tsx` and `CodexFastMode.module.scss`
-- [ ] remove `saveCodexFastMode` from `routingModel.ts`, `updateCodexFastMode` and the `codexFastMode` field from `personal-quota-support/services/api/config.ts`, the field from `personal-quota-support/types/config.ts`, and the `'codex-fast-mode'` member of `RawConfigSection` there if nothing uses it
-- [ ] delete the three `useCodexFastMode` tests and the hook import in `settingsHooks.lifecycle.test.tsx`, and the `vi.mock('./hooks/useCodexFastMode', ...)` in `keyProfiles.lifecycle.test.tsx`
-- [ ] drop `codexFastMode` from the `Config` fixtures in `useKeyProfiles.lifecycle.test.tsx`, `profilesKeysFlow.lifecycle.test.tsx` and `QuotaPage.lifecycle.test.tsx`
-- [ ] update `config.test.ts`, `useConfigStore.test.ts` and `quotaSettingsHooks.test.ts`: remove the Fast mode cases; where `codexFastMode` only serves as an arbitrary config payload, use another `Config` field and keep the case
-- [ ] remove the `quota_management.codex_fast` subtree from all four locales and add a check to `keyProfiles.locale.test.ts` that no locale has it
-- [ ] confirm with a search that no file under `apps/web/src` mentions `codexFastMode`, `CodexFastMode`, `codex_fast` or `fast-mode`, except the test that asserts the absence of such a request
-- [ ] run `npm run test:web`, `npm run type-check` and `npm run lint` - must pass before task 8
+- [x] delete `apps/web/src/features/quota/hooks/useCodexFastMode.ts`, `apps/web/src/features/quota/components/CodexFastMode.tsx` and `CodexFastMode.module.scss`
+- [x] remove `saveCodexFastMode` from `routingModel.ts`, `updateCodexFastMode` and the `codexFastMode` field from `personal-quota-support/services/api/config.ts`, the field from `personal-quota-support/types/config.ts`, and the `'codex-fast-mode'` member of `RawConfigSection` there if nothing uses it
+- [x] delete the three `useCodexFastMode` tests and the hook import in `settingsHooks.lifecycle.test.tsx`, and the `vi.mock('./hooks/useCodexFastMode', ...)` in `keyProfiles.lifecycle.test.tsx`
+- [x] drop `codexFastMode` from the `Config` fixtures in `useKeyProfiles.lifecycle.test.tsx`, `profilesKeysFlow.lifecycle.test.tsx` and `QuotaPage.lifecycle.test.tsx`
+- [x] update `config.test.ts`, `useConfigStore.test.ts` and `quotaSettingsHooks.test.ts`: remove the Fast mode cases; where `codexFastMode` only serves as an arbitrary config payload, use another `Config` field and keep the case
+- [x] remove the `quota_management.codex_fast` subtree from all four locales and add a check to `keyProfiles.locale.test.ts` that no locale has it
+- [x] confirm with a search that no file under `apps/web/src` mentions `codexFastMode`, `CodexFastMode`, `codex_fast` or `fast-mode`, except the test that asserts the absence of such a request (also matched: the `keyProfiles.locale.test.ts` check that no locale has `codex_fast`, which this task adds; the toolbar tests now assert the switch list instead of naming `fast-mode`)
+- [x] run `npm run test:web`, `npm run type-check` and `npm run lint` - must pass before task 8
 
 ### Task 8: Verify acceptance criteria
 - [ ] map each of the six Success Criteria to the named tests that cover it and record the mapping under Technical Details; add a test for any criterion without one

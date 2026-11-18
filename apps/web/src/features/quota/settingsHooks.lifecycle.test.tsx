@@ -2,14 +2,12 @@ import { createElement } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { apiClient } from '@/features/personal-quota-support/services/api/client';
-import { configApi } from '@/features/personal-quota-support/services/api/config';
 import {
   subscriptionRoutingApi,
   type SubscriptionActivity,
 } from '@/features/personal-quota-support/services/api/subscriptionRouting';
 import { useConfigStore } from '@/features/personal-quota-support/stores/useConfigStore';
 import type { Config } from '@/features/personal-quota-support/types';
-import { useCodexFastMode, type CodexFastModeState } from './hooks/useCodexFastMode';
 import {
   useSubscriptionRouting,
   type SubscriptionRoutingState,
@@ -59,67 +57,6 @@ afterEach(async () => {
 });
 
 describe('personal quota settings session lifecycle', () => {
-  test('does not apply an initial fast-mode response from a previous connection', async () => {
-    const response = deferred<Config>();
-    useConfigStore.setState({ fetchConfig: vi.fn(() => response.promise) });
-    let state!: CodexFastModeState;
-    await mount(() => {
-      state = useCodexFastMode(false);
-    });
-    expect(state.enabled).toBeNull();
-
-    revision += 1;
-    await act(async () => {
-      response.resolve({ codexFastMode: true });
-    });
-    expect(state.enabled).toBeNull();
-    expect(state.error).toBe('');
-  });
-
-  test('applies fast mode immediately and reconciles it with the server result', async () => {
-    const fetchConfig = vi
-      .fn<() => Promise<Config>>()
-      .mockResolvedValueOnce({ codexFastMode: false })
-      .mockResolvedValueOnce({ codexFastMode: true });
-    const write = vi.spyOn(configApi, 'updateCodexFastMode').mockResolvedValue(undefined);
-    useConfigStore.setState({ fetchConfig });
-    let state!: CodexFastModeState;
-    await mount(() => {
-      state = useCodexFastMode(false);
-    });
-    expect(state.enabled).toBe(false);
-
-    await act(async () => {
-      await state.toggle(true);
-    });
-    expect(write).toHaveBeenCalledExactlyOnceWith(true);
-    expect(fetchConfig).toHaveBeenLastCalledWith(true);
-    expect(state.enabled).toBe(true);
-    expect(state.saving).toBe(false);
-  });
-
-  test('does not reload another connection after a pending fast-mode write completes', async () => {
-    const written = deferred<unknown>();
-    const fetchConfig = vi.fn(async () => ({ codexFastMode: false }));
-    vi.spyOn(configApi, 'updateCodexFastMode').mockReturnValue(written.promise);
-    useConfigStore.setState({ fetchConfig });
-    let state!: CodexFastModeState;
-    await mount(() => {
-      state = useCodexFastMode(false);
-    });
-    let save!: Promise<void>;
-    await act(async () => {
-      save = state.toggle(true);
-    });
-    revision += 1;
-    await act(async () => {
-      written.resolve(undefined);
-      await save;
-    });
-    expect(fetchConfig).toHaveBeenCalledTimes(1);
-    expect(state.enabled).toBe(false);
-  });
-
   test('requires explicit routing save, preserves the baseline and reloads after writing', async () => {
     const initial: Config = { routingStrategy: 'round-robin', routingSessionAffinityTTL: '1h' };
     const next: Config = { ...initial, routingStrategy: 'earliest-reset' };

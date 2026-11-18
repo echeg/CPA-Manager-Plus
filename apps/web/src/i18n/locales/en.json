@@ -5641,12 +5641,6 @@
         "fill_first": "Fill-first"
       }
     },
-    "codex_fast": {
-      "title": "Codex Fast mode",
-      "on": "On",
-      "off": "Off",
-      "description": "Requests the priority service tier for Codex subscription requests on models that support it, like Fast in the Codex CLI. Responses are faster, but subscription limits are consumed faster. Applies to new requests immediately; a tier chosen by the client and payload rules take precedence. API keys are not affected."
-    },
     "codex_speed": {
       "speed_standard": "Standard",
       "speed_fast": "Fast",

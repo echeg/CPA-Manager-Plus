@@ -40,9 +40,6 @@ vi.mock('./hooks/useClaudeFallback', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./hooks/useClaudeFallback')>();
   return { useClaudeFallback: vi.fn(actual.useClaudeFallback) };
 });
-vi.mock('./hooks/useCodexFastMode', () => ({
-  useCodexFastMode: () => ({ enabled: false, saving: false, error: '', toggle: vi.fn() }),
-}));
 vi.mock('./hooks/useSubscriptionActivity', () => ({
   useSubscriptionActivity: () => ({ activity: [], activityState: 'ready' }),
 }));

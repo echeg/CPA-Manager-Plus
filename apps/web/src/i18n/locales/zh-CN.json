@@ -5636,12 +5636,6 @@
         "fill_first": "填充优先 (Fill First)"
       }
     },
-    "codex_fast": {
-      "title": "Codex 快速模式",
-      "on": "已开启",
-      "off": "已关闭",
-      "description": "为支持的模型上的 Codex 订阅请求申请优先服务层级（priority），与 Codex CLI 的 Fast 模式相同。响应更快，但订阅额度消耗也更快。对新请求立即生效；客户端指定的层级和 payload 规则优先。不影响 API 密钥。"
-    },
     "codex_speed": {
       "speed_standard": "标准",
       "speed_fast": "快速",

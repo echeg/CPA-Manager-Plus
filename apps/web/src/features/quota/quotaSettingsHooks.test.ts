@@ -1,7 +1,6 @@
-import { afterEach, beforeAll, describe, expect, vi, test } from 'vitest';
+import { beforeAll, describe, expect, test } from 'vitest';
 import type { TFunction } from 'i18next';
 import i18n from '@/i18n';
-import { configApi } from '@/features/personal-quota-support/services/api/config';
 import {
   readSubscriptionRouting,
   subscriptionRoutingPatch,
@@ -13,13 +12,9 @@ import {
   isPickerSlot,
   routingFormState,
   routingStrategyOptions,
-  saveCodexFastMode,
   selectionSlotOptions,
   withPickerRule,
 } from '@/features/quota/routingModel';
-
-const spies: Array<{ mockRestore(): void }> = [];
-afterEach(() => spies.splice(0).forEach((spy) => spy.mockRestore()));
 
 beforeAll(async () => {
   await i18n.changeLanguage('en');
@@ -177,23 +172,5 @@ describe('error text', () => {
   test('uses the error message or a translated fallback', () => {
     expect(errorText(new Error('boom'), t)).toBe('boom');
     expect(errorText('nope', t)).toBe('common.unknown_error');
-  });
-});
-
-describe('codex fast mode save', () => {
-  test('writes the flag and returns the reloaded config value', async () => {
-    const update = vi.spyOn(configApi, 'updateCodexFastMode').mockResolvedValue(undefined as never);
-    spies.push(update);
-    const fetchConfig = async () => ({ codexFastMode: true });
-    await expect(saveCodexFastMode(true, fetchConfig as never)).resolves.toBe(true);
-    expect(update).toHaveBeenLastCalledWith(true);
-  });
-
-  test('defaults a missing reloaded flag to off and propagates failures', async () => {
-    const update = vi.spyOn(configApi, 'updateCodexFastMode').mockResolvedValue(undefined as never);
-    spies.push(update);
-    await expect(saveCodexFastMode(false, (async () => ({})) as never)).resolves.toBe(false);
-    update.mockRejectedValue(new Error('denied'));
-    await expect(saveCodexFastMode(true, (async () => ({})) as never)).rejects.toThrow('denied');
   });
 });

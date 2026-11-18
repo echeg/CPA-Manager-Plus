@@ -121,6 +121,12 @@ describe('key profiles and client keys locales', () => {
     }
   });
 
+  it('drops the strings of the removed Codex Fast mode toggle', () => {
+    for (const [name, locale] of Object.entries(locales)) {
+      expect(Object.keys(locale.quota_management), name).not.toContain('codex_fast');
+    }
+  });
+
   it('has every key the profile editor, provider blocks, speed table and speed button use in every locale', () => {
     const prefixes = new Set([
       'quota_management.provider_routing.errors',

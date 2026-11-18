@@ -1,6 +1,5 @@
 import type { TFunction } from 'i18next';
 import { goDurationSeconds } from '@/features/quota/utils/goDuration';
-import { configApi } from '@/features/personal-quota-support/services/api/config';
 import type {
   RoutingSelectionOptions,
   SelectionSlots,
@@ -10,7 +9,7 @@ import {
   type SubscriptionActivity,
   type SubscriptionRoutingSettings,
 } from '@/features/personal-quota-support/services/api/subscriptionRouting';
-import type { AuthFileItem, Config } from '@/features/personal-quota-support/types';
+import type { AuthFileItem } from '@/features/personal-quota-support/types';
 
 export type ActivityState = 'loading' | 'ready' | 'error';
 
@@ -147,19 +146,4 @@ export function activityStatusKey(disconnected: boolean, state: ActivityState) {
 
 export function errorText(err: unknown, t: TFunction) {
   return err instanceof Error ? err.message : t('common.unknown_error');
-}
-
-/**
- * Writes codex.fast-mode and returns the value the server reports after the write.
- * onWritten runs once the write succeeded, before the config reload.
- */
-export async function saveCodexFastMode(
-  next: boolean,
-  fetchConfig: (force: boolean) => Promise<Pick<Config, 'codexFastMode'>>,
-  onWritten?: () => boolean
-) {
-  await configApi.updateCodexFastMode(next);
-  if (onWritten && !onWritten()) return next;
-  const config = await fetchConfig(true);
-  return config.codexFastMode ?? false;
 }

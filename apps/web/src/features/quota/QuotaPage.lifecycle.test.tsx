@@ -50,7 +50,7 @@ beforeEach(() => {
     isAuthenticated: true,
   });
   useQuotaStore.getState().clearQuotaCache();
-  useConfigStore.setState({ fetchConfig: vi.fn(async () => ({ codexFastMode: false })) });
+  useConfigStore.setState({ fetchConfig: vi.fn(async () => ({})) });
   vi.spyOn(subscriptionRoutingApi, 'activity').mockResolvedValue([]);
   // An older backend (404 on /routing/profiles): offline, and the legacy strategy select stays.
   vi.spyOn(routingProfilesApi, 'get').mockResolvedValue(unsupportedRoutingProfiles());

@@ -4,8 +4,7 @@ export interface Config {
   routingSessionAffinity?: boolean;
   routingSessionAffinityTTL?: string;
   routingPreferredAccounts?: Record<string, string>;
-  codexFastMode?: boolean;
   raw?: Record<string, unknown>;
 }
 
-export type RawConfigSection = 'routing/strategy' | 'codex-fast-mode';
+export type RawConfigSection = 'routing/strategy';
