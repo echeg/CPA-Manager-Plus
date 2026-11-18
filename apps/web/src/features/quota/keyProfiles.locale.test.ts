@@ -59,6 +59,11 @@ const dynamicProviderRoutingKeys = [
   ),
 ];
 
+// The toolbar's Codex speed button; the toolbar source is not part of the scan.
+const toolbarSpeedKeys = ['button', 'button_hint'].map(
+  (key) => `quota_management.codex_speed.${key}`
+);
+
 /** Complete `quota_management.*` keys written as string literals in a source file. */
 const literalKeys = (source: string): string[] =>
   [...source.matchAll(/['"`](quota_management\.[a-z_.]+[a-z_])['"`]/g)].map((match) => match[1]);
@@ -116,7 +121,7 @@ describe('key profiles and client keys locales', () => {
     }
   });
 
-  it('has every key the profile editor, provider blocks and speed table use in every locale', () => {
+  it('has every key the profile editor, provider blocks, speed table and speed button use in every locale', () => {
     const prefixes = new Set([
       'quota_management.provider_routing.errors',
       'quota_management.key_profiles.summary',
@@ -131,6 +136,7 @@ describe('key profiles and client keys locales', () => {
         ...literalKeys(codexSpeedModalSource),
         ...literalKeys(codexSpeedModelSource),
         ...dynamicProviderRoutingKeys,
+        ...toolbarSpeedKeys,
       ].filter((key) => !prefixes.has(key))
     );
     expect([...used].filter((key) => key.includes('provider_routing')).length).toBeGreaterThan(15);

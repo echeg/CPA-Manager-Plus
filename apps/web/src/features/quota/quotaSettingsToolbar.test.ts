@@ -54,7 +54,6 @@ const render = (props: Record<string, unknown> = {}) =>
   renderToStaticMarkup(
     createElement(QuotaSettingsToolbar, {
       routing: routing(),
-      fastMode: { enabled: false, saving: false, error: '', toggle: async () => {} },
       activity: [
         { authIndex: 'codex-a', provider: 'codex', lastSelectedAt: '2026-10-08T13:02:37Z' },
       ],
@@ -68,7 +67,7 @@ const render = (props: Record<string, unknown> = {}) =>
   );
 
 describe('quota settings toolbar', () => {
-  test('renders every routing and fast mode control in one labelled region', () => {
+  test('renders every routing control in one labelled region', () => {
     const markup = render();
     expect(markup).toContain('data-quota-settings');
     expect(markup).toContain(`aria-label="${i18n.t('quota_management.routing.title')}"`);
@@ -78,7 +77,6 @@ describe('quota settings toolbar', () => {
     );
     expect(markup).toContain(i18n.t('config_management.visual.sections.network.session_affinity'));
     expect(markup).toContain('value="24h"');
-    expect(markup).toContain(i18n.t('quota_management.codex_fast.title'));
     expect(markup).toContain('Codex');
     expect(markup).toContain('Claude');
   });
@@ -89,7 +87,6 @@ describe('quota settings toolbar', () => {
       'quota_management.routing.description',
       'quota_management.routing.ttl_hint',
       'quota_management.routing.manual_hint',
-      'quota_management.codex_fast.description',
     ]) {
       expect(markup).toContain(`title="${i18n.t(key)}"`);
     }
@@ -123,7 +120,6 @@ describe('quota settings toolbar', () => {
     const markup = render({
       disabled: true,
       routing: routing({ blocked: true, values: null, error: 'failed for alice@example.com' }),
-      fastMode: { enabled: null, saving: false, error: '', toggle: async () => {} },
     });
     expect(markup).toContain('disabled');
     expect(markup).toContain('role="alert"');
@@ -137,13 +133,15 @@ describe('quota settings toolbar', () => {
     );
   });
 
-  test('marks each switch on or off for the colored state', () => {
+  test('marks the affinity switch on or off for the colored state', () => {
+    expect(render()).toContain('data-switch="affinity" data-state="on"');
+  });
+
+  test('the legacy toolbar has no Fast mode switch and no speed control', () => {
     const markup = render();
-    expect(markup).toContain('data-switch="affinity" data-state="on"');
-    expect(markup).toContain('data-switch="fast-mode" data-state="off"');
-    expect(
-      render({ fastMode: { enabled: true, saving: false, error: '', toggle: async () => {} } })
-    ).toContain('data-switch="fast-mode" data-state="on"');
+    expect(markup).not.toContain('data-switch="fast-mode"');
+    expect(markup).not.toContain('data-open-speed');
+    expect(markup).not.toContain('Fast mode');
   });
 
   test('renders the legacy strategy select, never selection slots', () => {
@@ -162,16 +160,18 @@ describe('quota settings toolbar', () => {
       disabled: false,
       onOpenProfiles: () => {},
       onOpenKeys: () => {},
+      codexSpeed: 'fast',
+      onOpenSpeed: () => {},
       ...patch,
     });
 
-    test('keeps only Fast mode, the last-routed indicators, Profiles and Keys · N', () => {
+    test('keeps only the speed button, the last-routed indicators, Profiles and Keys · N', () => {
       const markup = render({
         profileButtons: profileButtons(),
         fallbackControl: createElement('span', { 'data-fallback-control': true }),
       });
       expect(markup).toContain('data-toolbar="slim"');
-      expect(markup).toContain(i18n.t('quota_management.codex_fast.title'));
+      expect(buttonWith(markup, 'data-open-speed')).toContain('>Codex speed: Fast<');
       expect(markup).toContain('data-last-selected="codex"');
       expect(markup).toContain('data-last-selected="claude"');
       expect(buttonWith(markup, 'data-open-profiles')).toContain('>Profiles<');
@@ -183,13 +183,14 @@ describe('quota settings toolbar', () => {
         'data-routing-save',
         'data-fallback-control',
         'data-switch="affinity"',
+        'data-switch="fast-mode"',
         i18n.t('quota_management.toolbar.switching'),
         i18n.t('config_management.visual.sections.network.session_affinity_ttl'),
         'value="24h"',
       ]) {
         expect(markup).not.toContain(absent);
       }
-      expect(markup).not.toMatch(/<button[^>]*data-open-(profiles|keys)[^>]*disabled/);
+      expect(markup).not.toMatch(/<button[^>]*data-open-(profiles|keys|speed)[^>]*disabled/);
     });
 
     test('masks the account in the indicator title unless emails are shown', () => {
@@ -200,26 +201,40 @@ describe('quota settings toolbar', () => {
       );
     });
 
-    test('disables both buttons on request', () => {
+    test('disables all three buttons on request', () => {
       const markup = render({ profileButtons: profileButtons({ disabled: true }) });
       expect(buttonWith(markup, 'data-open-profiles')).toMatch(/<button[^>]*disabled/);
       expect(buttonWith(markup, 'data-open-keys')).toMatch(/<button[^>]*disabled/);
+      expect(buttonWith(markup, 'data-open-speed')).toMatch(/<button[^>]*disabled/);
     });
 
-    test('shows only the fast mode error, masked', () => {
+    test("the speed button names the Default profile's speed", () => {
+      for (const [speed, name] of [
+        ['standard', 'Standard'],
+        ['fast', 'Fast'],
+        ['ultrafast', 'Ultrafast'],
+      ]) {
+        const button = buttonWith(
+          render({ profileButtons: profileButtons({ codexSpeed: speed }) }),
+          'data-open-speed'
+        );
+        expect(button).toContain(`>Codex speed: ${name}<`);
+        expect(button).toContain(`title="${i18n.t('quota_management.codex_speed.button_hint')}"`);
+      }
+    });
+
+    test('renders no speed button without a Codex speed', () => {
+      const markup = render({ profileButtons: profileButtons({ codexSpeed: undefined }) });
+      expect(markup).not.toContain('data-open-speed');
+      expect(markup).toContain('data-open-profiles');
+    });
+
+    test('shows no routing error in the slim toolbar', () => {
       const markup = render({
         profileButtons: profileButtons(),
         routing: routing({ error: 'routing failed' }),
-        fastMode: {
-          enabled: false,
-          saving: false,
-          error: 'fast failed for alice@example.com',
-          toggle: async () => {},
-        },
       });
-      expect(markup).toContain('role="alert"');
-      expect(markup).toContain('fast failed');
-      expect(markup).not.toContain('alice@example.com');
+      expect(markup).not.toContain('role="alert"');
       expect(markup).not.toContain('routing failed');
     });
 

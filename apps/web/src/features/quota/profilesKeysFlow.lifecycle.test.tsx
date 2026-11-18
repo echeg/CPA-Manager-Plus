@@ -350,6 +350,79 @@ describe('provider routing saves with the real key profiles hook', () => {
   });
 });
 
+describe('Codex speed button and table with the real key profiles hook', () => {
+  const withSharedSpeed = (
+    state: RoutingProfilesState,
+    speed: 'standard' | 'fast' | 'ultrafast',
+    speedSupported = true
+  ): RoutingProfilesState => ({
+    ...state,
+    speedSupported,
+    shared: {
+      ...state.shared,
+      providers: {
+        ...state.shared.providers,
+        codex: { ...state.shared.providers.codex, speed },
+      },
+    },
+  });
+  const speedModal = () => root().findAll((node) => node.props['data-codex-speed-modal']);
+  const speedOption = (rowKind: 'default' | 'key', speed: string) =>
+    root()
+      .findAll((node) => node.type === 'tr' && node.props['data-speed-row'] === rowKind)[0]
+      .find((node) => node.type === 'button' && node.props['data-speed-option'] === speed);
+
+  test('an older backend without speed gets no speed button', async () => {
+    vi.mocked(routingProfilesApi.get).mockResolvedValue(
+      withSharedSpeed(profilesState(profile('priority')), 'standard', false)
+    );
+    await mount();
+    expect(buttonWith('data-open-profiles')).toBeDefined();
+    expect(buttonWith('data-open-speed')).toBeUndefined();
+  });
+
+  test("the button names the Default profile's speed and opens the table", async () => {
+    vi.mocked(routingProfilesApi.get).mockResolvedValue(
+      withSharedSpeed(profilesState(profile('priority')), 'fast')
+    );
+    await mount();
+    const button = buttonWith('data-open-speed');
+    expect(text(button!)).toBe('Codex speed: Fast');
+    expect(speedModal()).toHaveLength(0);
+
+    await click(button);
+    expect(speedModal()).toHaveLength(1);
+    expect(
+      root().findAll((node) => node.type === 'tr' && node.props['data-speed-row'])
+    ).toHaveLength(3);
+    expect(speedOption('default', 'fast').props['aria-pressed']).toBe(true);
+    expect(JSON.stringify(renderer!.toJSON())).not.toContain(KEY_A);
+  });
+
+  test('the panel never calls the removed fast-mode path', async () => {
+    const state = withSharedSpeed(profilesState(profile('priority')), 'fast');
+    vi.mocked(routingProfilesApi.get).mockResolvedValue(state);
+    const get = vi.spyOn(apiClient, 'get');
+    const put = vi.spyOn(apiClient, 'put').mockResolvedValue({});
+    const patch = vi.spyOn(apiClient, 'patch').mockImplementation(async () => {
+      vi.mocked(routingProfilesApi.get).mockResolvedValue(withSharedSpeed(state, 'ultrafast'));
+      return {};
+    });
+    await mount();
+    await click(buttonWith('data-open-speed'));
+    await click(speedOption('default', 'ultrafast'));
+
+    // The click wrote the Default profile through the routing PATCH.
+    expect(patch).toHaveBeenCalledTimes(1);
+    expect(text(buttonWith('data-open-speed')!)).toBe('Codex speed: Ultrafast');
+    for (const spy of [get, put, patch]) {
+      for (const call of spy.mock.calls) {
+        expect(String(call[0])).not.toContain('fast-mode');
+      }
+    }
+  });
+});
+
 function text(node: ReactTestInstance): string {
   return node.children.map((child) => (typeof child === 'string' ? child : text(child))).join('');
 }

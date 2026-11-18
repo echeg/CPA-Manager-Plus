@@ -209,14 +209,14 @@
 - [x] run `npm run test:web` and `npm run type-check` - must pass before task 6
 
 ### Task 6: Toolbar button and modal wiring in place of the Fast toggle
-- [ ] in `QuotaSettingsToolbar.tsx` remove the `fastMode` prop and `fastModeSwitch` from both toolbar variants and drop `fastMode.error` from both error lines; add `codexSpeed?: CodexSpeed` and `onOpenSpeed` to `ProfileButtonsProps`; the slim toolbar renders a button "Codex speed: <speed>" (`data-open-speed`) in the place of the toggle when `codexSpeed` is set, disabled like the Profiles and Keys buttons; the legacy toolbar renders no speed control
-- [ ] in `QuotaSettingsBar` stop calling `useCodexFastMode`, add `'speed'` to the modal navigation, set `codexSpeed` from `profilesState.shared.providers.codex.speed` only when `profilesState?.speedSupported` is true, and render `CodexSpeedModal` with the `keyProfiles` state; opening it reloads the profiles like the other two modals
-- [ ] add the button strings (label with the speed, hint) to all four locales and add their keys by name to the checked list of `keyProfiles.locale.test.ts`
-- [ ] update `quotaSettingsToolbar.test.ts`: remove the `fastMode` fixtures and the `codex_fast.title` / `codex_fast.description` assertions (lines 81, 92, 174); the button shows the Default profile's speed, is absent without `codexSpeed`, and no `data-switch="fast-mode"` remains in either toolbar variant
-- [ ] update `QuotaPage.lifecycle.test.tsx`, `profilesKeysFlow.lifecycle.test.tsx` and `keyProfiles.lifecycle.test.tsx` only where they pass or assert the removed prop or toggle; the tests of the `useCodexFastMode` hook itself stay until Task 7
-- [ ] add lifecycle cases in `profilesKeysFlow.lifecycle.test.tsx` for the gate: with a profiles state where `speedSupported` is false no `[data-open-speed]` is rendered; with true the button text contains the Default speed name and a click opens the modal
-- [ ] add a lifecycle case in the same file for the removed path: spy `apiClient.get`, `put` and `patch`, mount `QuotaSettingsBar`, open the speed modal and click a speed; assert that no call's first argument contains `fast-mode`
-- [ ] run `npm run test:web` and `npm run type-check` - must pass before task 7
+- [x] in `QuotaSettingsToolbar.tsx` remove the `fastMode` prop and `fastModeSwitch` from both toolbar variants and drop `fastMode.error` from both error lines; add `codexSpeed?: CodexSpeed` and `onOpenSpeed` to `ProfileButtonsProps`; the slim toolbar renders a button "Codex speed: <speed>" (`data-open-speed`) in the place of the toggle when `codexSpeed` is set, disabled like the Profiles and Keys buttons; the legacy toolbar renders no speed control
+- [x] in `QuotaSettingsBar` stop calling `useCodexFastMode`, add `'speed'` to the modal navigation, set `codexSpeed` from `profilesState.shared.providers.codex.speed` only when `profilesState?.speedSupported` is true, and render `CodexSpeedModal` with the `keyProfiles` state; opening it reloads the profiles like the other two modals
+- [x] add the button strings (label with the speed, hint) to all four locales and add their keys by name to the checked list of `keyProfiles.locale.test.ts`
+- [x] update `quotaSettingsToolbar.test.ts`: remove the `fastMode` fixtures and the `codex_fast.title` / `codex_fast.description` assertions (lines 81, 92, 174); the button shows the Default profile's speed, is absent without `codexSpeed`, and no `data-switch="fast-mode"` remains in either toolbar variant
+- [x] update `QuotaPage.lifecycle.test.tsx`, `profilesKeysFlow.lifecycle.test.tsx` and `keyProfiles.lifecycle.test.tsx` only where they pass or assert the removed prop or toggle; the tests of the `useCodexFastMode` hook itself stay until Task 7
+- [x] add lifecycle cases in `profilesKeysFlow.lifecycle.test.tsx` for the gate: with a profiles state where `speedSupported` is false no `[data-open-speed]` is rendered; with true the button text contains the Default speed name and a click opens the modal
+- [x] add a lifecycle case in the same file for the removed path: spy `apiClient.get`, `put` and `patch`, mount `QuotaSettingsBar`, open the speed modal and click a speed; assert that no call's first argument contains `fast-mode`
+- [x] run `npm run test:web` and `npm run type-check` - must pass before task 7
 
 ### Task 7: Delete the Fast mode code, strings and tests
 - [ ] delete `apps/web/src/features/quota/hooks/useCodexFastMode.ts`, `apps/web/src/features/quota/components/CodexFastMode.tsx` and `CodexFastMode.module.scss`

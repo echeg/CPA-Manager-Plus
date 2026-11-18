@@ -5671,7 +5671,9 @@
       "table_read_only": "Key profiles are not used in this routing mode, so key rows are read-only. The Default profile speed still applies.",
       "table_default_hint": "A change on a key marked Default gives the key its own profile: a full copy of the Default profile with the new value.",
       "table_loading": "Loading profiles…",
-      "table_empty": "No client keys yet."
+      "table_empty": "No client keys yet.",
+      "button": "Codex speed: {{speed}}",
+      "button_hint": "Codex speed of the Default profile and of every client key: change it with one click."
     },
     "search_label": "Search accounts",
     "search_placeholder": "Search by filename or email",

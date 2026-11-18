@@ -5666,7 +5666,9 @@
       "table_read_only": "此路由模式不使用金鑰設定檔，因此金鑰列為唯讀。預設設定檔的速度仍然生效。",
       "table_default_hint": "修改標示為「預設」的金鑰會為其建立獨立設定檔：預設設定檔的完整副本加上新值。",
       "table_loading": "正在載入設定檔…",
-      "table_empty": "還沒有用戶端金鑰。"
+      "table_empty": "還沒有用戶端金鑰。",
+      "button": "Codex 速度：{{speed}}",
+      "button_hint": "預設設定檔和每個用戶端金鑰的 Codex 速度：按一下即可變更。"
     },
     "search_label": "搜尋帳號",
     "search_placeholder": "依檔案名稱或電子郵件搜尋",
