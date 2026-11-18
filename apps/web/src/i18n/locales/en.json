@@ -5650,7 +5650,13 @@
     "codex_speed": {
       "speed_standard": "Standard",
       "speed_fast": "Fast",
-      "speed_ultrafast": "Ultrafast"
+      "speed_ultrafast": "Ultrafast",
+      "row_label": "Speed",
+      "row_aria": "{{provider}} speed",
+      "ignore_client_tier": "Ignore the tier the client sends",
+      "ignore_client_tier_hint": "On: this speed applies even when the client asks for its own tier. Off: a tier the client sends is used, and this speed applies only when the client sends none.",
+      "ultrafast_hint": "Ultrafast applies to models that offer it. Models that offer only Fast use Fast; other models get no speed tier.",
+      "api_mode_hint": "Requests billed to an API key never get a speed tier. The stored speed is kept for Subscription mode."
     },
     "search_label": "Search accounts",
     "search_placeholder": "Search by filename or email",

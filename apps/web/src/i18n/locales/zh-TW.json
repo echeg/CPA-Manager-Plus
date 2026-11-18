@@ -5645,7 +5645,13 @@
     "codex_speed": {
       "speed_standard": "標準",
       "speed_fast": "快速",
-      "speed_ultrafast": "極速"
+      "speed_ultrafast": "極速",
+      "row_label": "速度",
+      "row_aria": "{{provider}} 速度",
+      "ignore_client_tier": "忽略用戶端傳送的等級",
+      "ignore_client_tier_hint": "開啟：即使用戶端要求自己的等級，也使用此速度。關閉：使用用戶端傳送的等級，僅在用戶端未傳送時才使用此速度。",
+      "ultrafast_hint": "極速僅適用於支援它的模型。只支援快速的模型使用快速；其他模型不使用速度等級。",
+      "api_mode_hint": "透過 API 金鑰計費的請求不會使用速度等級。已儲存的速度會保留給訂閱模式。"
     },
     "search_label": "搜尋帳號",
     "search_placeholder": "依檔案名稱或電子郵件搜尋",

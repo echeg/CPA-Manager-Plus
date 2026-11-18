@@ -149,6 +149,7 @@ export function RoutingProfilesModal({
         selectionOptions={state.selectionOptions}
         models={models}
         providersSupported={state.providersSupported}
+        speedSupported={state.speedSupported}
         apiKeys={apiKeysOf(state)}
         // A reload keeps the rows on screen; the editor waits for it because the
         // hook refuses a save while the profiles load.
@@ -260,6 +261,7 @@ export function RoutingProfilesModal({
                   selectionOptions={state.selectionOptions}
                   models={models}
                   providersSupported={state.providersSupported}
+                  speedSupported={state.speedSupported}
                   apiKeys={apiKeysOf(state)}
                   saving={saving || loading}
                   // The shared values stay editable in Home or scheduler-plugin mode,

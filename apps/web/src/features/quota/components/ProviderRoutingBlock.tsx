@@ -1,9 +1,12 @@
 import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SegmentedTabs, type SegmentedTabItem } from '@/components/ui/SegmentedTabs';
+import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import {
+  CODEX_SPEEDS,
   FALLBACK_TARGETS,
   type ApiProvider,
+  type CodexSpeed,
   type FallbackTarget,
   type ProviderMode,
   type ProviderRouting,
@@ -34,6 +37,8 @@ export interface ProviderRoutingBlockProps {
   modeLocked: boolean;
   /** `false` on an older backend: only Subscription mode and the Codex target can be written. */
   providersSupported: boolean;
+  /** `false` on a backend without the Codex speed: the Speed row is not rendered. */
+  speedSupported?: boolean;
   onChange: (value: ProviderRouting) => void;
   onPreferredChange: (authIndex: string) => void;
 }
@@ -53,6 +58,7 @@ export function ProviderRoutingBlock({
   disabled,
   modeLocked,
   providersSupported,
+  speedSupported = false,
   onChange,
   onPreferredChange,
 }: ProviderRoutingBlockProps) {
@@ -88,6 +94,16 @@ export function ProviderRoutingBlock({
   );
   // The mapping table shows its own error; a hidden one still blocks the save, so say why.
   const mappingsShown = value.mode !== 'api' && value.fallback.target === 'codex';
+
+  const speedShown = provider === 'codex' && speedSupported;
+  // API key credentials never carry a speed tier, but CPA ignores the stored mode while it
+  // is locked, so the speed still applies there. The lock itself never disables the row.
+  const speedInApiMode = value.mode === 'api' && !modeLocked;
+  const speedDisabled = disabled || speedInApiMode;
+  const speedItems: SegmentedTabItem<CodexSpeed>[] = CODEX_SPEEDS.map((speed) => ({
+    id: speed,
+    label: t(`quota_management.codex_speed.speed_${speed}`),
+  }));
 
   const selectedKey = apiKeyOptions.find((option) => option.value === value.apiCredential.trim());
   const keyErrorId = `${id}-key-error`;
@@ -238,6 +254,36 @@ export function ProviderRoutingBlock({
           {value.fallback.target === 'api' &&
             apiKeyField(t('quota_management.provider_routing.api_fallback_hint'))}
         </>
+      )}
+      {speedShown && (
+        <div className={styles.field} data-provider-codex-speed>
+          <div className={styles.row}>
+            <span className={styles.caption}>{t('quota_management.codex_speed.row_label')}</span>
+            <SegmentedTabs
+              items={speedItems}
+              activeTab={value.speed}
+              ariaLabel={t('quota_management.codex_speed.row_aria', { provider: label })}
+              idBase={`${id}-speed`}
+              className={styles.segmented}
+              responsiveFullWidth={false}
+              disabled={speedDisabled}
+              onChange={(speed) => onChange({ ...value, speed })}
+            />
+          </div>
+          <ToggleSwitch
+            checked={value.ignoreClientTier}
+            disabled={speedDisabled}
+            onChange={(ignoreClientTier) => onChange({ ...value, ignoreClientTier })}
+            label={t('quota_management.codex_speed.ignore_client_tier')}
+          />
+          <p className={styles.hint}>{t('quota_management.codex_speed.ignore_client_tier_hint')}</p>
+          <p className={styles.hint}>{t('quota_management.codex_speed.ultrafast_hint')}</p>
+          {speedInApiMode && (
+            <p className={styles.hint} data-provider-speed-api-mode>
+              {t('quota_management.codex_speed.api_mode_hint')}
+            </p>
+          )}
+        </div>
       )}
       {errors.mappings && !mappingsShown && (
         <p role="alert" className={styles.fieldError} data-provider-hidden-mappings-error>
