@@ -156,14 +156,14 @@
 ## Implementation Steps
 
 ### Task 1: Add the two fields to the profile model: read, normalize, copy
-- [ ] in `apps/web/src/features/personal-quota-support/services/api/routingProfiles.ts` add `export type CodexSpeed = 'standard' | 'fast' | 'ultrafast'` and the fields `speed: CodexSpeed` and `ignoreClientTier: boolean` to `ProviderRouting`; `defaultProviderRouting()` returns `standard` / `false`
-- [ ] `readProviderRouting`: for Codex read `speed` with `readEnum` (default `standard`) and `ignore-client-tier` as `true` only for the boolean `true`; for Claude always return `standard` / `false` whatever the response holds; `providersFromClaudeFallback` returns the defaults for both providers
-- [ ] in `apps/web/src/features/quota/keyProfilesModel.ts` make `normalizeProviderRouting` carry `speed` and `ignoreClientTier` for both providers and `copyOfProviderRouting` copy them; both functions build `ProviderRouting` literals, so they must change in the same task as the type
-- [ ] update every `ProviderRouting` literal in source and tests so the type check passes (among them `routingProfiles.test.ts`, `keyProfilesModel.test.ts`, `providerRoutingModel.test.ts`, `components/ProviderRoutingBlock.test.tsx`, `components/KeyProfileEditor.test.tsx` and the lifecycle tests); a shared test helper for a default block is fine
-- [ ] write tests for reading: Codex values, the default for an absent, `null` and empty `speed`, an unknown `speed` fails the load, Claude always `standard` / `false`
-- [ ] write tests for normalization and `profileDirty`: a changed speed is dirty, a changed flag is dirty, equal profiles are not
-- [ ] write tests for `copyOfShared` (both fields copied, the copy is independent) and for `withApiModeNormalization` in `providerRoutingModel.ts` (API key mode keeps both fields)
-- [ ] run `npm run test:web` and `npm run type-check` - must pass before task 2
+- [x] in `apps/web/src/features/personal-quota-support/services/api/routingProfiles.ts` add `export type CodexSpeed = 'standard' | 'fast' | 'ultrafast'` and the fields `speed: CodexSpeed` and `ignoreClientTier: boolean` to `ProviderRouting`; `defaultProviderRouting()` returns `standard` / `false`
+- [x] `readProviderRouting`: for Codex read `speed` with `readEnum` (default `standard`) and `ignore-client-tier` as `true` only for the boolean `true`; for Claude always return `standard` / `false` whatever the response holds; `providersFromClaudeFallback` returns the defaults for both providers
+- [x] in `apps/web/src/features/quota/keyProfilesModel.ts` make `normalizeProviderRouting` carry `speed` and `ignoreClientTier` for both providers and `copyOfProviderRouting` copy them; both functions build `ProviderRouting` literals, so they must change in the same task as the type
+- [x] update every `ProviderRouting` literal in source and tests so the type check passes (among them `routingProfiles.test.ts`, `keyProfilesModel.test.ts`, `providerRoutingModel.test.ts`, `components/ProviderRoutingBlock.test.tsx`, `components/KeyProfileEditor.test.tsx` and the lifecycle tests); a shared test helper for a default block is fine
+- [x] write tests for reading: Codex values, the default for an absent, `null` and empty `speed`, an unknown `speed` fails the load, Claude always `standard` / `false`
+- [x] write tests for normalization and `profileDirty`: a changed speed is dirty, a changed flag is dirty, equal profiles are not
+- [x] write tests for `copyOfShared` (both fields copied, the copy is independent) and for `withApiModeNormalization` in `providerRoutingModel.ts` (API key mode keeps both fields)
+- [x] run `npm run test:web` and `npm run type-check` - must pass before task 2
 
 ### Task 2: Send the fields and detect a backend without them
 - [ ] add `speedSupported: boolean` to `RoutingProfilesState`: true when `raw.shared.providers.codex` is a record with a `speed` key; false in `unsupportedRoutingProfiles()`

@@ -95,11 +95,15 @@ const providersProfile = (): RoutingProfile => ({
         mode: 'auto',
         mappings: [{ from: 'claude-opus-*', to: 'gpt-6-astra' }],
       },
+      speed: 'standard',
+      ignoreClientTier: false,
     },
     codex: {
       mode: 'api',
       apiCredential: 'codex-idx',
       fallback: { target: 'off', mode: 'auto', mappings: [] },
+      speed: 'standard',
+      ignoreClientTier: false,
     },
   },
 });
@@ -172,11 +176,15 @@ describe('reading routing profiles', () => {
           mode: 'auto',
           mappings: [{ from: 'claude-opus-*', to: 'gpt-6-astra' }],
         },
+        speed: 'standard',
+        ignoreClientTier: false,
       },
       codex: {
         mode: 'subscription',
         apiCredential: '',
         fallback: { target: 'off', mode: 'auto', mappings: [] },
+        speed: 'standard',
+        ignoreClientTier: false,
       },
     });
     const disabled = readRoutingProfiles({
@@ -225,11 +233,15 @@ describe('reading routing profiles', () => {
         mode: 'api',
         apiCredential: '',
         fallback: { target: 'off', mode: 'auto', mappings: [] },
+        speed: 'standard',
+        ignoreClientTier: false,
       },
       codex: {
         mode: 'subscription',
         apiCredential: '',
         fallback: { target: 'off', mode: 'auto', mappings: [] },
+        speed: 'standard',
+        ignoreClientTier: false,
       },
     });
   });
@@ -302,6 +314,98 @@ describe('reading routing profiles', () => {
         providersResponse({}, [{ key: RAW_KEY, profile: { ...rawShared(), providers: [] } }])
       )
     ).toThrow('Invalid routing provider settings');
+  });
+
+  it.each(['standard', 'fast', 'ultrafast'] as const)('reads the Codex speed %s', (speed) => {
+    const state = readRoutingProfiles(
+      providersResponse(
+        {
+          providers: {
+            ...rawProviders(),
+            codex: { ...rawProviders().codex, speed, 'ignore-client-tier': true },
+          },
+        },
+        [
+          {
+            key: RAW_KEY,
+            profile: {
+              ...rawShared(),
+              providers: { ...rawProviders(), codex: { ...rawProviders().codex, speed } },
+            },
+          },
+        ]
+      )
+    );
+    expect(state.shared.providers.codex.speed).toBe(speed);
+    expect(state.shared.providers.codex.ignoreClientTier).toBe(true);
+    expect(state.keys[0].profile.providers.codex.speed).toBe(speed);
+    expect(state.keys[0].profile.providers.codex.ignoreClientTier).toBe(false);
+  });
+
+  it.each([
+    ['absent', undefined],
+    ['null', null],
+    ['empty', ''],
+  ])('reads an %s Codex speed as standard', (_name, speed) => {
+    const codex: Record<string, unknown> = { ...rawProviders().codex };
+    if (speed !== undefined) codex.speed = speed;
+    const state = readRoutingProfiles(
+      providersResponse({ providers: { ...rawProviders(), codex } })
+    );
+    expect(state.shared.providers.codex.speed).toBe('standard');
+    expect(state.shared.providers.codex.ignoreClientTier).toBe(false);
+  });
+
+  it('reads only the boolean true as ignoring the client tier', () => {
+    for (const value of ['true', 1, null, false]) {
+      const state = readRoutingProfiles(
+        providersResponse({
+          providers: {
+            ...rawProviders(),
+            codex: { ...rawProviders().codex, 'ignore-client-tier': value },
+          },
+        })
+      );
+      expect(state.shared.providers.codex.ignoreClientTier).toBe(false);
+    }
+  });
+
+  it('fails the load on an unknown Codex speed', () => {
+    expect(() =>
+      readRoutingProfiles(
+        providersResponse({
+          providers: { ...rawProviders(), codex: { ...rawProviders().codex, speed: 'turbo' } },
+        })
+      )
+    ).toThrow('Invalid routing provider settings');
+  });
+
+  it('always reads Claude as standard without the flag, whatever the response holds', () => {
+    for (const speed of ['fast', 'ultrafast', 'turbo', 7]) {
+      const state = readRoutingProfiles(
+        providersResponse({
+          providers: {
+            ...rawProviders(),
+            claude: { ...rawProviders().claude, speed, 'ignore-client-tier': true },
+          },
+        })
+      );
+      expect(state.shared.providers.claude.speed).toBe('standard');
+      expect(state.shared.providers.claude.ignoreClientTier).toBe(false);
+    }
+  });
+
+  it('gives both providers the default speed on an older backend', () => {
+    const state = readRoutingProfiles(response());
+    for (const provider of ['claude', 'codex'] as const) {
+      expect(state.shared.providers[provider].speed).toBe('standard');
+      expect(state.shared.providers[provider].ignoreClientTier).toBe(false);
+    }
+    const legacy = providersFromClaudeFallback({ enabled: true, mode: 'auto', mappings: [] });
+    expect(legacy.claude.speed).toBe('standard');
+    expect(legacy.claude.ignoreClientTier).toBe(false);
+    expect(legacy.codex.speed).toBe('standard');
+    expect(legacy.codex.ignoreClientTier).toBe(false);
   });
 
   it('accepts an omitted preferred-accounts block and an empty tiebreak', () => {

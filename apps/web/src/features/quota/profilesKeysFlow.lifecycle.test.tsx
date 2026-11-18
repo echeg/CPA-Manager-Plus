@@ -245,6 +245,8 @@ describe('provider routing saves with the real key profiles hook', () => {
           mode: 'api',
           apiCredential: 'codex-key-1',
           fallback: { target: 'off', mode: 'auto', mappings: [] },
+          speed: 'standard',
+          ignoreClientTier: false,
         },
       },
     });
@@ -295,6 +297,8 @@ describe('provider routing saves with the real key profiles hook', () => {
           mode: 'subscription',
           apiCredential: 'codex-key-1',
           fallback: { target: 'api', mode: 'auto', mappings: [] },
+          speed: 'standard',
+          ignoreClientTier: false,
         },
       },
     });

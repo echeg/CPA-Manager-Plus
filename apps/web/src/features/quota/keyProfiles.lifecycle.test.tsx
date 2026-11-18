@@ -298,6 +298,8 @@ describe('quota settings bar on a backend with /routing/profiles', () => {
       mode: 'api',
       apiCredential: 'codex-key-1',
       fallback: { target: 'off', mode: 'auto', mappings: [] },
+      speed: 'standard',
+      ignoreClientTier: false,
     };
     keyProfiles = makeKeyProfiles(profilesState({ supported: false, shared: stored }));
     await mount();

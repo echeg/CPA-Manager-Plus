@@ -23,7 +23,9 @@ import { preferredAccountOptions, withPickerRule } from './routingModel';
  * Canonical form of one provider block: the credential is trimmed, API key mode
  * carries `target: off` (the save body does too), and the Codex fallback keeps only
  * its target because CPA stores no Codex mode or mappings. Claude's mode and
- * mappings are kept under every target: they survive as hidden values.
+ * mappings are kept under every target: they survive as hidden values. The Codex
+ * speed and flag are carried for both providers; the reader keeps Claude's at the
+ * defaults.
  */
 function normalizeProviderRouting(
   provider: ApiProvider,
@@ -35,6 +37,8 @@ function normalizeProviderRouting(
       mode: routing.mode,
       apiCredential: routing.apiCredential.trim(),
       fallback: { target, mode: 'auto', mappings: [] },
+      speed: routing.speed,
+      ignoreClientTier: routing.ignoreClientTier,
     };
   const fallback = normalizeFallbackSettings({
     enabled: false,
@@ -45,6 +49,8 @@ function normalizeProviderRouting(
     mode: routing.mode,
     apiCredential: routing.apiCredential.trim(),
     fallback: { target, mode: fallback.mode, mappings: fallback.mappings },
+    speed: routing.speed,
+    ignoreClientTier: routing.ignoreClientTier,
   };
 }
 
@@ -97,6 +103,8 @@ const copyOfProviderRouting = (routing: ProviderRouting): ProviderRouting => ({
     mode: routing.fallback.mode,
     mappings: routing.fallback.mappings.map((mapping) => ({ ...mapping })),
   },
+  speed: routing.speed,
+  ignoreClientTier: routing.ignoreClientTier,
 });
 
 /** A new key profile starts as an independent copy of the shared profile, hidden values included. */

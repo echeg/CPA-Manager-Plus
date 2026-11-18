@@ -31,6 +31,8 @@ const routing = (patch: Partial<ProviderRouting> = {}): ProviderRouting => ({
   mode: 'subscription',
   apiCredential: 'key-idx-1',
   fallback: { target: 'off', mode: 'auto', mappings },
+  speed: 'standard',
+  ignoreClientTier: false,
   ...patch,
 });
 const keyOptions: ApiKeyOption[] = [

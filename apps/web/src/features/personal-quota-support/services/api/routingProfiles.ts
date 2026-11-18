@@ -17,6 +17,8 @@ export interface SelectionSlots {
 
 export type ProviderMode = 'subscription' | 'api';
 export type FallbackTarget = 'off' | 'codex' | 'api';
+/** Codex speed tier of a profile; Claude always holds `standard`. */
+export type CodexSpeed = 'standard' | 'fast' | 'ultrafast';
 
 /** One provider's routing: subscriptions or its API key, and where to go when subscriptions fail. */
 export interface ProviderRouting {
@@ -30,6 +32,10 @@ export interface ProviderRouting {
     mode: 'auto' | 'always';
     mappings: Array<{ from: string; to: string }>;
   };
+  /** Codex only; Claude always reads as `standard` and never sends it. */
+  speed: CodexSpeed;
+  /** Codex only: ignore the service tier the client sends. Claude always reads `false`. */
+  ignoreClientTier: boolean;
 }
 
 export type ApiProvider = 'claude' | 'codex';
@@ -111,6 +117,8 @@ export const defaultProviderRouting = (): ProviderRouting => ({
   mode: 'subscription',
   apiCredential: '',
   fallback: { target: 'off', mode: 'auto', mappings: [] },
+  speed: 'standard',
+  ignoreClientTier: false,
 });
 
 const emptyProfile = (): RoutingProfile => ({
@@ -151,6 +159,7 @@ export function validClaudeMappings(routing: ProviderRouting, providersSupported
 }
 
 const PROVIDER_MODES: readonly ProviderMode[] = ['subscription', 'api'];
+export const CODEX_SPEEDS: readonly CodexSpeed[] = ['standard', 'fast', 'ultrafast'];
 /** Fallback targets per provider, in display order. Codex cannot fall back to itself. */
 export const FALLBACK_TARGETS: Record<ApiProvider, readonly FallbackTarget[]> = {
   claude: ['off', 'codex', 'api'],
@@ -204,6 +213,10 @@ function readProviderRouting(provider: ApiProvider, raw: unknown): ProviderRouti
         ? mappingsRaw.map((item) => ({ from: item.from as string, to: item.to as string }))
         : [],
     },
+    // The reader is the one place that forces Claude's defaults: CPA rejects a speed
+    // or the flag under Claude, so whatever the response holds there is not kept.
+    speed: provider === 'codex' ? readEnum(raw.speed, CODEX_SPEEDS, 'standard') : 'standard',
+    ignoreClientTier: provider === 'codex' && raw['ignore-client-tier'] === true,
   };
 }
 
@@ -220,6 +233,8 @@ export function providersFromClaudeFallback(
         mode: legacy.mode,
         mappings: legacy.mappings.map((mapping) => ({ ...mapping })),
       },
+      speed: 'standard',
+      ignoreClientTier: false,
     },
     codex: defaultProviderRouting(),
   };

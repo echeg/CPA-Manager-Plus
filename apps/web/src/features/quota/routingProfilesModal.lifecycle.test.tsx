@@ -214,6 +214,8 @@ describe('routing profiles modal rows', () => {
           mode: 'api',
           apiCredential: 'codex-key-1',
           fallback: { target: 'off', mode: 'auto', mappings: [] },
+          speed: 'standard',
+          ignoreClientTier: false,
         },
       },
     };

@@ -372,16 +372,24 @@ describe('withApiModeNormalization', () => {
       mode: 'api',
       apiCredential: 'claude-key-1',
       fallback: { target: 'codex', mode: 'always', mappings },
+      speed: 'standard',
+      ignoreClientTier: false,
     };
     const codex: ProviderRouting = {
       mode: 'api',
       apiCredential: 'codex-key-1',
       fallback: { target: 'api', mode: 'auto', mappings: [] },
+      speed: 'fast',
+      ignoreClientTier: true,
     };
     expect(withApiModeNormalization({ claude, codex })).toEqual({
       claude: { ...claude, fallback: { target: 'off', mode: 'always', mappings } },
       codex: { ...codex, fallback: { target: 'off', mode: 'auto', mappings: [] } },
     });
+    // The Codex speed and flag survive API key mode as stored values.
+    const normalized = withApiModeNormalization({ claude, codex });
+    expect(normalized.codex.speed).toBe('fast');
+    expect(normalized.codex.ignoreClientTier).toBe(true);
     // The draft itself is not changed.
     expect(claude.fallback.target).toBe('codex');
   });
@@ -391,6 +399,8 @@ describe('withApiModeNormalization', () => {
       mode: 'subscription',
       apiCredential: 'claude-key-1',
       fallback: { target: 'api', mode: 'auto', mappings },
+      speed: 'standard',
+      ignoreClientTier: false,
     };
     const codex = defaultProviderRouting();
     const result = withApiModeNormalization({ claude, codex });
