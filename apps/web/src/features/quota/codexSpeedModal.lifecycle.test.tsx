@@ -168,6 +168,22 @@ const badge = (row: ReactTestInstance) =>
 const click = async (button: ReactTestInstance) => {
   await act(async () => button.props.onClick());
 };
+/**
+ * The reason a row shows (`data-speed-reason`), or `''` without one. The speed group must
+ * name that reason in `aria-describedby`, so a screen reader announces why a control is off.
+ */
+const reasonOf = (row: ReactTestInstance): string => {
+  const group = row.find((node) => node.type === 'div' && node.props.role === 'group');
+  const spans = row.findAll((node) => node.type === 'span' && node.props['data-speed-reason']);
+  expect(spans.length).toBeLessThanOrEqual(1);
+  if (spans.length === 0) {
+    expect(group.props['aria-describedby']).toBeUndefined();
+    return '';
+  }
+  expect(spans[0].props.id).toBeTruthy();
+  expect(group.props['aria-describedby']).toBe(spans[0].props.id);
+  return spans[0].props['data-speed-reason'];
+};
 const allControls = () => [...rows().flatMap(speedButtons), ...rows().map((row) => flag(row))];
 
 describe('codex speed modal rows', () => {
@@ -304,6 +320,7 @@ describe('codex speed modal failure and disabled paths', () => {
     expect(speedButtons(beta).every((button) => button.props.disabled)).toBe(true);
     expect(flag(beta).props.disabled).toBe(true);
     expect(text(beta)).toContain(i18n.t('quota_management.codex_speed.table_reason_api_mode'));
+    expect([defaultRow, alpha, beta].map(reasonOf)).toEqual(['', '', 'api_mode']);
     expect(speedButtons(alpha).some((button) => button.props.disabled)).toBe(false);
     expect(speedButtons(defaultRow).some((button) => button.props.disabled)).toBe(false);
     // The stored value stays visible.
@@ -328,6 +345,11 @@ describe('codex speed modal failure and disabled paths', () => {
       expect(text(row)).not.toContain(i18n.t('quota_management.codex_speed.table_reason_api_mode'));
     }
     expect(text(beta)).not.toContain(note);
+    expect([defaultRow, alpha, beta].map(reasonOf)).toEqual([
+      'claude_fallback',
+      'claude_fallback',
+      '',
+    ]);
     await click(speedButton(defaultRow, 'ultrafast'));
     expect(keyProfiles.saveShared).toHaveBeenCalledExactlyOnceWith(
       shared(codex({ mode: 'api', speed: 'ultrafast' }))
@@ -345,6 +367,7 @@ describe('codex speed modal failure and disabled paths', () => {
       expect(flag(row).props.disabled).toBe(true);
       expect(text(row)).toContain(i18n.t('quota_management.codex_speed.table_reason_read_only'));
     }
+    expect([defaultRow, alpha, beta].map(reasonOf)).toEqual(['', 'read_only', 'read_only']);
     expect(
       root().findAll((node) => Boolean(node.props['data-codex-speed-read-only']))
     ).toHaveLength(1);

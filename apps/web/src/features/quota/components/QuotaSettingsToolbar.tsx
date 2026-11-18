@@ -333,7 +333,7 @@ export function QuotaSettingsToolbar({
       {routing.error && (
         <div className={styles.error} role="alert">
           {showEmails ? routing.error : maskQuotaText(routing.error)}{' '}
-          {routing.error && !values && (
+          {!values && (
             <Button variant="secondary" size="sm" onClick={routing.reload}>
               {t('common.refresh')}
             </Button>

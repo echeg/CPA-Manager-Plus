@@ -11,6 +11,7 @@ import {
   type ProviderMode,
   type ProviderRouting,
 } from '@/features/personal-quota-support/services/api/routingProfiles';
+import type { CodexSpeedUse } from '../codexSpeedModel';
 import { providerFieldErrors, type ApiKeyOption } from '../providerRoutingModel';
 import { FallbackModeMappings } from './FallbackSettingsEditor';
 import { Select, type SelectOption } from './Select';
@@ -40,10 +41,10 @@ export interface ProviderRoutingBlockProps {
   /** `false` on a backend without the Codex speed: the Speed row is not rendered. */
   speedSupported?: boolean;
   /**
-   * The profile's Claude falls back to Codex. That leg runs on Codex subscriptions with
-   * this profile's Codex speed, so the Speed row stays enabled in Codex API key mode.
+   * `codexSpeedUse` of the draft: `unused` disables the Speed row with an explanation,
+   * `claude_fallback` keeps it enabled with a note.
    */
-  claudeFallbackToCodex?: boolean;
+  speedUse?: CodexSpeedUse;
   onChange: (value: ProviderRouting) => void;
   onPreferredChange: (authIndex: string) => void;
 }
@@ -64,7 +65,7 @@ export function ProviderRoutingBlock({
   modeLocked,
   providersSupported,
   speedSupported = false,
-  claudeFallbackToCodex = false,
+  speedUse = 'applies',
   onChange,
   onPreferredChange,
 }: ProviderRoutingBlockProps) {
@@ -102,12 +103,8 @@ export function ProviderRoutingBlock({
   const mappingsShown = value.mode !== 'api' && value.fallback.target === 'codex';
 
   const speedShown = provider === 'codex' && speedSupported;
-  // API key credentials never carry a speed tier, but CPA ignores the stored mode while it
-  // is locked, so the speed still applies there. The lock itself never disables the row.
-  const speedInApiMode = value.mode === 'api' && !modeLocked;
-  // Claude's fallback to Codex still runs on subscriptions with this speed.
-  const speedUnused = speedInApiMode && !claudeFallbackToCodex;
-  const speedDisabled = disabled || speedUnused;
+  // The lock itself never disables the row: CPA ignores the stored mode while it is locked.
+  const speedDisabled = disabled || speedUse === 'unused';
   const speedItems: SegmentedTabItem<CodexSpeed>[] = CODEX_SPEEDS.map((speed) => ({
     id: speed,
     label: t(`quota_management.codex_speed.speed_${speed}`),
@@ -286,12 +283,12 @@ export function ProviderRoutingBlock({
           />
           <p className={styles.hint}>{t('quota_management.codex_speed.ignore_client_tier_hint')}</p>
           <p className={styles.hint}>{t('quota_management.codex_speed.ultrafast_hint')}</p>
-          {speedUnused && (
+          {speedUse === 'unused' && (
             <p className={styles.hint} data-provider-speed-api-mode>
               {t('quota_management.codex_speed.api_mode_hint')}
             </p>
           )}
-          {speedInApiMode && claudeFallbackToCodex && (
+          {speedUse === 'claude_fallback' && (
             <p className={styles.hint} data-provider-speed-claude-fallback>
               {t('quota_management.codex_speed.claude_fallback_hint')}
             </p>

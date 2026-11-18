@@ -378,10 +378,11 @@ describe('ProviderRoutingBlock Codex speed', () => {
     expect(text()).toContain('Ultrafast applies to models that offer it.');
   });
 
-  test('API key mode keeps the row visible but disabled, with the explanation', async () => {
+  test('an unused speed keeps the row visible but disabled, with the explanation', async () => {
     await mount({
       provider: 'codex',
       speedSupported: true,
+      speedUse: 'unused',
       value: routing({ mode: 'api', speed: 'fast', ignoreClientTier: true }),
     });
     expect(speedTabs()!.props.activeTab).toBe('fast');
@@ -395,7 +396,7 @@ describe('ProviderRoutingBlock Codex speed', () => {
     const { onChange } = await mount({
       provider: 'codex',
       speedSupported: true,
-      claudeFallbackToCodex: true,
+      speedUse: 'claude_fallback',
       value: routing({ mode: 'api', speed: 'fast' }),
     });
     expect(speedTabs()!.props.disabled).toBe(false);
@@ -406,24 +407,15 @@ describe('ProviderRoutingBlock Codex speed', () => {
     expect(onChange).toHaveBeenCalledExactlyOnceWith(routing({ mode: 'api', speed: 'ultrafast' }));
   });
 
-  test("Claude's fallback to Codex adds no hint in Subscription mode", async () => {
-    await mount({ provider: 'codex', speedSupported: true, claudeFallbackToCodex: true });
-    expect(speedTabs()!.props.disabled).toBe(false);
-    expect(byData('data-provider-speed-claude-fallback')).toHaveLength(0);
-  });
-
-  test('an API-key fallback in Subscription mode keeps the row enabled', async () => {
-    await mount({
-      provider: 'codex',
-      speedSupported: true,
-      value: routing({ fallback: { target: 'api', mode: 'auto', mappings } }),
-    });
+  test('a speed that applies keeps the row enabled, with neither note', async () => {
+    await mount({ provider: 'codex', speedSupported: true });
     expect(speedTabs()!.props.disabled).toBe(false);
     expect(flagSwitch().props.disabled).toBe(false);
     expect(byData('data-provider-speed-api-mode')).toHaveLength(0);
+    expect(byData('data-provider-speed-claude-fallback')).toHaveLength(0);
   });
 
-  test('the mode lock keeps the row enabled, also with a stored API key mode', async () => {
+  test('the mode lock locks the mode but never the Speed row', async () => {
     await mount({
       provider: 'codex',
       speedSupported: true,

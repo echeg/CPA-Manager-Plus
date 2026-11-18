@@ -9,23 +9,30 @@ import { sha256Hex } from '@/utils/apiKeyHash';
 import type { KeyDisplayRow } from './keyProfilesModel';
 
 /**
- * Why a row of the speed table takes no input:
- * - `read_only`: a key row while key profiles are not used (`supported: false`);
- * - `api_mode`: the effective Codex mode is API key, whose requests get no speed tier,
- *   and Claude does not fall back to Codex.
+ * Whether CPA puts a profile's Codex speed on requests:
+ * - `applies`: Codex runs on subscriptions, or its stored mode is locked (CPA ignores it);
+ * - `claude_fallback`: Codex uses an API key, whose requests get no speed tier, but Claude
+ *   falls back to Codex. CPA runs that leg on Codex subscriptions with this profile's speed,
+ *   so the speed applies to it alone;
+ * - `unused`: Codex uses an API key and Claude does not fall back to Codex.
  */
-export type SpeedDisabledReason = '' | 'read_only' | 'api_mode';
+export type CodexSpeedUse = 'applies' | 'claude_fallback' | 'unused';
+
+/** The one rule for the editor's Speed row and the speed table; see `CodexSpeedUse`. */
+export function codexSpeedUse(
+  providers: RoutingProfile['providers'],
+  modeLocked: boolean
+): CodexSpeedUse {
+  if (modeLocked || providers.codex.mode !== 'api') return 'applies';
+  return effectiveFallbackTarget(providers.claude) === 'codex' ? 'claude_fallback' : 'unused';
+}
 
 /**
- * Codex is in API key mode, but Claude falls back to Codex. CPA runs that fallback leg on
- * Codex subscriptions with this profile's Codex speed, so the speed applies to it alone.
+ * Why a row of the speed table takes no input:
+ * - `read_only`: a key row while key profiles are not used (`supported: false`);
+ * - `api_mode`: CPA puts the row's Codex speed on no request (`codexSpeedUse` is `unused`).
  */
-export const codexSpeedOnlyInClaudeFallback = (providers: RoutingProfile['providers']): boolean =>
-  providers.codex.mode === 'api' && effectiveFallbackTarget(providers.claude) === 'codex';
-
-/** CPA puts the profile's Codex speed on no request: Codex uses an API key, and Claude does not fall back to Codex. */
-const codexSpeedUnused = (providers: RoutingProfile['providers']): boolean =>
-  providers.codex.mode === 'api' && !codexSpeedOnlyInClaudeFallback(providers);
+export type SpeedDisabledReason = '' | 'read_only' | 'api_mode';
 
 /** One row of the speed table. */
 export interface SpeedRow {
@@ -37,7 +44,7 @@ export interface SpeedRow {
   speed: CodexSpeed;
   ignoreClientTier: boolean;
   disabledReason: SpeedDisabledReason;
-  /** The speed applies only to Claude requests that fall back to Codex (see `codexSpeedOnlyInClaudeFallback`). */
+  /** The speed applies only to Claude requests that fall back to Codex (`claude_fallback`). */
   claudeFallbackOnly: boolean;
 }
 
@@ -48,34 +55,30 @@ export type CodexSpeedPatch = Partial<Pick<ProviderRouting, 'speed' | 'ignoreCli
  * profile shows the Default profile's values; the table never merges the two.
  */
 export function buildSpeedRows(state: RoutingProfilesState, rows: KeyDisplayRow[]): SpeedRow[] {
-  const shared = state.shared.providers.codex;
-  // Under `supported: false` CPA ignores the stored provider mode, while the shared
-  // speed still applies, so the Default row stays editable in API key mode there.
-  const defaultRow: SpeedRow = {
-    id: 'default',
-    keyRow: null,
-    speed: shared.speed,
-    ignoreClientTier: shared.ignoreClientTier,
-    disabledReason: state.supported && codexSpeedUnused(state.shared.providers) ? 'api_mode' : '',
-    claudeFallbackOnly: state.supported && codexSpeedOnlyInClaudeFallback(state.shared.providers),
-  };
-  const keyRows = rows.map((row): SpeedRow => {
-    const { providers } = row.profile ?? state.shared;
-    const disabledReason: SpeedDisabledReason = !state.supported
-      ? 'read_only'
-      : codexSpeedUnused(providers)
-        ? 'api_mode'
-        : '';
+  const toRow = (
+    id: string,
+    keyRow: KeyDisplayRow | null,
+    { providers }: RoutingProfile
+  ): SpeedRow => {
+    // Under `supported: false` CPA ignores the stored provider mode, while the shared
+    // speed still applies, so the Default row stays editable in API key mode there.
+    // Key rows are read-only then, whatever their mode.
+    const use = codexSpeedUse(providers, !state.supported);
     return {
-      id: `key-${sha256Hex(row.key).toLowerCase()}`,
-      keyRow: row,
+      id,
+      keyRow,
       speed: providers.codex.speed,
       ignoreClientTier: providers.codex.ignoreClientTier,
-      disabledReason,
-      claudeFallbackOnly: state.supported && codexSpeedOnlyInClaudeFallback(providers),
+      disabledReason: keyRow && !state.supported ? 'read_only' : use === 'unused' ? 'api_mode' : '',
+      claudeFallbackOnly: use === 'claude_fallback',
     };
-  });
-  return [defaultRow, ...keyRows];
+  };
+  return [
+    toRow('default', null, state.shared),
+    ...rows.map((row) =>
+      toRow(`key-${sha256Hex(row.key).toLowerCase()}`, row, row.profile ?? state.shared)
+    ),
+  ];
 }
 
 /** A copy of the profile with the Codex speed and / or flag replaced and nothing else changed. */

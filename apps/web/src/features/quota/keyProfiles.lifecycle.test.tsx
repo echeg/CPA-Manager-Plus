@@ -20,6 +20,7 @@ import type { AuthFileItem } from '@/features/personal-quota-support/types';
 import { sha256Hex } from '@/utils/apiKeyHash';
 import { ClaudeFallbackControl } from './components/ClaudeFallbackControl';
 import { ClientKeysModal } from './components/ClientKeysModal';
+import { CodexSpeedModal } from './components/CodexSpeedModal';
 import { KeyProfileEditor } from './components/KeyProfileEditor';
 import { ProviderRoutingBlock } from './components/ProviderRoutingBlock';
 import { QuotaSettingsBar, QuotaSettingsToolbar } from './components/QuotaSettingsToolbar';
@@ -218,6 +219,8 @@ const text = (node: ReactTestInstance): string =>
   node.children.map((child) => (typeof child === 'string' ? child : text(child))).join('');
 const profilesModal = () => root().findByType(RoutingProfilesModal);
 const keysModal = () => root().findByType(ClientKeysModal);
+const speedButton = () => buttonWith('data-open-speed');
+const speedModal = () => root().findByType(CodexSpeedModal);
 const keyRows = () =>
   root().findAll((node) => node.type === 'li' && node.props['data-client-key-row']);
 const editors = () => root().findAllByType(KeyProfileEditor);
@@ -364,6 +367,18 @@ describe('quota settings bar on a backend with /routing/profiles', () => {
     expect(profilesModal().props.open).toBe(false);
     expect(keyRows()).toHaveLength(2);
     expect(keyProfiles.reload).toHaveBeenCalledTimes(2);
+    expect(speedModal().props.open).toBe(false);
+
+    await act(async () => keysModal().props.onClose());
+    await click(speedButton());
+    expect(speedModal().props.open).toBe(true);
+    expect(speedModal().props.keyProfiles).toBe(keyProfiles);
+    expect(keysModal().props.open).toBe(false);
+    expect(profilesModal().props.open).toBe(false);
+    expect(keyProfiles.reload).toHaveBeenCalledTimes(3);
+
+    await act(async () => speedModal().props.onClose());
+    expect(speedModal().props.open).toBe(false);
   });
 
   test('Configure opens the Profiles modal on that key, and Back returns to the keys', async () => {
@@ -454,6 +469,8 @@ describe('quota settings bar on a backend without /routing/profiles', () => {
     expect(root().findByType(QuotaSettingsToolbar).props.fallbackControl).toBeDefined();
     expect(root().findAllByType(RoutingProfilesModal)).toHaveLength(0);
     expect(root().findAllByType(ClientKeysModal)).toHaveLength(0);
+    expect(speedButton()).toBeUndefined();
+    expect(root().findAllByType(CodexSpeedModal)).toHaveLength(0);
     expect(useSubscriptionRouting).toHaveBeenLastCalledWith(false);
   });
 

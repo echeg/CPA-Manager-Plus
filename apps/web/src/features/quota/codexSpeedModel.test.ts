@@ -6,7 +6,7 @@ import {
   type RoutingProfilesState,
 } from '@/features/personal-quota-support/services/api/routingProfiles';
 import { sha256Hex } from '@/utils/apiKeyHash';
-import { buildSpeedRows, withCodexSpeed } from './codexSpeedModel';
+import { buildSpeedRows, codexSpeedUse, withCodexSpeed } from './codexSpeedModel';
 import { buildKeyRows } from './keyProfilesModel';
 
 const RAW_ALPHA = 'sk-live-RAWKEY-alpha-000111';
@@ -32,6 +32,19 @@ const profile = (codexRouting: ProviderRouting, primary = 'reserves'): RoutingPr
   };
 };
 
+/** A profile whose Claude falls back to Codex (the Claude block of `profile` has no fallback). */
+const viaClaude = (codexRouting: ProviderRouting): RoutingProfile => {
+  const base = profile(codexRouting);
+  const claude = base.providers.claude;
+  return {
+    ...base,
+    providers: {
+      ...base.providers,
+      claude: { ...claude, fallback: { ...claude.fallback, target: 'codex' } },
+    },
+  };
+};
+
 const state = (overrides: Partial<RoutingProfilesState> = {}): RoutingProfilesState => ({
   supported: true,
   unsupportedBackend: false,
@@ -49,6 +62,30 @@ const keyRows = (own: Partial<Record<string, RoutingProfile>> = {}) =>
     [RAW_ALPHA, RAW_BETA, RAW_GAMMA].map((key) => ({ key, profile: own[key] ?? null })),
     [{ apiKeyHash: sha256Hex(RAW_ALPHA).toLowerCase(), alias: 'Laptop' }]
   );
+
+describe('codexSpeedUse', () => {
+  test('Subscription mode applies the speed, with any fallback target', () => {
+    expect(codexSpeedUse(profile(codex()).providers, false)).toBe('applies');
+    const apiTarget = codex({ fallback: { target: 'api', mode: 'auto', mappings: [] } });
+    expect(codexSpeedUse(profile(apiTarget).providers, false)).toBe('applies');
+    expect(codexSpeedUse(viaClaude(codex()).providers, false)).toBe('applies');
+  });
+
+  test('API key mode leaves the speed unused unless Claude falls back to Codex', () => {
+    expect(codexSpeedUse(profile(codex({ mode: 'api' })).providers, false)).toBe('unused');
+    const fallback = viaClaude(codex({ mode: 'api' }));
+    expect(codexSpeedUse(fallback.providers, false)).toBe('claude_fallback');
+    // Claude in API key mode skips its fallback, so the speed reaches no request.
+    const claudeApi = { ...fallback.providers.claude, mode: 'api' as const };
+    expect(codexSpeedUse({ ...fallback.providers, claude: claudeApi }, false)).toBe('unused');
+  });
+
+  test('a locked mode applies the speed, also with a stored API key mode', () => {
+    // CPA ignores the stored mode and fallback target while it is locked.
+    expect(codexSpeedUse(profile(codex({ mode: 'api' })).providers, true)).toBe('applies');
+    expect(codexSpeedUse(viaClaude(codex({ mode: 'api' })).providers, true)).toBe('applies');
+  });
+});
 
 describe('buildSpeedRows', () => {
   test('the Default row comes first, then the keys in list order', () => {
@@ -93,17 +130,6 @@ describe('buildSpeedRows', () => {
 
   test('Codex in API key mode stays enabled while Claude falls back to Codex', () => {
     // CPA runs the Claude -> Codex leg on Codex subscriptions with the profile's Codex speed.
-    const viaClaude = (codexRouting: ProviderRouting): RoutingProfile => {
-      const base = profile(codexRouting);
-      const claude = base.providers.claude;
-      return {
-        ...base,
-        providers: {
-          ...base.providers,
-          claude: { ...claude, fallback: { ...claude.fallback, target: 'codex' } },
-        },
-      };
-    };
     const rows = buildSpeedRows(
       state({ shared: viaClaude(codex({ mode: 'api', speed: 'ultrafast' })) }),
       keyRows({ [RAW_BETA]: profile(codex({ mode: 'api' })), [RAW_GAMMA]: profile(codex()) })
