@@ -3,8 +3,10 @@ import en from '@/i18n/locales/en.json';
 import ru from '@/i18n/locales/ru.json';
 import zhCN from '@/i18n/locales/zh-CN.json';
 import zhTW from '@/i18n/locales/zh-TW.json';
+import codexSpeedModalSource from './components/CodexSpeedModal.tsx?raw';
 import keyProfileEditorSource from './components/KeyProfileEditor.tsx?raw';
 import providerRoutingBlockSource from './components/ProviderRoutingBlock.tsx?raw';
+import codexSpeedModelSource from './codexSpeedModel.ts?raw';
 import providerRoutingModelSource from './providerRoutingModel.ts?raw';
 
 type LocaleTree = { [key: string]: string | LocaleTree };
@@ -114,7 +116,7 @@ describe('key profiles and client keys locales', () => {
     }
   });
 
-  it('has every key the profile editor and provider blocks use in every locale', () => {
+  it('has every key the profile editor, provider blocks and speed table use in every locale', () => {
     const prefixes = new Set([
       'quota_management.provider_routing.errors',
       'quota_management.key_profiles.summary',
@@ -126,10 +128,15 @@ describe('key profiles and client keys locales', () => {
         ...literalKeys(keyProfileEditorSource),
         ...literalKeys(providerRoutingBlockSource),
         ...literalKeys(providerRoutingModelSource),
+        ...literalKeys(codexSpeedModalSource),
+        ...literalKeys(codexSpeedModelSource),
         ...dynamicProviderRoutingKeys,
       ].filter((key) => !prefixes.has(key))
     );
     expect([...used].filter((key) => key.includes('provider_routing')).length).toBeGreaterThan(15);
+    expect([...used].filter((key) => key.includes('codex_speed.table_')).length).toBeGreaterThan(
+      10
+    );
     for (const [name, locale] of Object.entries(locales)) {
       for (const key of used) {
         const value = lookup(locale, key);

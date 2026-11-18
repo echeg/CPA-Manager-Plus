@@ -1,0 +1,140 @@
+import { describe, expect, test } from 'vitest';
+import {
+  providersFromClaudeFallback,
+  type ProviderRouting,
+  type RoutingProfile,
+  type RoutingProfilesState,
+} from '@/features/personal-quota-support/services/api/routingProfiles';
+import { sha256Hex } from '@/utils/apiKeyHash';
+import { buildSpeedRows, withCodexSpeed } from './codexSpeedModel';
+import { buildKeyRows } from './keyProfilesModel';
+
+const RAW_ALPHA = 'sk-live-RAWKEY-alpha-000111';
+const RAW_BETA = 'sk-live-RAWKEY-beta-000222';
+const RAW_GAMMA = 'sk-live-RAWKEY-gamma-000333';
+
+const codex = (overrides: Partial<ProviderRouting> = {}): ProviderRouting => ({
+  mode: 'subscription',
+  apiCredential: '',
+  fallback: { target: 'off', mode: 'auto', mappings: [] },
+  speed: 'standard',
+  ignoreClientTier: false,
+  ...overrides,
+});
+
+const profile = (codexRouting: ProviderRouting, primary = 'reserves'): RoutingProfile => {
+  const providers = providersFromClaudeFallback({ enabled: false, mode: 'auto', mappings: [] });
+  return {
+    sessionAffinity: true,
+    preferredAccounts: { claude: 'claude-a' },
+    selection: { primary, tiebreak: 'round-robin' },
+    providers: { claude: providers.claude, codex: codexRouting },
+  };
+};
+
+const state = (overrides: Partial<RoutingProfilesState> = {}): RoutingProfilesState => ({
+  supported: true,
+  unsupportedBackend: false,
+  providersSupported: true,
+  speedSupported: true,
+  apiCredentials: { claude: [], codex: [] },
+  shared: profile(codex({ speed: 'fast', ignoreClientTier: true })),
+  keys: [],
+  selectionOptions: { narrowing: ['reserves'], pickers: ['round-robin'] },
+  ...overrides,
+});
+
+const keyRows = (own: Partial<Record<string, RoutingProfile>> = {}) =>
+  buildKeyRows(
+    [RAW_ALPHA, RAW_BETA, RAW_GAMMA].map((key) => ({ key, profile: own[key] ?? null })),
+    [{ apiKeyHash: sha256Hex(RAW_ALPHA).toLowerCase(), alias: 'Laptop' }]
+  );
+
+describe('buildSpeedRows', () => {
+  test('the Default row comes first, then the keys in list order', () => {
+    const rows = buildSpeedRows(state(), keyRows());
+    expect(rows.map((row) => row.kind)).toEqual(['default', 'key', 'key', 'key']);
+    expect(rows[0]).toMatchObject({ id: 'default', key: null, profile: null, disabledReason: '' });
+    expect(rows.slice(1).map((row) => row.key)).toEqual([RAW_ALPHA, RAW_BETA, RAW_GAMMA]);
+    expect(rows[1]).toMatchObject({ label: 'Laptop', hasAlias: true });
+    expect(rows[2].hasAlias).toBe(false);
+  });
+
+  test('a key without its own profile shows the Default values; one with a profile shows its own', () => {
+    const own = profile(codex({ speed: 'ultrafast', ignoreClientTier: false }), 'priority');
+    const rows = buildSpeedRows(state(), keyRows({ [RAW_BETA]: own }));
+    expect(rows[0]).toMatchObject({ speed: 'fast', ignoreClientTier: true });
+    expect(rows[1]).toMatchObject({ speed: 'fast', ignoreClientTier: true, profile: null });
+    expect(rows[2]).toMatchObject({ speed: 'ultrafast', ignoreClientTier: false, profile: own });
+    expect(rows[3]).toMatchObject({ speed: 'fast', ignoreClientTier: true, profile: null });
+  });
+
+  test('a key row is api_mode when its effective Codex mode is API key', () => {
+    const apiOwn = profile(codex({ mode: 'api', speed: 'fast' }));
+    const rows = buildSpeedRows(state(), keyRows({ [RAW_GAMMA]: apiOwn }));
+    expect(rows.map((row) => row.disabledReason)).toEqual(['', '', '', 'api_mode']);
+    // A Default profile in API key mode is inherited by keys without their own profile.
+    const apiShared = buildSpeedRows(
+      state({ shared: profile(codex({ mode: 'api' })) }),
+      keyRows({ [RAW_BETA]: profile(codex()) })
+    );
+    expect(apiShared.map((row) => row.disabledReason)).toEqual([
+      'api_mode',
+      'api_mode',
+      '',
+      'api_mode',
+    ]);
+  });
+
+  test('under supported: false every key row is read_only and the Default row stays enabled', () => {
+    const rows = buildSpeedRows(state({ supported: false }), keyRows());
+    expect(rows.map((row) => row.disabledReason)).toEqual([
+      '',
+      'read_only',
+      'read_only',
+      'read_only',
+    ]);
+    // CPA ignores the stored mode there, while the shared speed applies.
+    const apiShared = buildSpeedRows(
+      state({ supported: false, shared: profile(codex({ mode: 'api' })) }),
+      keyRows()
+    );
+    expect(apiShared[0].disabledReason).toBe('');
+    expect(apiShared.slice(1).every((row) => row.disabledReason === 'read_only')).toBe(true);
+  });
+
+  test('no id or label holds a raw key', () => {
+    const rows = buildSpeedRows(state(), keyRows({ [RAW_BETA]: profile(codex()) }));
+    for (const row of rows) {
+      for (const raw of [RAW_ALPHA, RAW_BETA, RAW_GAMMA]) {
+        expect(row.id).not.toContain(raw);
+        expect(row.label).not.toContain(raw);
+        expect(row.masked).not.toContain(raw);
+      }
+    }
+    expect(new Set(rows.map((row) => row.id)).size).toBe(rows.length);
+  });
+
+  test('without keys only the Default row is built', () => {
+    expect(buildSpeedRows(state(), [])).toHaveLength(1);
+  });
+});
+
+describe('withCodexSpeed', () => {
+  test('changes only the Codex speed and flag', () => {
+    const input = profile(codex({ speed: 'fast', apiCredential: 'idx' }));
+    const before = JSON.parse(JSON.stringify(input));
+    const speedOnly = withCodexSpeed(input, { speed: 'ultrafast' });
+    expect(speedOnly).toEqual({
+      ...before,
+      providers: { ...before.providers, codex: { ...before.providers.codex, speed: 'ultrafast' } },
+    });
+    const flagOnly = withCodexSpeed(input, { ignoreClientTier: true });
+    expect(flagOnly.providers.codex).toEqual({ ...before.providers.codex, ignoreClientTier: true });
+    expect(flagOnly.providers.claude).toEqual(before.providers.claude);
+    // The input is not mutated.
+    expect(input).toEqual(before);
+    expect(speedOnly.providers).not.toBe(input.providers);
+    expect(speedOnly.providers.codex).not.toBe(input.providers.codex);
+  });
+});
