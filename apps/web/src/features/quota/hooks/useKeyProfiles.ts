@@ -211,7 +211,8 @@ export function useKeyProfiles(disabled: boolean) {
         key,
         profile,
         state.selectionOptions,
-        state.providersSupported
+        state.providersSupported,
+        state.speedSupported
       );
       if (!isCurrent()) return false;
       useConfigStore.getState().clearCache();
@@ -237,7 +238,8 @@ export function useKeyProfiles(disabled: boolean) {
         profile,
         nextTTL,
         state.selectionOptions,
-        state.providersSupported
+        state.providersSupported,
+        state.speedSupported
       );
       if (!isCurrent()) return false;
       useConfigStore.getState().clearCache();

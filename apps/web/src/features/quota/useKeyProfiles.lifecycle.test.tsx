@@ -108,6 +108,7 @@ const profilesState = (keys: RoutingProfilesState['keys'] = []): RoutingProfiles
   supported: true,
   unsupportedBackend: false,
   providersSupported: true,
+  speedSupported: true,
   apiCredentials: { claude: [], codex: [] },
   shared: sharedProfile(),
   keys,
@@ -268,6 +269,7 @@ describe('useKeyProfiles', () => {
       KEY_A,
       ownProfile(),
       profilesState().selectionOptions,
+      true,
       true
     );
     expect(hook.state).toBe(saved);
@@ -289,6 +291,7 @@ describe('useKeyProfiles', () => {
       KEY_B,
       null,
       profilesState().selectionOptions,
+      true,
       true
     );
     expect(ownProfiles()).toBe(0);
@@ -564,6 +567,7 @@ describe('useKeyProfiles shared profile', () => {
       ownProfile(),
       '24h',
       profilesState().selectionOptions,
+      true,
       true
     );
     expect(routingProfilesApi.get).toHaveBeenCalledTimes(2);
@@ -588,12 +592,13 @@ describe('useKeyProfiles shared profile', () => {
       sharedProfile(),
       undefined,
       profilesState().selectionOptions,
+      true,
       true
     );
   });
 
   test('saves on an older backend pass providersSupported false for the legacy body', async () => {
-    const legacy = { ...profilesState(), providersSupported: false };
+    const legacy = { ...profilesState(), providersSupported: false, speedSupported: false };
     vi.mocked(routingProfilesApi.get).mockResolvedValue(legacy);
     const saveKey = vi.spyOn(routingProfilesApi, 'saveKeyProfile').mockResolvedValue(legacy);
     const saveShared = vi.spyOn(routingProfilesApi, 'saveSharedProfile').mockResolvedValue(legacy);
@@ -608,12 +613,42 @@ describe('useKeyProfiles shared profile', () => {
       KEY_A,
       ownProfile(),
       legacy.selectionOptions,
+      false,
       false
     );
     expect(saveShared).toHaveBeenCalledExactlyOnceWith(
       sharedProfile(),
       undefined,
       legacy.selectionOptions,
+      false,
+      false
+    );
+  });
+
+  test('saves on a backend without speed pass speedSupported false', async () => {
+    const noSpeed = { ...profilesState(), speedSupported: false };
+    vi.mocked(routingProfilesApi.get).mockResolvedValue(noSpeed);
+    const saveKey = vi.spyOn(routingProfilesApi, 'saveKeyProfile').mockResolvedValue(noSpeed);
+    const saveShared = vi.spyOn(routingProfilesApi, 'saveSharedProfile').mockResolvedValue(noSpeed);
+    await mount();
+    await act(async () => {
+      await hook.saveKeyProfile(KEY_A, ownProfile());
+    });
+    await act(async () => {
+      await hook.saveShared(sharedProfile());
+    });
+    expect(saveKey).toHaveBeenCalledExactlyOnceWith(
+      KEY_A,
+      ownProfile(),
+      noSpeed.selectionOptions,
+      true,
+      false
+    );
+    expect(saveShared).toHaveBeenCalledExactlyOnceWith(
+      sharedProfile(),
+      undefined,
+      noSpeed.selectionOptions,
+      true,
       false
     );
   });

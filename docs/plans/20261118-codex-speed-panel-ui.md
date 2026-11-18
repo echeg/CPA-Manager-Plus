@@ -166,14 +166,14 @@
 - [x] run `npm run test:web` and `npm run type-check` - must pass before task 2
 
 ### Task 2: Send the fields and detect a backend without them
-- [ ] add `speedSupported: boolean` to `RoutingProfilesState`: true when `raw.shared.providers.codex` is a record with a `speed` key; false in `unsupportedRoutingProfiles()`
-- [ ] `profileBody`, `keyProfilePatch`, `sharedProfilePatch`, `saveKeyProfile` and `saveSharedProfile` take `speedSupported = false` as their last parameter (a caller that forgets it cannot send the fields to an older backend); `profileBody` adds `speed` and `ignore-client-tier` to the Codex block only when `providersSupported` and `speedSupported` are both true; the Claude block never carries them
-- [ ] in `apps/web/src/features/quota/hooks/useKeyProfiles.ts` pass `state.speedSupported` to `saveKeyProfile` and `saveSharedProfile`
-- [ ] update every `RoutingProfilesState` literal in tests with `speedSupported` (`clientKeysModal`, `keyProfiles`, `profilesKeysFlow`, `routingProfilesModal` and `useKeyProfiles` lifecycle tests, `routingProfiles.test.ts`, `components/KeyProfileEditor.test.tsx`, `components/ProviderRoutingBlock.test.tsx`)
-- [ ] update the `saveKeyProfile` / `saveSharedProfile` call assertions in `useKeyProfiles.lifecycle.test.tsx` (they use `toHaveBeenCalledExactlyOnceWith` with four arguments) to the new argument list, and add a case that `speedSupported: false` is passed through
-- [ ] write tests for `speedSupported` (true with the key, false without it, false for the unsupported backend) and for the bodies: the two fields in the Codex block with the flag, absent without it, never in the Claude block, for both the key profile and the shared profile patch
-- [ ] write tests for the save and read-back in `routingProfiles.test.ts`: `saveKeyProfile` with `speed: 'fast'` resolves when the mocked GET returns `fast` and rejects with the existing verification error when it returns `standard`; the same pair for `saveSharedProfile`; a new key profile saved without the flag on a backend that stores `standard` rejects when the sent profile has `fast`
-- [ ] run `npm run test:web` and `npm run type-check` - must pass before task 3
+- [x] add `speedSupported: boolean` to `RoutingProfilesState`: true when `raw.shared.providers.codex` is a record with a `speed` key; false in `unsupportedRoutingProfiles()`
+- [x] `profileBody`, `keyProfilePatch`, `sharedProfilePatch`, `saveKeyProfile` and `saveSharedProfile` take `speedSupported = false` as their last parameter (a caller that forgets it cannot send the fields to an older backend); `profileBody` adds `speed` and `ignore-client-tier` to the Codex block only when `providersSupported` and `speedSupported` are both true; the Claude block never carries them
+- [x] in `apps/web/src/features/quota/hooks/useKeyProfiles.ts` pass `state.speedSupported` to `saveKeyProfile` and `saveSharedProfile`
+- [x] update every `RoutingProfilesState` literal in tests with `speedSupported` (`clientKeysModal`, `keyProfiles`, `profilesKeysFlow`, `routingProfilesModal` and `useKeyProfiles` lifecycle tests, `routingProfiles.test.ts`, `components/KeyProfileEditor.test.tsx`, `components/ProviderRoutingBlock.test.tsx`)
+- [x] update the `saveKeyProfile` / `saveSharedProfile` call assertions in `useKeyProfiles.lifecycle.test.tsx` (they use `toHaveBeenCalledExactlyOnceWith` with four arguments) to the new argument list, and add a case that `speedSupported: false` is passed through
+- [x] write tests for `speedSupported` (true with the key, false without it, false for the unsupported backend) and for the bodies: the two fields in the Codex block with the flag, absent without it, never in the Claude block, for both the key profile and the shared profile patch
+- [x] write tests for the save and read-back in `routingProfiles.test.ts`: `saveKeyProfile` with `speed: 'fast'` resolves when the mocked GET returns `fast` and rejects with the existing verification error when it returns `standard`; the same pair for `saveSharedProfile`; a new key profile saved without the flag on a backend that stores `standard` rejects when the sent profile has `fast`
+- [x] run `npm run test:web` and `npm run type-check` - must pass before task 3
 
 ### Task 3: Name the Codex speed in the chain summary
 - [ ] add the three speed names (`quota_management.codex_speed.speed_standard`, `speed_fast`, `speed_ultrafast`) and `quota_management.key_profiles.summary.provider_speed` (`{{provider}} ({{speed}})`) to all four locales

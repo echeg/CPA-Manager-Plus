@@ -78,6 +78,7 @@ const profilesState = (overrides: Partial<RoutingProfilesState> = {}): RoutingPr
   supported: true,
   unsupportedBackend: false,
   providersSupported: true,
+  speedSupported: true,
   apiCredentials: { claude: [], codex: [] },
   shared: shared(),
   keys: [{ key: RAW_BETA, profile: betaProfile() }],

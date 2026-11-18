@@ -81,6 +81,11 @@ export interface RoutingProfilesState {
    * older backend: `providers` is derived from `claude-fallback` and written back as it.
    */
   providersSupported: boolean;
+  /**
+   * The backend serves the Codex `speed` and `ignore-client-tier` fields. `false` on
+   * an older backend: the panel shows no speed controls and never sends the fields.
+   */
+  speedSupported: boolean;
   apiCredentials: ApiCredentials;
 }
 
@@ -304,6 +309,13 @@ function readProfile(raw: unknown): RoutingProfile {
   };
 }
 
+/** The backend view always carries `speed` in the Codex block when it knows the field. */
+const hasCodexSpeed = (shared: unknown): boolean =>
+  isRecord(shared) &&
+  isRecord(shared.providers) &&
+  isRecord(shared.providers.codex) &&
+  Object.prototype.hasOwnProperty.call(shared.providers.codex, 'speed');
+
 /** Validate `GET /routing/profiles` and map its kebab-case fields to panel types. */
 export function readRoutingProfiles(raw: unknown): RoutingProfilesState {
   if (
@@ -328,6 +340,7 @@ export function readRoutingProfiles(raw: unknown): RoutingProfilesState {
       pickers: stringList(raw.selection_options.pickers),
     },
     providersSupported: isRecord(raw.shared) && isRecord(raw.shared.providers),
+    speedSupported: hasCodexSpeed(raw.shared),
     apiCredentials: readApiCredentials(raw.api_credentials),
   };
 }
@@ -339,6 +352,7 @@ export const unsupportedRoutingProfiles = (): RoutingProfilesState => ({
   keys: [],
   selectionOptions: { narrowing: [], pickers: [] },
   providersSupported: false,
+  speedSupported: false,
   apiCredentials: { claude: [], codex: [] },
 });
 
@@ -373,12 +387,14 @@ const noSelectionOptions: RoutingSelectionOptions = { narrowing: [], pickers: []
  * and mappings replace the list. A backend with `providers` gets the complete
  * `providers` block (API key mode carries `target: off`; the Codex fallback is its
  * target, with mode and mappings cleared); an older one gets the `claude-fallback`
- * block instead.
+ * block instead. The Codex block carries `speed` and `ignore-client-tier` only when
+ * the backend serves them; the Claude block never does, because CPA rejects them there.
  */
 export function profileBody(
   profile: RoutingProfile,
   selectionOptions: RoutingSelectionOptions = noSelectionOptions,
-  providersSupported = true
+  providersSupported = true,
+  speedSupported = false
 ): Record<string, unknown> {
   const normalized = normalizeProfile(profile, selectionOptions);
   const body: Record<string, unknown> = {
@@ -410,6 +426,9 @@ export function profileBody(
         // CPA accepts any stored mode and mapping rows under target api but checks
         // them under off, so they are cleared rather than left to the merge.
         fallback: { target: codex.fallback.target, mode: null, mappings: null },
+        ...(speedSupported
+          ? { speed: codex.speed, 'ignore-client-tier': codex.ignoreClientTier }
+          : {}),
       },
     };
   } else {
@@ -431,9 +450,12 @@ export function keyProfilePatch(
   key: string,
   profile: RoutingProfile | null,
   selectionOptions: RoutingSelectionOptions = noSelectionOptions,
-  providersSupported = true
+  providersSupported = true,
+  speedSupported = false
 ): Record<string, unknown> {
-  const body = profile ? profileBody(profile, selectionOptions, providersSupported) : null;
+  const body = profile
+    ? profileBody(profile, selectionOptions, providersSupported, speedSupported)
+    : null;
   return { routing: { 'key-profiles': { [key]: body } } };
 }
 
@@ -445,9 +467,10 @@ export function sharedProfilePatch(
   profile: RoutingProfile,
   ttl: string | undefined,
   selectionOptions: RoutingSelectionOptions = noSelectionOptions,
-  providersSupported = true
+  providersSupported = true,
+  speedSupported = false
 ): Record<string, unknown> {
-  const routing = profileBody(profile, selectionOptions, providersSupported);
+  const routing = profileBody(profile, selectionOptions, providersSupported, speedSupported);
   if (ttl !== undefined) routing['session-affinity-ttl'] = ttl.trim();
   return { routing };
 }
@@ -486,7 +509,8 @@ export const routingProfilesApi = {
     key: string,
     profile: RoutingProfile | null,
     selectionOptions: RoutingSelectionOptions = noSelectionOptions,
-    providersSupported = true
+    providersSupported = true,
+    speedSupported = false
   ): Promise<RoutingProfilesState> {
     const assertCurrent = guardConfigConnection();
     if (profile && !validClaudeMappings(profile.providers.claude, providersSupported))
@@ -494,7 +518,7 @@ export const routingProfilesApi = {
     try {
       await apiClient.patch(
         '/config',
-        keyProfilePatch(key, profile, selectionOptions, providersSupported)
+        keyProfilePatch(key, profile, selectionOptions, providersSupported, speedSupported)
       );
     } catch (error) {
       assertCurrent();
@@ -517,7 +541,8 @@ export const routingProfilesApi = {
     profile: RoutingProfile,
     ttl: string | undefined,
     selectionOptions: RoutingSelectionOptions = noSelectionOptions,
-    providersSupported = true
+    providersSupported = true,
+    speedSupported = false
   ): Promise<RoutingProfilesState> {
     const assertCurrent = guardConfigConnection();
     if (!validClaudeMappings(profile.providers.claude, providersSupported))
@@ -526,7 +551,7 @@ export const routingProfilesApi = {
     try {
       await apiClient.patch(
         '/config',
-        sharedProfilePatch(profile, ttl, selectionOptions, providersSupported)
+        sharedProfilePatch(profile, ttl, selectionOptions, providersSupported, speedSupported)
       );
     } catch (error) {
       assertCurrent();

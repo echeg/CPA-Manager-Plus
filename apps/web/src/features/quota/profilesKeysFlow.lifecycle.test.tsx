@@ -65,6 +65,7 @@ const profilesState = (bProfile: RoutingProfile): RoutingProfilesState => ({
   supported: true,
   unsupportedBackend: false,
   providersSupported: true,
+  speedSupported: true,
   apiCredentials: { claude: [], codex: [] },
   shared: { ...profile('reserves'), selection: { primary: 'reserves', tiebreak: 'round-robin' } },
   keys: [{ key: KEY_B, profile: bProfile }],
@@ -265,10 +266,13 @@ describe('provider routing saves with the real key profiles hook', () => {
         'api-credential': null,
         fallback: { target: 'off', mode: 'auto', mappings: suggestedFallbackMappings() },
       },
+      // The backend serves `speed`, so the Codex block carries both fields.
       codex: {
         mode: 'api',
         'api-credential': 'codex-key-1',
         fallback: { target: 'off', mode: null, mappings: null },
+        speed: 'standard',
+        'ignore-client-tier': false,
       },
     });
     // The read-back matched, so the editor closed.
