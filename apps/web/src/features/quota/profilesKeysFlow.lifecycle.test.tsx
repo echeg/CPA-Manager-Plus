@@ -23,6 +23,7 @@ import type { Config } from '@/features/personal-quota-support/types';
 import { KeyProfileEditor } from './components/KeyProfileEditor';
 import { ProviderRoutingBlock } from './components/ProviderRoutingBlock';
 import { QuotaSettingsBar } from './components/QuotaSettingsToolbar';
+import { Select } from './components/Select';
 
 // The bar, both modals and the real useKeyProfiles; only the network layer is stubbed.
 vi.mock('@/components/ui/Modal', () => ({
@@ -345,6 +346,92 @@ describe('provider routing saves with the real key profiles hook', () => {
       mappings: suggestedFallbackMappings(),
     });
     expect(sent['session-affinity']).toBe(true);
+    expect(editors()).toHaveLength(0);
+  });
+
+  const codexBlock = () =>
+    root()
+      .findAllByType(ProviderRoutingBlock)
+      .find((item) => item.props.provider === 'codex')!;
+
+  test('a Codex speed edited in the Default profile is saved and shown again after a reload', async () => {
+    const state = withProviders(profilesState(profile('priority')));
+    vi.mocked(routingProfilesApi.get).mockResolvedValue(state);
+    const after = withSuggested({
+      ...state.shared,
+      providers: {
+        ...state.shared.providers,
+        codex: { ...state.shared.providers.codex, speed: 'ultrafast', ignoreClientTier: true },
+      },
+    });
+    // The backend stores what the PATCH sent, so the read-back and the next load see it.
+    const patch = vi.spyOn(apiClient, 'patch').mockImplementation(async () => {
+      vi.mocked(routingProfilesApi.get).mockResolvedValue({ ...state, shared: after });
+      return {};
+    });
+    await mount();
+    await openProfileEditor('data-profile-default');
+    expect(codexBlock().props.speedSupported).toBe(true);
+    expect(codexBlock().props.value.speed).toBe('standard');
+
+    await editBlock('codex', (value) => ({ ...value, speed: 'ultrafast', ignoreClientTier: true }));
+    await click(buttonWith('data-key-profile-save'));
+    expect(patch).toHaveBeenCalledTimes(1);
+    const body = patch.mock.calls[0][1] as { routing: { providers: Record<string, unknown> } };
+    expect(body.routing.providers.codex).toMatchObject({
+      speed: 'ultrafast',
+      'ignore-client-tier': true,
+    });
+    expect(editors()).toHaveLength(0);
+
+    // A fresh panel load shows the stored values in the editor and on the toolbar button.
+    await act(async () => renderer?.unmount());
+    await mount();
+    expect(text(buttonWith('data-open-speed')!)).toBe('Codex speed: Ultrafast');
+    await openProfileEditor('data-profile-default');
+    expect(codexBlock().props.value).toMatchObject({ speed: 'ultrafast', ignoreClientTier: true });
+  });
+
+  test("a new key profile created in the editor inherits the Default profile's speed and flag", async () => {
+    const base = withProviders(profilesState(profile('priority')));
+    const shared: RoutingProfile = {
+      ...base.shared,
+      providers: {
+        ...base.shared.providers,
+        codex: { ...base.shared.providers.codex, speed: 'fast', ignoreClientTier: true },
+      },
+    };
+    const state: RoutingProfilesState = { ...base, shared };
+    vi.mocked(routingProfilesApi.get).mockResolvedValue(state);
+    const patch = vi.spyOn(apiClient, 'patch').mockImplementation(async () => {
+      vi.mocked(routingProfilesApi.get).mockResolvedValue({
+        ...state,
+        keys: [...state.keys, { key: KEY_A, profile: withSuggested(shared) }],
+      });
+      return {};
+    });
+    await mount();
+    await click(buttonWith('data-open-profiles'));
+    // KEY_A has no profile of its own, so "+ Profile for a key" offers it.
+    const add = root()
+      .find((node) => node.props['data-profile-add'])
+      .findByType(Select);
+    expect(add.props.options).toHaveLength(1);
+    await act(async () => add.props.onChange(add.props.options[0].value));
+    expect(editors()).toHaveLength(1);
+    expect(editors()[0].props.isNew).toBe(true);
+    expect(codexBlock().props.value).toMatchObject({ speed: 'fast', ignoreClientTier: true });
+
+    await click(buttonWith('data-key-profile-save'));
+    expect(patch).toHaveBeenCalledTimes(1);
+    const body = patch.mock.calls[0][1] as {
+      routing: { 'key-profiles': Record<string, { providers: Record<string, unknown> }> };
+    };
+    expect(body.routing['key-profiles'][KEY_A].providers.codex).toMatchObject({
+      speed: 'fast',
+      'ignore-client-tier': true,
+    });
+    // The read-back matched, so the draft closed.
     expect(editors()).toHaveLength(0);
   });
 });
