@@ -3,9 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { withSuggestions } from '@/features/personal-quota-support/services/api/claudeFallback';
-import type {
-  RoutingProfile,
-  RoutingSelectionOptions,
+import {
+  effectiveFallbackTarget,
+  type RoutingProfile,
+  type RoutingSelectionOptions,
 } from '@/features/personal-quota-support/services/api/routingProfiles';
 import type { AuthFileItem } from '@/features/personal-quota-support/types';
 import { getQuotaDisplayName } from '@/features/quota/utils/quota/identity';
@@ -283,6 +284,7 @@ export function KeyProfileEditor({
               modeLocked={fallbackReadOnly}
               providersSupported={providersSupported}
               speedSupported={speedSupported}
+              claudeFallbackToCodex={effectiveFallbackTarget(draft.providers.claude) === 'codex'}
               onChange={(value) =>
                 setDraft((current) => ({
                   ...current,

@@ -162,7 +162,10 @@ block of every profile editor has a **Speed** row below the fallback:
 
 The row is disabled in API key mode, with an explanation: requests billed to an API
 key never get a speed tier. The stored values stay in the profile and are shown, so
-switching back to Subscription restores them. In Home mode or with a scheduler plugin
+switching back to Subscription restores them. The exception is a profile whose Claude
+falls back to Codex: CPA runs that fallback on Codex subscriptions with the profile's
+Codex speed, so the row stays enabled in Codex API key mode, with a note that the
+speed applies only to those Claude requests. In Home mode or with a scheduler plugin
 (`supported: false`) the Default profile's row stays enabled even with a stored API
 key mode, because CPA ignores the mode there and keeps applying the default speed. Subscription mode with an API-key
 fallback keeps the row enabled. The Claude block has no speed. Both fields are saved
@@ -404,7 +407,9 @@ Every save writes the complete profile with one `PATCH /v8/management/config` an
 reads the profiles back, as the editors do. While it runs, every control is
 disabled. The rows always show the stored values: after a failed write the error is
 shown above the table and the row keeps its stored speed. A row whose Codex mode is
-API key is disabled with the reason. In Home mode or with a scheduler plugin
+API key is disabled with the reason, unless the profile's Claude falls back to Codex:
+then the row stays editable, with a note that the speed applies only to that fallback.
+In Home mode or with a scheduler plugin
 (`supported: false`) the key rows are read-only, while the Default row stays
 editable, also with a stored API key mode, because CPA ignores the mode there and
 keeps applying the default profile's speed. If a reload while the table is open
@@ -451,7 +456,7 @@ routing:
       mode: api
       api-credential: "codex-key-auth-index"
       fallback: {target: "off"}
-      speed: fast # standard, fast or ultrafast; kept, but not applied, in API key mode
+      speed: fast # standard, fast or ultrafast; in API key mode it applies only to Claude's fallback to Codex
       ignore-client-tier: false
   key-profiles:
     "client-key-a":

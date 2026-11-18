@@ -1,8 +1,9 @@
-import type {
-  CodexSpeed,
-  ProviderRouting,
-  RoutingProfile,
-  RoutingProfilesState,
+import {
+  effectiveFallbackTarget,
+  type CodexSpeed,
+  type ProviderRouting,
+  type RoutingProfile,
+  type RoutingProfilesState,
 } from '@/features/personal-quota-support/services/api/routingProfiles';
 import { sha256Hex } from '@/utils/apiKeyHash';
 import type { KeyDisplayRow } from './keyProfilesModel';
@@ -10,9 +11,21 @@ import type { KeyDisplayRow } from './keyProfilesModel';
 /**
  * Why a row of the speed table takes no input:
  * - `read_only`: a key row while key profiles are not used (`supported: false`);
- * - `api_mode`: the effective Codex mode is API key, whose requests get no speed tier.
+ * - `api_mode`: the effective Codex mode is API key, whose requests get no speed tier,
+ *   and Claude does not fall back to Codex.
  */
 export type SpeedDisabledReason = '' | 'read_only' | 'api_mode';
+
+/**
+ * Codex is in API key mode, but Claude falls back to Codex. CPA runs that fallback leg on
+ * Codex subscriptions with this profile's Codex speed, so the speed applies to it alone.
+ */
+export const codexSpeedOnlyInClaudeFallback = (providers: RoutingProfile['providers']): boolean =>
+  providers.codex.mode === 'api' && effectiveFallbackTarget(providers.claude) === 'codex';
+
+/** CPA puts the profile's Codex speed on no request: Codex uses an API key, and Claude does not fall back to Codex. */
+const codexSpeedUnused = (providers: RoutingProfile['providers']): boolean =>
+  providers.codex.mode === 'api' && !codexSpeedOnlyInClaudeFallback(providers);
 
 /** One row of the speed table. */
 export interface SpeedRow {
@@ -24,6 +37,8 @@ export interface SpeedRow {
   speed: CodexSpeed;
   ignoreClientTier: boolean;
   disabledReason: SpeedDisabledReason;
+  /** The speed applies only to Claude requests that fall back to Codex (see `codexSpeedOnlyInClaudeFallback`). */
+  claudeFallbackOnly: boolean;
 }
 
 export type CodexSpeedPatch = Partial<Pick<ProviderRouting, 'speed' | 'ignoreClientTier'>>;
@@ -41,21 +56,23 @@ export function buildSpeedRows(state: RoutingProfilesState, rows: KeyDisplayRow[
     keyRow: null,
     speed: shared.speed,
     ignoreClientTier: shared.ignoreClientTier,
-    disabledReason: state.supported && shared.mode === 'api' ? 'api_mode' : '',
+    disabledReason: state.supported && codexSpeedUnused(state.shared.providers) ? 'api_mode' : '',
+    claudeFallbackOnly: state.supported && codexSpeedOnlyInClaudeFallback(state.shared.providers),
   };
   const keyRows = rows.map((row): SpeedRow => {
-    const codex = (row.profile ?? state.shared).providers.codex;
+    const { providers } = row.profile ?? state.shared;
     const disabledReason: SpeedDisabledReason = !state.supported
       ? 'read_only'
-      : codex.mode === 'api'
+      : codexSpeedUnused(providers)
         ? 'api_mode'
         : '';
     return {
       id: `key-${sha256Hex(row.key).toLowerCase()}`,
       keyRow: row,
-      speed: codex.speed,
-      ignoreClientTier: codex.ignoreClientTier,
+      speed: providers.codex.speed,
+      ignoreClientTier: providers.codex.ignoreClientTier,
       disabledReason,
+      claudeFallbackOnly: state.supported && codexSpeedOnlyInClaudeFallback(providers),
     };
   });
   return [defaultRow, ...keyRows];

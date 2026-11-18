@@ -91,6 +91,42 @@ describe('buildSpeedRows', () => {
     ]);
   });
 
+  test('Codex in API key mode stays enabled while Claude falls back to Codex', () => {
+    // CPA runs the Claude -> Codex leg on Codex subscriptions with the profile's Codex speed.
+    const viaClaude = (codexRouting: ProviderRouting): RoutingProfile => {
+      const base = profile(codexRouting);
+      const claude = base.providers.claude;
+      return {
+        ...base,
+        providers: {
+          ...base.providers,
+          claude: { ...claude, fallback: { ...claude.fallback, target: 'codex' } },
+        },
+      };
+    };
+    const rows = buildSpeedRows(
+      state({ shared: viaClaude(codex({ mode: 'api', speed: 'ultrafast' })) }),
+      keyRows({ [RAW_BETA]: profile(codex({ mode: 'api' })), [RAW_GAMMA]: profile(codex()) })
+    );
+    expect(rows.map((row) => row.disabledReason)).toEqual(['', '', 'api_mode', '']);
+    expect(rows.map((row) => row.claudeFallbackOnly)).toEqual([true, true, false, false]);
+    expect(rows[1].speed).toBe('ultrafast');
+    // Claude in API key mode skips its fallback, so the speed reaches no request.
+    const claudeApi = viaClaude(codex({ mode: 'api' }));
+    claudeApi.providers.claude = { ...claudeApi.providers.claude, mode: 'api' };
+    expect(buildSpeedRows(state({ shared: claudeApi }), [])[0]).toMatchObject({
+      disabledReason: 'api_mode',
+      claudeFallbackOnly: false,
+    });
+    // Under supported: false CPA ignores the stored mode and fallback target.
+    const locked = buildSpeedRows(
+      state({ supported: false, shared: viaClaude(codex({ mode: 'api' })) }),
+      keyRows()
+    );
+    expect(locked.every((row) => !row.claudeFallbackOnly)).toBe(true);
+    expect(locked[0].disabledReason).toBe('');
+  });
+
   test('under supported: false every key row is read_only and the Default row stays enabled', () => {
     const rows = buildSpeedRows(state({ supported: false }), keyRows());
     expect(rows.map((row) => row.disabledReason)).toEqual([

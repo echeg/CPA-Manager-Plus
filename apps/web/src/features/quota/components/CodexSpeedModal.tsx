@@ -71,12 +71,15 @@ export function CodexSpeedModal({ open, onClose, keyProfiles, showEmails }: Code
   const rowLabel = (row: SpeedRow) =>
     row.keyRow ? row.keyRow.label : t('quota_management.codex_speed.table_default_row');
 
+  // Why a row takes no input, or that its speed applies only to Claude's fallback to Codex.
   const reasonText = (row: SpeedRow) =>
     row.disabledReason === 'read_only'
       ? t('quota_management.codex_speed.table_reason_read_only')
       : row.disabledReason === 'api_mode'
         ? t('quota_management.codex_speed.table_reason_api_mode')
-        : '';
+        : row.claudeFallbackOnly
+          ? t('quota_management.codex_speed.claude_fallback_hint')
+          : '';
 
   const renderRow = (row: SpeedRow) => {
     const label = rowLabel(row);
@@ -102,7 +105,11 @@ export function CodexSpeedModal({ open, onClose, keyProfiles, showEmails }: Code
             )}
           </span>
           {reason && (
-            <span id={reasonId} className={styles.reason} data-speed-reason={row.disabledReason}>
+            <span
+              id={reasonId}
+              className={styles.reason}
+              data-speed-reason={row.disabledReason || 'claude_fallback'}
+            >
               {reason}
             </span>
           )}

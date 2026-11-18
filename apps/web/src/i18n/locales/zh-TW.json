@@ -5646,6 +5646,7 @@
       "ignore_client_tier_hint": "開啟：即使用戶端要求自己的等級，也使用此速度。關閉：使用用戶端傳送的等級，僅在用戶端未傳送時才使用此速度。",
       "ultrafast_hint": "極速僅適用於支援它的模型。只支援快速的模型使用快速；其他模型不使用速度等級。",
       "api_mode_hint": "透過 API 金鑰計費的請求不會使用速度等級。已儲存的速度會保留給訂閱模式。",
+      "claude_fallback_hint": "此處的 Codex 請求透過 API 金鑰計費，不會使用速度等級。此速度僅用於備援至 Codex 訂閱的 Claude 請求。",
       "table_title": "Codex 速度",
       "table_default_row": "預設設定檔",
       "table_column_profile": "設定檔",

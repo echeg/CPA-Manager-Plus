@@ -39,6 +39,11 @@ export interface ProviderRoutingBlockProps {
   providersSupported: boolean;
   /** `false` on a backend without the Codex speed: the Speed row is not rendered. */
   speedSupported?: boolean;
+  /**
+   * The profile's Claude falls back to Codex. That leg runs on Codex subscriptions with
+   * this profile's Codex speed, so the Speed row stays enabled in Codex API key mode.
+   */
+  claudeFallbackToCodex?: boolean;
   onChange: (value: ProviderRouting) => void;
   onPreferredChange: (authIndex: string) => void;
 }
@@ -59,6 +64,7 @@ export function ProviderRoutingBlock({
   modeLocked,
   providersSupported,
   speedSupported = false,
+  claudeFallbackToCodex = false,
   onChange,
   onPreferredChange,
 }: ProviderRoutingBlockProps) {
@@ -99,7 +105,9 @@ export function ProviderRoutingBlock({
   // API key credentials never carry a speed tier, but CPA ignores the stored mode while it
   // is locked, so the speed still applies there. The lock itself never disables the row.
   const speedInApiMode = value.mode === 'api' && !modeLocked;
-  const speedDisabled = disabled || speedInApiMode;
+  // Claude's fallback to Codex still runs on subscriptions with this speed.
+  const speedUnused = speedInApiMode && !claudeFallbackToCodex;
+  const speedDisabled = disabled || speedUnused;
   const speedItems: SegmentedTabItem<CodexSpeed>[] = CODEX_SPEEDS.map((speed) => ({
     id: speed,
     label: t(`quota_management.codex_speed.speed_${speed}`),
@@ -278,9 +286,14 @@ export function ProviderRoutingBlock({
           />
           <p className={styles.hint}>{t('quota_management.codex_speed.ignore_client_tier_hint')}</p>
           <p className={styles.hint}>{t('quota_management.codex_speed.ultrafast_hint')}</p>
-          {speedInApiMode && (
+          {speedUnused && (
             <p className={styles.hint} data-provider-speed-api-mode>
               {t('quota_management.codex_speed.api_mode_hint')}
+            </p>
+          )}
+          {speedInApiMode && claudeFallbackToCodex && (
+            <p className={styles.hint} data-provider-speed-claude-fallback>
+              {t('quota_management.codex_speed.claude_fallback_hint')}
             </p>
           )}
         </div>

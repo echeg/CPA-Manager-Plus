@@ -391,6 +391,27 @@ describe('ProviderRoutingBlock Codex speed', () => {
     expect(byData('data-provider-speed-api-mode')).toHaveLength(1);
   });
 
+  test("Claude's fallback to Codex keeps the row enabled in API key mode, with its own hint", async () => {
+    const { onChange } = await mount({
+      provider: 'codex',
+      speedSupported: true,
+      claudeFallbackToCodex: true,
+      value: routing({ mode: 'api', speed: 'fast' }),
+    });
+    expect(speedTabs()!.props.disabled).toBe(false);
+    expect(flagSwitch().props.disabled).toBe(false);
+    expect(byData('data-provider-speed-api-mode')).toHaveLength(0);
+    expect(byData('data-provider-speed-claude-fallback')).toHaveLength(1);
+    act(() => speedTabs()!.props.onChange('ultrafast'));
+    expect(onChange).toHaveBeenCalledExactlyOnceWith(routing({ mode: 'api', speed: 'ultrafast' }));
+  });
+
+  test("Claude's fallback to Codex adds no hint in Subscription mode", async () => {
+    await mount({ provider: 'codex', speedSupported: true, claudeFallbackToCodex: true });
+    expect(speedTabs()!.props.disabled).toBe(false);
+    expect(byData('data-provider-speed-claude-fallback')).toHaveLength(0);
+  });
+
   test('an API-key fallback in Subscription mode keeps the row enabled', async () => {
     await mount({
       provider: 'codex',

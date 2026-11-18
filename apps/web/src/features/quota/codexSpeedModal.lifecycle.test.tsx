@@ -312,6 +312,28 @@ describe('codex speed modal failure and disabled paths', () => {
     expect(keyProfiles.saveKeyProfile).not.toHaveBeenCalled();
   });
 
+  test('a row in API key mode stays editable with a note while Claude falls back to Codex', async () => {
+    // The Default profile sends Claude's fallback to Codex: that leg runs on Codex
+    // subscriptions with the profile's Codex speed. Beta has its own profile without it.
+    keyProfiles = makeKeyProfiles(
+      profilesState({ shared: shared(codex({ mode: 'api', speed: 'fast' })) })
+    );
+    await mount();
+    const [defaultRow, alpha, beta] = rows();
+    const note = i18n.t('quota_management.codex_speed.claude_fallback_hint');
+    for (const row of [defaultRow, alpha]) {
+      expect(speedButtons(row).some((button) => button.props.disabled)).toBe(false);
+      expect(flag(row).props.disabled).toBe(false);
+      expect(text(row)).toContain(note);
+      expect(text(row)).not.toContain(i18n.t('quota_management.codex_speed.table_reason_api_mode'));
+    }
+    expect(text(beta)).not.toContain(note);
+    await click(speedButton(defaultRow, 'ultrafast'));
+    expect(keyProfiles.saveShared).toHaveBeenCalledExactlyOnceWith(
+      shared(codex({ mode: 'api', speed: 'ultrafast' }))
+    );
+  });
+
   test('under supported: false key rows are read-only and the Default row stays editable', async () => {
     keyProfiles = makeKeyProfiles(
       profilesState({ supported: false, shared: shared(codex({ mode: 'api', speed: 'fast' })) })

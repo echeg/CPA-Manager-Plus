@@ -709,6 +709,20 @@ describe('KeyProfileEditor', () => {
     expect(onSave.mock.calls[0][0].providers.codex.ignoreClientTier).toBe(false);
   });
 
+  test("the Codex block follows the draft's Claude fallback to Codex", async () => {
+    await mount({ speedSupported: true });
+    expect(block('codex').props.claudeFallbackToCodex).toBe(true);
+    const claude = shared.providers.claude;
+    // Target Off: the Codex speed no longer reaches a Claude request.
+    act(() =>
+      block('claude').props.onChange({ ...claude, fallback: { ...claude.fallback, target: 'off' } })
+    );
+    expect(block('codex').props.claudeFallbackToCodex).toBe(false);
+    // Claude in API key mode skips its fallback.
+    act(() => block('claude').props.onChange({ ...claude, mode: 'api' }));
+    expect(block('codex').props.claudeFallbackToCodex).toBe(false);
+  });
+
   test('a changed ignore-client-tier flag enables Save and is in the saved profile', async () => {
     const { onSave } = await mount({ speedSupported: true });
     act(() => block('codex').findByType(ToggleSwitch).props.onChange(true));
