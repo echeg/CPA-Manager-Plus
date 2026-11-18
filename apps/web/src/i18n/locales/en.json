@@ -5648,10 +5648,10 @@
       "row_label": "Speed",
       "row_aria": "{{provider}} speed",
       "ignore_client_tier": "Ignore the tier the client sends",
-      "ignore_client_tier_hint": "On: this speed applies even when the client asks for its own tier. Off: a tier the client sends is used, and this speed applies only when the client sends none.",
+      "ignore_client_tier_hint": "On: this speed applies even when the client asks for its own tier. Off: the client's tier is used when one is left after CPA translates the request; otherwise this speed applies. Translation drops tiers it does not know, such as flex.",
       "ultrafast_hint": "Ultrafast applies to models that offer it. Models that offer only Fast use Fast; other models get no speed tier.",
-      "api_mode_hint": "Requests billed to an API key never get a speed tier. The stored speed is kept for Subscription mode.",
-      "claude_fallback_hint": "Codex requests here are billed to the API key and get no speed tier. This speed applies only to Claude requests that fall back to Codex subscriptions.",
+      "api_mode_hint": "The profile does not set or override the tier of requests billed to an API key. The stored values are kept for Subscription mode.",
+      "claude_fallback_hint": "Codex requests here are billed to the API key, and the profile does not set or override their tier. This speed applies only to Claude requests that fall back to Codex subscriptions.",
       "table_title": "Codex speed",
       "table_default_row": "Default profile",
       "table_column_profile": "Profile",
@@ -5662,7 +5662,7 @@
       "table_speed_option": "{{speed}} for {{label}}",
       "table_flag_aria": "Ignore the tier the client sends for {{label}}",
       "table_reason_read_only": "Key profiles are not used in this routing mode.",
-      "table_reason_api_mode": "Codex uses an API key here; API key requests get no speed tier.",
+      "table_reason_api_mode": "Codex uses an API key here; the profile does not set or override the tier of API key requests.",
       "table_read_only": "Key profiles are not used in this routing mode, so key rows are read-only. The Default profile speed still applies.",
       "table_default_hint": "A change on a key marked Default gives the key its own profile: a full copy of the Default profile with the new value.",
       "table_loading": "Loading profiles…",
@@ -5751,7 +5751,13 @@
         "provider_speed": "{{provider}} ({{speed}})"
       },
       "errors": {
-        "unknown_key": "This key was removed on the Config page. The key list was reloaded."
+        "unknown_key": "This key was removed on the Config page, so nothing was saved.",
+        "config_changed": "The configuration changed elsewhere after it was read, so nothing was saved. Check the current values and try again.",
+        "config_version_missing": "CPA's answer carried no usable configuration version (ETag), so a key's speed cannot be changed here without the risk of undoing a change made elsewhere. Nothing was saved; change the speed in the key's profile editor.",
+        "copy_unconfirmed": "The key may now have its own profile: a copy of the Default profile that could not be confirmed. Refresh to see whether it has one, and reset it to default if the key should follow the Default profile.",
+        "legacy_fallback_default": "The Default profile keeps its Claude fallback in the old claude-fallback block beside an empty providers.claude.fallback, and CPA would drop that block on this change, which turns the fallback off. Nothing was saved; save the Default profile once in Profiles, then change the speed.",
+        "legacy_fallback_key": "This key's profile keeps its Claude fallback in the old claude-fallback block beside an empty providers.claude.fallback, and CPA would drop that block on this change, which turns the fallback off. Nothing was saved; save the key's profile once in Profiles, then change the speed.",
+        "reload_failed": "The current values could not be loaded, so the values shown may be out of date: {{message}}"
       },
       "editor": {
         "sticky": "Sticky session",

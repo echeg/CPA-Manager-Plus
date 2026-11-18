@@ -12,9 +12,16 @@ import {
   type RoutingProfilesState,
 } from '@/features/personal-quota-support/services/api/routingProfiles';
 import { sha256Hex } from '@/utils/apiKeyHash';
+import { buildSpeedRows } from './codexSpeedModel';
 import { CodexSpeedModal, type CodexSpeedModalProps } from './components/CodexSpeedModal';
-import { buildKeyRows, copyOfShared } from './keyProfilesModel';
+import { buildKeyRows } from './keyProfilesModel';
 import { maskQuotaText } from './ledgerModel';
+
+// Spied on, so a test can tell that a closed table builds no rows.
+vi.mock('./codexSpeedModel', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./codexSpeedModel')>();
+  return { ...actual, buildSpeedRows: vi.fn(actual.buildSpeedRows) };
+});
 
 vi.mock('@/components/ui/Modal', () => ({
   Modal: ({ open, children, footer }: { open: boolean; children: ReactNode; footer: ReactNode }) =>
@@ -106,8 +113,7 @@ function makeKeyProfiles(
     saving: false,
     error: '',
     reload: vi.fn(),
-    saveKeyProfile: vi.fn(async () => true),
-    saveShared: vi.fn(async () => true),
+    saveCodexSpeed: vi.fn(async () => true),
     ...overrides,
   };
 }
@@ -115,6 +121,7 @@ function makeKeyProfiles(
 let keyProfiles: ModalHook;
 let renderer: ReactTestRenderer | undefined;
 let showEmails: boolean;
+let open: boolean;
 let onClose: () => void;
 
 beforeAll(async () => {
@@ -124,7 +131,9 @@ beforeAll(async () => {
 beforeEach(() => {
   keyProfiles = makeKeyProfiles();
   showEmails = false;
+  open = true;
   onClose = vi.fn();
+  vi.mocked(buildSpeedRows).mockClear();
 });
 
 afterEach(async () => {
@@ -132,8 +141,7 @@ afterEach(async () => {
   renderer = undefined;
 });
 
-const modal = () =>
-  createElement(CodexSpeedModal, { open: true, onClose, keyProfiles, showEmails });
+const modal = () => createElement(CodexSpeedModal, { open, onClose, keyProfiles, showEmails });
 
 async function mount() {
   await act(async () => {
@@ -219,6 +227,17 @@ describe('codex speed modal rows', () => {
     for (const raw of RAW_KEYS) expect(html).not.toContain(raw);
   });
 
+  test('a closed table builds no rows, so a re-render of the quota page stays cheap', async () => {
+    open = false;
+    await mount();
+    await rerender();
+    expect(buildSpeedRows).not.toHaveBeenCalled();
+    open = true;
+    await rerender();
+    expect(buildSpeedRows).toHaveBeenCalled();
+    expect(rows()).toHaveLength(3);
+  });
+
   test('the loading and empty states', async () => {
     keyProfiles = makeKeyProfiles(null, { loading: true });
     await mount();
@@ -233,49 +252,39 @@ describe('codex speed modal rows', () => {
 });
 
 describe('codex speed modal writes', () => {
-  test('a click on the Default row saves the shared profile with the new speed', async () => {
+  // The hook applies the change to the stored profile it reads again, so the table sends
+  // only the key and the changed field (see the useKeyProfiles Codex speed tests).
+  test('a click on the Default row saves the new speed of the shared profile', async () => {
     await mount();
     await click(speedButton(rows()[0], 'ultrafast'));
-    expect(keyProfiles.saveShared).toHaveBeenCalledExactlyOnceWith(
-      shared(codex({ speed: 'ultrafast' }))
-    );
-    expect(keyProfiles.saveKeyProfile).not.toHaveBeenCalled();
+    expect(keyProfiles.saveCodexSpeed).toHaveBeenCalledExactlyOnceWith(null, {
+      speed: 'ultrafast',
+    });
   });
 
-  test('a click on a key without a profile saves a full copy of the Default profile', async () => {
+  test('a click on a key without a profile saves the new speed of that key', async () => {
     await mount();
     await click(speedButton(rows()[1], 'standard'));
-    const expected = withCodex(copyOfShared(shared()), codex({ speed: 'standard' }));
-    expect(keyProfiles.saveKeyProfile).toHaveBeenCalledExactlyOnceWith(RAW_ALPHA, expected);
-    // The copy keeps everything else of the Default profile, mappings included.
-    const saved = vi.mocked(keyProfiles.saveKeyProfile).mock.calls[0][1]!;
-    expect(saved.providers.claude.fallback.mappings).toEqual([
-      { from: 'claude-opus-*', to: 'gpt-6-astra' },
-    ]);
-    expect(saved.selection).toEqual(shared().selection);
-    expect(keyProfiles.saveShared).not.toHaveBeenCalled();
+    expect(keyProfiles.saveCodexSpeed).toHaveBeenCalledExactlyOnceWith(RAW_ALPHA, {
+      speed: 'standard',
+    });
   });
 
-  test('a click on a key with its own profile saves that profile', async () => {
+  test('a click on a key with its own profile saves the new speed of that key', async () => {
     await mount();
     await click(speedButton(rows()[2], 'fast'));
-    expect(keyProfiles.saveKeyProfile).toHaveBeenCalledExactlyOnceWith(
-      RAW_BETA,
-      betaProfile(codex({ speed: 'fast' }))
-    );
+    expect(keyProfiles.saveCodexSpeed).toHaveBeenCalledExactlyOnceWith(RAW_BETA, { speed: 'fast' });
   });
 
   test('the flag switch saves', async () => {
     await mount();
     await act(async () => flag(rows()[2]).props.onChange(true));
-    expect(keyProfiles.saveKeyProfile).toHaveBeenCalledExactlyOnceWith(
-      RAW_BETA,
-      betaProfile(codex({ speed: 'ultrafast', ignoreClientTier: true }))
-    );
+    expect(keyProfiles.saveCodexSpeed).toHaveBeenCalledExactlyOnceWith(RAW_BETA, {
+      ignoreClientTier: true,
+    });
     await act(async () => flag(rows()[0]).props.onChange(true));
-    expect(keyProfiles.saveShared).toHaveBeenCalledExactlyOnceWith(
-      shared(codex({ speed: 'fast', ignoreClientTier: true }))
-    );
+    expect(keyProfiles.saveCodexSpeed).toHaveBeenLastCalledWith(null, { ignoreClientTier: true });
+    expect(keyProfiles.saveCodexSpeed).toHaveBeenCalledTimes(2);
   });
 
   test('a click on the value a row already has does nothing', async () => {
@@ -283,8 +292,7 @@ describe('codex speed modal writes', () => {
     await click(speedButton(rows()[0], 'fast'));
     await click(speedButton(rows()[2], 'ultrafast'));
     await act(async () => flag(rows()[1]).props.onChange(false));
-    expect(keyProfiles.saveShared).not.toHaveBeenCalled();
-    expect(keyProfiles.saveKeyProfile).not.toHaveBeenCalled();
+    expect(keyProfiles.saveCodexSpeed).not.toHaveBeenCalled();
   });
 
   test('speed options are plain buttons, so only a click, Enter or Space writes', async () => {
@@ -305,7 +313,7 @@ describe('codex speed modal failure and disabled paths', () => {
     await mount();
     expect(allControls().every((control) => control.props.disabled)).toBe(true);
     await click(speedButton(rows()[1], 'ultrafast'));
-    expect(keyProfiles.saveKeyProfile).not.toHaveBeenCalled();
+    expect(keyProfiles.saveCodexSpeed).not.toHaveBeenCalled();
 
     keyProfiles = makeKeyProfiles(profilesState(), { loading: true });
     await rerender();
@@ -326,7 +334,7 @@ describe('codex speed modal failure and disabled paths', () => {
     // The stored value stays visible.
     expect(pressed(beta)).toEqual(['fast']);
     await click(speedButton(beta, 'ultrafast'));
-    expect(keyProfiles.saveKeyProfile).not.toHaveBeenCalled();
+    expect(keyProfiles.saveCodexSpeed).not.toHaveBeenCalled();
   });
 
   test('a row in API key mode stays editable with a note while Claude falls back to Codex', async () => {
@@ -351,9 +359,9 @@ describe('codex speed modal failure and disabled paths', () => {
       '',
     ]);
     await click(speedButton(defaultRow, 'ultrafast'));
-    expect(keyProfiles.saveShared).toHaveBeenCalledExactlyOnceWith(
-      shared(codex({ mode: 'api', speed: 'ultrafast' }))
-    );
+    expect(keyProfiles.saveCodexSpeed).toHaveBeenCalledExactlyOnceWith(null, {
+      speed: 'ultrafast',
+    });
   });
 
   test('under supported: false key rows are read-only and the Default row stays editable', async () => {
@@ -368,22 +376,28 @@ describe('codex speed modal failure and disabled paths', () => {
       expect(text(row)).toContain(i18n.t('quota_management.codex_speed.table_reason_read_only'));
     }
     expect([defaultRow, alpha, beta].map(reasonOf)).toEqual(['', 'read_only', 'read_only']);
+    // CPA ignores key profiles here, so beta shows the shared Fast its requests get, not
+    // its stored Ultrafast; the badge still says it has a profile of its own.
+    expect(pressed(beta)).toEqual(['fast']);
+    expect(badge(beta)).toBe('own');
     expect(
       root().findAll((node) => Boolean(node.props['data-codex-speed-read-only']))
     ).toHaveLength(1);
     // CPA ignores the stored API key mode here, while the shared speed applies.
     expect(speedButtons(defaultRow).some((button) => button.props.disabled)).toBe(false);
     await click(speedButton(defaultRow, 'standard'));
-    expect(keyProfiles.saveShared).toHaveBeenCalledExactlyOnceWith(
-      shared(codex({ mode: 'api', speed: 'standard' }))
-    );
+    expect(keyProfiles.saveCodexSpeed).toHaveBeenCalledExactlyOnceWith(null, {
+      speed: 'standard',
+    });
+    await click(speedButton(beta, 'ultrafast'));
+    expect(keyProfiles.saveCodexSpeed).toHaveBeenCalledTimes(1);
   });
 
   test('after a failed write the row shows the stored speed and the error', async () => {
-    keyProfiles = makeKeyProfiles(profilesState(), { saveKeyProfile: vi.fn(async () => false) });
+    keyProfiles = makeKeyProfiles(profilesState(), { saveCodexSpeed: vi.fn(async () => false) });
     await mount();
     await click(speedButton(rows()[1], 'ultrafast'));
-    expect(keyProfiles.saveKeyProfile).toHaveBeenCalledTimes(1);
+    expect(keyProfiles.saveCodexSpeed).toHaveBeenCalledTimes(1);
     const error = 'Save failed for bob@example.com';
     keyProfiles = { ...keyProfiles, error };
     await rerender();

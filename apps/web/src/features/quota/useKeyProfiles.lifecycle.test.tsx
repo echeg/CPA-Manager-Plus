@@ -14,6 +14,8 @@ import {
   LastClientKeyError,
 } from '@/features/personal-quota-support/services/api/clientKeys';
 import {
+  ConfigChangedError,
+  DefaultCopyUnconfirmedError,
   providersFromClaudeFallback,
   InvalidRoutingConfigError,
   UnknownApiKeyError,
@@ -27,7 +29,9 @@ import type { Config } from '@/features/personal-quota-support/types';
 import { providersApi } from '@/services/api/providers';
 import type { ApiKeyAlias } from '@/services/api/usageService';
 import { sha256Hex } from '@/utils/apiKeyHash';
+import { withCodexSpeed } from './codexSpeedModel';
 import { useKeyProfiles, type KeyProfilesState } from './hooks/useKeyProfiles';
+import { copyOfShared } from './keyProfilesModel';
 
 const aliasState = vi.hoisted(() => ({
   aliases: [] as ApiKeyAlias[],
@@ -136,7 +140,23 @@ async function mount(disabled = false) {
   });
 }
 
-const unknownKeyMessage = 'This key was removed on the Config page. The key list was reloaded.';
+const unknownKeyMessage = 'This key was removed on the Config page, so nothing was saved.';
+/** The config ETag a speed table write of a key row is conditional on. */
+const CONFIG_VERSION = '"config-v1"';
+/**
+ * The stored config as `configSnapshot` reads it: KEY_A and KEY_B are client keys, as
+ * in `config`, and KEY_B owns a profile, as in `get`.
+ */
+const snapshot = (
+  version = CONFIG_VERSION,
+  profiledKeys: string[] = [KEY_B],
+  clientKeys: string[] = [KEY_A, KEY_B]
+) => ({
+  version,
+  clientKeys: new Set(clientKeys),
+  profiledKeys: new Set(profiledKeys),
+  legacyClaudeFallback: { shared: false, keys: new Set<string>() },
+});
 
 beforeAll(async () => {
   await i18n.changeLanguage('en');
@@ -156,6 +176,7 @@ beforeEach(() => {
   vi.spyOn(routingProfilesApi, 'get').mockResolvedValue(
     profilesState([{ key: KEY_B, profile: ownProfile() }])
   );
+  vi.spyOn(routingProfilesApi, 'configSnapshot').mockResolvedValue(snapshot());
   vi.spyOn(providersApi, 'getClaudeConfigs').mockResolvedValue([]);
   vi.spyOn(providersApi, 'getCodexConfigs').mockResolvedValue([]);
 });
@@ -676,6 +697,525 @@ describe('useKeyProfiles shared profile', () => {
     expect(hook.loading).toBe(false);
     expect(hook.error).toBe('CPA did not retain the routing profile');
     expect(hook.ttl).toBe('1h');
+  });
+});
+
+describe('useKeyProfiles Codex speed', () => {
+  /**
+   * The stored profiles after another tab changed the routing since the hook loaded:
+   * the shared profile prefers a Codex account, and KEY_B's profile has a new selection.
+   */
+  const changedElsewhere = (): RoutingProfilesState => {
+    const state = profilesState([
+      {
+        key: KEY_B,
+        profile: { ...ownProfile(), selection: { primary: 'reserves', tiebreak: 'round-robin' } },
+      },
+    ]);
+    return { ...state, shared: { ...state.shared, preferredAccounts: { codex: 'codex-9' } } };
+  };
+
+  test('a key with its own profile gets the changed field alone, conditional on the version', async () => {
+    await mount();
+    const stored = changedElsewhere();
+    vi.mocked(routingProfilesApi.get).mockResolvedValue(stored);
+    const saved = changedElsewhere();
+    const saveField = vi.spyOn(routingProfilesApi, 'saveKeyCodexSpeed').mockResolvedValue(saved);
+    const saveCopy = vi.spyOn(routingProfilesApi, 'saveKeyDefaultCopy');
+    const clearCache = vi.fn();
+    useConfigStore.setState({ clearCache });
+    let result = false;
+    await act(async () => {
+      result = await hook.saveCodexSpeed(KEY_B, { speed: 'ultrafast' });
+    });
+    expect(result).toBe(true);
+    expect(routingProfilesApi.get).toHaveBeenCalledTimes(2);
+    // No other field is sent, so none can carry a value older than the stored one,
+    // also when the profiles CPA has loaded lag an edit of the file.
+    expect(saveField).toHaveBeenCalledExactlyOnceWith(
+      KEY_B,
+      { speed: 'ultrafast' },
+      CONFIG_VERSION
+    );
+    expect(saveCopy).not.toHaveBeenCalled();
+    // The version is read before the profiles, so a change saved after the reread
+    // fails the conditional write instead of being undone by it.
+    const [versionRead] = vi.mocked(routingProfilesApi.configSnapshot).mock.invocationCallOrder;
+    const reread = vi.mocked(routingProfilesApi.get).mock.invocationCallOrder[1];
+    expect(versionRead).toBeLessThan(reread);
+    expect(hook.state).toBe(saved);
+    expect(clearCache).toHaveBeenCalled();
+    expect(hook.saving).toBe(false);
+  });
+
+  test('refuses a key write without a config version', async () => {
+    await mount();
+    const saveCopy = vi.spyOn(routingProfilesApi, 'saveKeyDefaultCopy');
+    const saveField = vi.spyOn(routingProfilesApi, 'saveKeyCodexSpeed');
+    const missing =
+      "CPA's answer carried no usable configuration version (ETag), so a key's speed cannot be changed here without the risk of undoing a change made elsewhere. Nothing was saved; change the speed in the key's profile editor.";
+    // Unconditional, either write could undo a change saved elsewhere after the reread,
+    // and bring back a profile deleted meanwhile, so neither a key with its own
+    // profile nor a key on the Default profile is written.
+    vi.mocked(routingProfilesApi.configSnapshot).mockResolvedValue(snapshot('', [KEY_B]));
+    for (const key of [KEY_B, KEY_A]) {
+      let result = true;
+      await act(async () => {
+        result = await hook.saveCodexSpeed(key, { speed: 'fast' });
+      });
+      expect(result).toBe(false);
+      expect(hook.error).toBe(missing);
+      expect(hook.saving).toBe(false);
+    }
+    expect(saveField).not.toHaveBeenCalled();
+    expect(saveCopy).not.toHaveBeenCalled();
+    // Refused before the reread: nothing was written, so nothing is reloaded either.
+    expect(routingProfilesApi.get).toHaveBeenCalledOnce();
+    // The Default row merges one field and needs no version.
+    const saveShared = vi
+      .spyOn(routingProfilesApi, 'saveSharedCodexSpeed')
+      .mockResolvedValue(profilesState());
+    let result = false;
+    await act(async () => {
+      result = await hook.saveCodexSpeed(null, { speed: 'fast' });
+    });
+    expect(result).toBe(true);
+    expect(saveShared).toHaveBeenCalledExactlyOnceWith({ speed: 'fast' });
+  });
+
+  test('writes nothing while the loaded profiles lag the stored config on a key profile', async () => {
+    await mount();
+    const saveField = vi.spyOn(routingProfilesApi, 'saveKeyCodexSpeed');
+    const saveCopy = vi.spyOn(routingProfilesApi, 'saveKeyDefaultCopy');
+    const changed =
+      'The configuration changed elsewhere after it was read, so nothing was saved. Check the current values and try again.';
+    // The file no longer holds KEY_B's profile, but CPA has not reloaded it yet.
+    vi.mocked(routingProfilesApi.configSnapshot).mockResolvedValue(snapshot(CONFIG_VERSION, []));
+    let result = true;
+    await act(async () => {
+      result = await hook.saveCodexSpeed(KEY_B, { speed: 'fast' });
+    });
+    expect(result).toBe(false);
+    expect(hook.error).toBe(changed);
+    // The file gives KEY_A a profile that CPA has not loaded yet.
+    vi.mocked(routingProfilesApi.configSnapshot).mockResolvedValue(
+      snapshot(CONFIG_VERSION, [KEY_A, KEY_B])
+    );
+    await act(async () => {
+      result = await hook.saveCodexSpeed(KEY_A, { speed: 'fast' });
+    });
+    expect(result).toBe(false);
+    expect(hook.error).toBe(changed);
+    expect(saveField).not.toHaveBeenCalled();
+    expect(saveCopy).not.toHaveBeenCalled();
+    expect(hook.saving).toBe(false);
+  });
+
+  test('a key on the Default profile gets a full copy of the stored Default profile', async () => {
+    await mount();
+    const stored = changedElsewhere();
+    vi.mocked(routingProfilesApi.get).mockResolvedValue(stored);
+    const save = vi.spyOn(routingProfilesApi, 'saveKeyDefaultCopy').mockResolvedValue(stored);
+    const saveProfile = vi.spyOn(routingProfilesApi, 'saveKeyProfile');
+    await act(async () => {
+      await hook.saveCodexSpeed(KEY_A, { ignoreClientTier: true });
+    });
+    const sent = withCodexSpeed(copyOfShared(stored.shared), { ignoreClientTier: true });
+    // Passed with the read it was copied from, so the write can check that the version
+    // it wrote holds that Default.
+    expect(save).toHaveBeenCalledExactlyOnceWith(KEY_A, sent, stored, CONFIG_VERSION);
+    expect(saveProfile).not.toHaveBeenCalled();
+    expect(sent.preferredAccounts).toEqual({ codex: 'codex-9' });
+  });
+
+  test('a Default change patches the changed Codex field alone', async () => {
+    await mount();
+    const stored = changedElsewhere();
+    vi.mocked(routingProfilesApi.get).mockResolvedValue(stored);
+    const saved = changedElsewhere();
+    const saveField = vi.spyOn(routingProfilesApi, 'saveSharedCodexSpeed').mockResolvedValue(saved);
+    const saveProfile = vi.spyOn(routingProfilesApi, 'saveSharedProfile');
+    let result = false;
+    await act(async () => {
+      result = await hook.saveCodexSpeed(null, { speed: 'fast' });
+    });
+    expect(result).toBe(true);
+    // No full profile is sent, so a change another tab writes meanwhile is kept.
+    expect(saveField).toHaveBeenCalledExactlyOnceWith({ speed: 'fast' });
+    expect(saveProfile).not.toHaveBeenCalled();
+    // The config is read for the legacy Claude fallback check only: a merged field of
+    // the shared profile needs no config version.
+    expect(routingProfilesApi.configSnapshot).toHaveBeenCalledTimes(1);
+    expect(hook.state).toBe(saved);
+  });
+
+  test('a key write refused because the config changed shows why and reloads', async () => {
+    await mount();
+    vi.spyOn(routingProfilesApi, 'saveKeyCodexSpeed').mockRejectedValue(new ConfigChangedError());
+    let result = true;
+    await act(async () => {
+      result = await hook.saveCodexSpeed(KEY_B, { speed: 'fast' });
+    });
+    expect(result).toBe(false);
+    expect(hook.error).toBe(
+      'The configuration changed elsewhere after it was read, so nothing was saved. Check the current values and try again.'
+    );
+    // Mount, reread, then the reload after the refused write.
+    expect(routingProfilesApi.get).toHaveBeenCalledTimes(3);
+    expect(hook.saving).toBe(false);
+  });
+
+  test('a click on a key deleted elsewhere writes nothing and reloads the key list', async () => {
+    const fetchConfig = vi
+      .fn<(force?: boolean) => Promise<Config>>()
+      .mockResolvedValue(config([KEY_B]))
+      .mockResolvedValueOnce(config());
+    useConfigStore.setState({ fetchConfig });
+    await mount();
+    // Another tab deleted KEY_A, which was on the Default profile. A click on the speed
+    // the Default profile already has would write nothing and keep the key shown.
+    vi.mocked(routingProfilesApi.configSnapshot).mockResolvedValue(
+      snapshot(CONFIG_VERSION, [KEY_B], [KEY_B])
+    );
+    const saveCopy = vi.spyOn(routingProfilesApi, 'saveKeyDefaultCopy');
+    let result = true;
+    await act(async () => {
+      result = await hook.saveCodexSpeed(KEY_A, { speed: 'standard' });
+    });
+    expect(result).toBe(false);
+    expect(saveCopy).not.toHaveBeenCalled();
+    expect(hook.error).toBe(unknownKeyMessage);
+    expect(fetchConfig).toHaveBeenLastCalledWith(true);
+    expect(hook.rows.map((row) => row.key)).toEqual([KEY_B]);
+    expect(hook.saving).toBe(false);
+  });
+
+  test('a copy of the Default the key may keep says so and reloads', async () => {
+    await mount();
+    vi.spyOn(routingProfilesApi, 'saveKeyDefaultCopy').mockRejectedValue(
+      new DefaultCopyUnconfirmedError()
+    );
+    let result = true;
+    await act(async () => {
+      result = await hook.saveCodexSpeed(KEY_A, { speed: 'fast' });
+    });
+    expect(result).toBe(false);
+    expect(hook.error).toBe(
+      'The key may now have its own profile: a copy of the Default profile that could not be confirmed. Refresh to see whether it has one, and reset it to default if the key should follow the Default profile.'
+    );
+    // Mount, reread, then the reload that shows whether the key kept the copy.
+    expect(routingProfilesApi.get).toHaveBeenCalledTimes(3);
+    expect(hook.saving).toBe(false);
+  });
+
+  test('a write warning whose reload fails says the values shown may be out of date', async () => {
+    await mount();
+    const copyWarning =
+      'The key may now have its own profile: a copy of the Default profile that could not be confirmed. Refresh to see whether it has one, and reset it to default if the key should follow the Default profile.';
+    vi.spyOn(routingProfilesApi, 'saveKeyDefaultCopy').mockRejectedValue(
+      new DefaultCopyUnconfirmedError()
+    );
+    // The reread succeeds; the reload after the write finds the connection down.
+    vi.mocked(routingProfilesApi.get)
+      .mockResolvedValueOnce(profilesState([{ key: KEY_B, profile: ownProfile() }]))
+      .mockRejectedValueOnce(new Error('Network down'));
+    await act(async () => {
+      await hook.saveCodexSpeed(KEY_A, { speed: 'fast' });
+    });
+    expect(routingProfilesApi.get).toHaveBeenCalledTimes(3);
+    expect(hook.loading).toBe(false);
+    // The rows are still those of the mount, which showed KEY_A on the Default profile:
+    // the reload error is not hidden behind the write warning.
+    expect(hook.rows[0].profile).toBeNull();
+    expect(hook.error).toBe(
+      `${copyWarning} The current values could not be loaded, so the values shown may be out of date: Network down`
+    );
+    // A user reload that fails too keeps the warning: the "Default" row it explains was
+    // not reloaded either.
+    vi.mocked(routingProfilesApi.get).mockRejectedValueOnce(new Error('Still down'));
+    await act(async () => {
+      hook.reload();
+    });
+    expect(routingProfilesApi.get).toHaveBeenCalledTimes(4);
+    expect(hook.rows[0].profile).toBeNull();
+    expect(hook.error).toBe(
+      `${copyWarning} The current values could not be loaded, so the values shown may be out of date: Still down`
+    );
+    // A reload that succeeds clears both.
+    await act(async () => {
+      hook.reload();
+    });
+    expect(hook.error).toBe('');
+  });
+
+  test('a write warning stays until a user reload loads, and the next write clears it', async () => {
+    await mount();
+    vi.spyOn(routingProfilesApi, 'saveKeyDefaultCopy').mockRejectedValue(
+      new DefaultCopyUnconfirmedError()
+    );
+    await act(async () => {
+      await hook.saveCodexSpeed(KEY_A, { speed: 'fast' });
+    });
+    expect(hook.error).toContain('The key may now have its own profile');
+    // A reload still running shows the warning.
+    const pending = deferred<RoutingProfilesState>();
+    vi.mocked(routingProfilesApi.get).mockReturnValueOnce(pending.promise);
+    await act(async () => {
+      hook.reload();
+    });
+    expect(hook.loading).toBe(true);
+    expect(hook.error).toContain('The key may now have its own profile');
+    await act(async () => {
+      pending.resolve(profilesState([{ key: KEY_B, profile: ownProfile() }]));
+    });
+    expect(hook.error).toBe('');
+    // A failed user reload followed by a write: the write's own error is not cleared by
+    // the reload that write triggers.
+    vi.mocked(routingProfilesApi.get).mockRejectedValueOnce(new Error('Network down'));
+    await act(async () => {
+      hook.reload();
+    });
+    vi.mocked(routingProfilesApi.configSnapshot).mockResolvedValueOnce(
+      snapshot(CONFIG_VERSION, [KEY_B], [KEY_B])
+    );
+    await act(async () => {
+      await hook.saveCodexSpeed(KEY_A, { speed: 'fast' });
+    });
+    expect(hook.error).toBe('This key was removed on the Config page, so nothing was saved.');
+  });
+
+  test('a write that would drop a legacy Claude fallback is refused before any write', async () => {
+    await mount();
+    const saveShared = vi.spyOn(routingProfilesApi, 'saveSharedCodexSpeed');
+    const saveKeyField = vi.spyOn(routingProfilesApi, 'saveKeyCodexSpeed');
+    const saveCopy = vi.spyOn(routingProfilesApi, 'saveKeyDefaultCopy');
+    const refuse = async (key: string | null) => {
+      let result = true;
+      await act(async () => {
+        result = await hook.saveCodexSpeed(key, { speed: 'ultrafast' });
+      });
+      expect(result).toBe(false);
+    };
+    // The Default profile keeps it: CPA runs its merge on the shared profile for every
+    // routing write, also one that names only a key.
+    vi.mocked(routingProfilesApi.configSnapshot).mockResolvedValue({
+      ...snapshot(),
+      legacyClaudeFallback: { shared: true, keys: new Set() },
+    });
+    for (const key of [null, KEY_A, KEY_B]) {
+      await refuse(key);
+      expect(hook.error).toBe(
+        'The Default profile keeps its Claude fallback in the old claude-fallback block beside an empty providers.claude.fallback, and CPA would drop that block on this change, which turns the fallback off. Nothing was saved; save the Default profile once in Profiles, then change the speed.'
+      );
+    }
+    // Only KEY_B's own profile keeps it: a write of its speed is refused.
+    vi.mocked(routingProfilesApi.configSnapshot).mockResolvedValue({
+      ...snapshot(),
+      legacyClaudeFallback: { shared: false, keys: new Set([KEY_B]) },
+    });
+    await refuse(KEY_B);
+    expect(hook.error).toBe(
+      "This key's profile keeps its Claude fallback in the old claude-fallback block beside an empty providers.claude.fallback, and CPA would drop that block on this change, which turns the fallback off. Nothing was saved; save the key's profile once in Profiles, then change the speed."
+    );
+    expect(saveShared).not.toHaveBeenCalled();
+    expect(saveKeyField).not.toHaveBeenCalled();
+    expect(saveCopy).not.toHaveBeenCalled();
+    // Refused before any write, so nothing is reloaded: the mount and four rereads.
+    expect(routingProfilesApi.get).toHaveBeenCalledTimes(5);
+    // A click on the value the row already gets writes nothing, so it is not refused.
+    await act(async () => {
+      await hook.saveCodexSpeed(KEY_B, { speed: 'standard' });
+    });
+    expect(hook.error).toBe('');
+  });
+
+  test('a failed config version read writes nothing', async () => {
+    await mount();
+    vi.mocked(routingProfilesApi.configSnapshot).mockRejectedValueOnce(new Error('Network down'));
+    const save = vi.spyOn(routingProfilesApi, 'saveKeyCodexSpeed');
+    let result = true;
+    await act(async () => {
+      result = await hook.saveCodexSpeed(KEY_B, { speed: 'fast' });
+    });
+    expect(result).toBe(false);
+    expect(save).not.toHaveBeenCalled();
+    expect(hook.error).toBe('Network down');
+    expect(hook.saving).toBe(false);
+  });
+
+  /** Codex on an API key, and Claude not falling back to Codex: CPA uses no Codex speed. */
+  const speedUnused = (profile: RoutingProfile): RoutingProfile => ({
+    ...profile,
+    providers: {
+      claude: {
+        ...profile.providers.claude,
+        fallback: { ...profile.providers.claude.fallback, target: 'off' },
+      },
+      codex: { ...profile.providers.codex, mode: 'api' },
+    },
+  });
+
+  test('writes nothing when the stored row no longer uses the speed', async () => {
+    await mount();
+    const saveKey = vi.spyOn(routingProfilesApi, 'saveKeyDefaultCopy');
+    const saveKeyField = vi.spyOn(routingProfilesApi, 'saveKeyCodexSpeed');
+    const saveField = vi.spyOn(routingProfilesApi, 'saveSharedCodexSpeed');
+    // Another tab moved the Default profile to Codex API key mode without a fallback.
+    const stored = { ...profilesState(), shared: speedUnused(sharedProfile()) };
+    vi.mocked(routingProfilesApi.get).mockResolvedValue(stored);
+    let result = true;
+    await act(async () => {
+      // KEY_A inherits the Default profile, so it must not get an own profile now.
+      result = await hook.saveCodexSpeed(KEY_A, { speed: 'fast' });
+    });
+    expect(result).toBe(false);
+    expect(hook.state).toBe(stored);
+    result = true;
+    await act(async () => {
+      result = await hook.saveCodexSpeed(null, { speed: 'fast' });
+    });
+    expect(result).toBe(false);
+    // A key whose own profile moved to API key mode is not written either.
+    vi.mocked(routingProfilesApi.get).mockResolvedValue(
+      profilesState([{ key: KEY_B, profile: speedUnused(ownProfile()) }])
+    );
+    await act(async () => {
+      result = await hook.saveCodexSpeed(KEY_B, { ignoreClientTier: true });
+    });
+    expect(result).toBe(false);
+    expect(saveKey).not.toHaveBeenCalled();
+    expect(saveKeyField).not.toHaveBeenCalled();
+    expect(saveField).not.toHaveBeenCalled();
+    expect(hook.saving).toBe(false);
+  });
+
+  test('a Default speed is written under supported: false even with a stored API key mode', async () => {
+    const locked = { ...profilesState(), supported: false, shared: speedUnused(sharedProfile()) };
+    vi.mocked(routingProfilesApi.get).mockResolvedValue(locked);
+    await mount();
+    const saveField = vi
+      .spyOn(routingProfilesApi, 'saveSharedCodexSpeed')
+      .mockResolvedValue(locked);
+    let result = false;
+    await act(async () => {
+      result = await hook.saveCodexSpeed(null, { speed: 'ultrafast' });
+    });
+    // CPA ignores the stored mode there and applies the shared speed to every request.
+    expect(result).toBe(true);
+    expect(saveField).toHaveBeenCalledExactlyOnceWith({ speed: 'ultrafast' });
+  });
+
+  test('a click on the value a row already gets writes nothing', async () => {
+    await mount();
+    const saveKey = vi.spyOn(routingProfilesApi, 'saveKeyDefaultCopy');
+    const saveKeyField = vi.spyOn(routingProfilesApi, 'saveKeyCodexSpeed');
+    const saveField = vi.spyOn(routingProfilesApi, 'saveSharedCodexSpeed');
+    // The table opened on Standard; another tab has set the Default profile to Fast since.
+    const shared = withCodexSpeed(sharedProfile(), { speed: 'fast' });
+    const stored = profilesState([
+      { key: KEY_B, profile: withCodexSpeed(ownProfile(), { speed: 'fast' }) },
+    ]);
+    vi.mocked(routingProfilesApi.get).mockResolvedValue({ ...stored, shared });
+    let result = true;
+    await act(async () => {
+      // KEY_A already gets Fast from the Default profile: it stays on the Default profile.
+      result = await hook.saveCodexSpeed(KEY_A, { speed: 'fast' });
+    });
+    expect(result).toBe(false);
+    expect(hook.state?.shared).toBe(shared);
+    expect(ownProfiles()).toBe(1);
+    await act(async () => {
+      await hook.saveCodexSpeed(KEY_B, { speed: 'fast' });
+      await hook.saveCodexSpeed(null, { speed: 'fast', ignoreClientTier: false });
+    });
+    expect(saveKey).not.toHaveBeenCalled();
+    expect(saveKeyField).not.toHaveBeenCalled();
+    expect(saveField).not.toHaveBeenCalled();
+    expect(hook.saving).toBe(false);
+  });
+
+  test('writes nothing when the reread shows that the change no longer applies', async () => {
+    await mount();
+    const saveKey = vi
+      .spyOn(routingProfilesApi, 'saveKeyDefaultCopy')
+      .mockResolvedValue(profilesState());
+    const saveKeyField = vi
+      .spyOn(routingProfilesApi, 'saveKeyCodexSpeed')
+      .mockResolvedValue(profilesState());
+    const saveShared = vi
+      .spyOn(routingProfilesApi, 'saveSharedCodexSpeed')
+      .mockResolvedValue(profilesState());
+    // Key profiles are no longer used, for example after a scheduler plugin was enabled.
+    vi.mocked(routingProfilesApi.get).mockResolvedValue({ ...profilesState(), supported: false });
+    let result = true;
+    await act(async () => {
+      result = await hook.saveCodexSpeed(KEY_B, { speed: 'fast' });
+    });
+    expect(result).toBe(false);
+    expect(hook.state?.supported).toBe(false);
+    // The backend no longer serves the speed.
+    vi.mocked(routingProfilesApi.get).mockResolvedValue({
+      ...profilesState(),
+      speedSupported: false,
+    });
+    result = true;
+    await act(async () => {
+      result = await hook.saveCodexSpeed(null, { speed: 'fast' });
+    });
+    expect(result).toBe(false);
+    expect(hook.state?.speedSupported).toBe(false);
+    expect(saveKey).not.toHaveBeenCalled();
+    expect(saveKeyField).not.toHaveBeenCalled();
+    expect(saveShared).not.toHaveBeenCalled();
+    expect(hook.saving).toBe(false);
+  });
+
+  test('a key change is refused without a request while key profiles are not used', async () => {
+    vi.mocked(routingProfilesApi.get).mockResolvedValue({ ...profilesState(), supported: false });
+    await mount();
+    const save = vi.spyOn(routingProfilesApi, 'saveKeyDefaultCopy');
+    const saveField = vi.spyOn(routingProfilesApi, 'saveKeyCodexSpeed');
+    let result = true;
+    await act(async () => {
+      result = await hook.saveCodexSpeed(KEY_B, { speed: 'fast' });
+    });
+    expect(result).toBe(false);
+    expect(routingProfilesApi.get).toHaveBeenCalledTimes(1);
+    expect(routingProfilesApi.configSnapshot).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+    expect(saveField).not.toHaveBeenCalled();
+  });
+
+  test('a failed reread shows its error and writes nothing', async () => {
+    await mount();
+    vi.mocked(routingProfilesApi.get).mockRejectedValueOnce(new Error('Network down'));
+    const save = vi.spyOn(routingProfilesApi, 'saveSharedCodexSpeed');
+    let result = true;
+    await act(async () => {
+      result = await hook.saveCodexSpeed(null, { speed: 'fast' });
+    });
+    expect(result).toBe(false);
+    expect(save).not.toHaveBeenCalled();
+    expect(hook.error).toBe('Network down');
+    expect(hook.saving).toBe(false);
+  });
+
+  test('a connection change during the reread writes nothing', async () => {
+    await mount();
+    const pending = deferred<RoutingProfilesState>();
+    vi.mocked(routingProfilesApi.get).mockReturnValueOnce(pending.promise);
+    const save = vi.spyOn(routingProfilesApi, 'saveSharedCodexSpeed');
+    let result!: Promise<boolean>;
+    await act(async () => {
+      result = hook.saveCodexSpeed(null, { speed: 'fast' });
+    });
+    revision += 1;
+    await act(async () => {
+      pending.resolve(changedElsewhere());
+    });
+    await expect(result).resolves.toBe(false);
+    expect(save).not.toHaveBeenCalled();
+    expect(hook.saving).toBe(false);
   });
 });
 

@@ -170,6 +170,16 @@ describe('buildSpeedRows', () => {
     expect(apiShared.slice(1).every((row) => row.disabledReason === 'read_only')).toBe(true);
   });
 
+  test('under supported: false a key row shows the Default values, which its requests get', () => {
+    const own = profile(codex({ speed: 'ultrafast', ignoreClientTier: false }), 'priority');
+    const rows = buildSpeedRows(state({ supported: false }), keyRows({ [RAW_BETA]: own }));
+    // CPA ignores key profiles there, so the stored Ultrafast of beta does not apply.
+    for (const row of rows) expect(row).toMatchObject({ speed: 'fast', ignoreClientTier: true });
+    // The stored profile is kept on the display row, so the badge still says "Own profile".
+    expect(rows[2].keyRow?.profile).toBe(own);
+    expect(rows[2].disabledReason).toBe('read_only');
+  });
+
   test('no id or label holds a raw key', () => {
     const rows = buildSpeedRows(state(), keyRows({ [RAW_BETA]: profile(codex()) }));
     for (const row of rows) {

@@ -157,12 +157,14 @@ block of every profile editor has a **Speed** row below the fallback:
   subscription traffic of that profile. Ultrafast applies to models that offer it;
   models that offer only Fast use Fast, and other models get no speed tier.
 - **Ignore the tier the client sends.** On: the profile's speed applies even when the
-  client asks for its own tier. Off: a tier the client sends is used, and the
-  profile's speed applies only when the client sends none.
+  client asks for its own tier. Off: the client's tier is used when one is left after
+  CPA translates the request, and the profile's speed applies otherwise. The
+  translation of a Responses request maps `fast` to `priority` and drops tiers it does
+  not know, such as `flex` and `auto`, so such a request gets the profile's speed.
 
-The row is disabled in API key mode, with an explanation: requests billed to an API
-key never get a speed tier. The stored values stay in the profile and are shown, so
-switching back to Subscription restores them. The exception is a profile whose Claude
+The row is disabled in API key mode, with an explanation: the profile neither sets
+nor overrides the tier of requests billed to an API key. The stored values stay in
+the profile and are shown, so switching back to Subscription restores them. The exception is a profile whose Claude
 falls back to Codex: CPA runs that fallback on Codex subscriptions with the profile's
 Codex speed, so the row stays enabled in Codex API key mode, with a note that the
 speed applies only to those Claude requests. In Home mode or with a scheduler plugin
@@ -395,24 +397,83 @@ the flag switch; a click applies at once, without confirmation. A speed button i
 activated only by a click, Enter or Space; arrow keys do nothing, so no keyboard
 navigation writes.
 
-- A change on the Default row saves the default profile, like **Save** in its
-  editor.
-- A change on a key with its own profile saves that profile with the new value.
+- A change on the Default row saves the changed field of the default profile.
+- A change on a key with its own profile saves the new value into that profile.
 - A change on a key marked **Default** gives the key its own profile: a full copy of
   the default profile with the new value, because a key profile is a full copy and
   nothing is inherited from the default. The badge then reads **Own profile**. A
   key is returned to the default profile in the Keys modal.
 
-Every save writes the complete profile with one `PATCH /v8/management/config` and
-reads the profiles back, as the editors do. While it runs, every control is
-disabled. The rows always show the stored values: after a failed write the error is
+Every save first reads the stored profiles again and decides on them, not on the
+values the table was opened with. It writes nothing, and shows the stored values,
+when the row's speed is no longer used (Codex moved to API key mode without a Claude
+fallback to Codex) or the row already gets the clicked value, so a key marked
+**Default** keeps the default profile when that already has the speed. Otherwise
+the Default row sends only the changed field with one `PATCH /v8/management/config`;
+PATCH merges objects, so every other field of the default profile, also one changed
+in another tab, is kept, and the read-back checks that field. A key row write is
+conditional: the panel reads the config (`GET /v8/management/config`) before it
+reads the profiles again and sends its `ETag` as `If-Match`, so when the config
+changed in between (another tab moved the key's preferred account or deleted its
+profile), CPA answers 412, nothing is written, and the table shows the error and
+the reloaded values. A key that owns a profile in that config gets only the changed
+field, merged into its stored profile and checked on read-back: the `If-Match`
+guarantees the profile still exists, so the merge cannot create a profile holding
+only the speed, and no other field is sent. A key marked **Default** gets a complete
+copy of the stored default profile with the new value, read back as the editors do.
+The config read comes from the file and the profiles from the configuration CPA has
+loaded; after an edit of the file they differ until CPA reloads it. When they
+disagree on whether the key owns a profile, nothing is written and the table shows
+the same error. A copy could still come from a default profile that such an edit has
+changed, for example one edit that adds the key and moves the default profile to
+another account, and would then route the key's requests to the old account. So
+before a copy the panel sends an empty `PATCH`, conditional on the version it read:
+a write makes CPA load the version it writes, so the profiles read after it show the
+default profile of that version. When that is not the one copied, or that version no
+longer uses key profiles (a scheduler plugin took over routing) or no longer serves the
+speed, nothing else is written and the table shows the same error; otherwise the copy
+is written,
+conditional on the version the empty write produced. When the copy's read-back fails,
+or shows another profile for the key or another default profile beside the copy, or
+the copy's own write failed without proof that CPA refused it (a timeout, a proxy's
+502 or 504, or CPA's 500 `write_failed`, which CPA also sends when the bytes reached
+the file and only the sync failed), CPA may have kept the copy; the error then says
+that the key may have its own profile, a copy that could not be confirmed, and the
+reloaded table shows whether it has. The panel does not delete such a copy: CPA names
+the version in its answer to a write by reading the file again, so an edit of the file
+made right then could give a delete conditional on that version another writer's file,
+and the delete would remove the profile that writer gave the key. **Reset to default**
+in the Keys modal returns the key to the default profile. The same answer is why the
+read-back also compares the default profile: in that race the copy can land beside a
+default profile it did not copy. When the reload after a failed write fails too, the
+table keeps the rows of the earlier load and the error adds that the values shown may
+be out of date; the write's error stays shown until a reload succeeds, also when
+**Refresh** fails again. A click on a key that the config read no longer
+lists, because it was deleted elsewhere, writes nothing, shows that the key was
+removed and reloads the key list, also when the click would change nothing. When the config read
+carries no usable version (no `ETag`; a weak one, as a compressing proxy makes it,
+while CPA matches `If-Match` strongly; or `*` or a list of tags, which CPA would
+match against a newer config), a key row is not written at all and the table says
+why: unconditional, the write could undo a change saved elsewhere after the reread
+or bring back a deleted profile. Every CPA that serves the speed sends one strong
+`ETag`, so this only happens when something between the panel and CPA changes it;
+the key's profile editor still saves. A speed table save is refused, with the reason
+and nothing written, while the default profile, or for a key that owns a profile also
+that profile, keeps its Claude fallback in the old `claude-fallback` block beside an
+empty `providers.claude.fallback` (a hand edit of the file can leave this shape). CPA
+reads the fallback from the old block there, but drops that block on any write that
+names the profile, the default profile on every routing write, and the fallback turns
+off; a save of the whole profile in the editor sends the fallback and keeps it, so the
+error asks to save that profile once in Profiles first. While a save runs,
+every control is disabled. The rows always show the stored values: after a failed write the error is
 shown above the table and the row keeps its stored speed. A row whose Codex mode is
 API key is disabled with the reason, unless the profile's Claude falls back to Codex:
 then the row stays editable, with a note that the speed applies only to that fallback.
 In Home mode or with a scheduler plugin
-(`supported: false`) the key rows are read-only, while the Default row stays
-editable, also with a stored API key mode, because CPA ignores the mode there and
-keeps applying the default profile's speed. If a reload while the table is open
+(`supported: false`) the key rows are read-only and show the default profile's
+speed and flag, which every request gets there, also for a key with its own profile;
+the Default row stays editable, also with a stored API key mode, because CPA ignores
+the mode there and keeps applying the default profile's speed. If a reload while the table is open
 reports a backend without `speed`, the table shows a note in place of its rows and
 offers no control, since a save there could not carry the speed.
 

@@ -140,6 +140,7 @@ function makeKeyProfiles(
     reload: vi.fn(),
     saveKeyProfile: vi.fn(async () => true),
     saveShared: vi.fn(async () => true),
+    saveCodexSpeed: vi.fn(async () => true),
     addKey: vi.fn(async () => ({ ok: true })),
     removeKey: vi.fn(async () => ({ ok: true })),
     ...overrides,

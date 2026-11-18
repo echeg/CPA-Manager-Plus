@@ -17,6 +17,11 @@ import {
 } from '@/features/personal-quota-support/services/api/clientKeys';
 import {
   clientApiKeys,
+  ConfigChangedError,
+  ConfigVersionUnavailableError,
+  DefaultCopyUnconfirmedError,
+  holdsCodexSpeed,
+  LegacyClaudeFallbackError,
   mergeKeyRows,
   routingProfilesApi,
   InvalidRoutingConfigError,
@@ -27,7 +32,8 @@ import {
 import { useConfigStore } from '@/features/personal-quota-support/stores';
 import { useApiKeyAliases } from '@/hooks/useApiKeyAliases';
 import { providersApi } from '@/services/api/providers';
-import { buildKeyRows } from '../keyProfilesModel';
+import { codexSpeedUse, withCodexSpeed, type CodexSpeedPatch } from '../codexSpeedModel';
+import { buildKeyRows, copyOfShared } from '../keyProfilesModel';
 import {
   emptyApiKeyConfigs,
   summarizeKeyConfigs,
@@ -98,8 +104,11 @@ export function useKeyProfiles(disabled: boolean) {
   const [ttl, setTtl] = useState(DEFAULT_TTL);
   const [apiKeyConfigs, setApiKeyConfigs] = useState<ApiKeyConfigSummaries>(emptyApiKeyConfigs);
   const [loadError, setLoadError] = useState('');
-  // A save error survives the reload it triggers; a user reload or the next save clears it.
+  // A save error survives the reload it triggers; a user reload that loads, or the next
+  // save, clears it. A user reload that fails keeps it, since the rows it explains, such
+  // as a "Default" badge beside a copy CPA did not confirm, were not reloaded either.
   const [saveError, setSaveError] = useState('');
+  const userReloadPending = useRef(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
@@ -137,6 +146,10 @@ export function useKeyProfiles(disabled: boolean) {
         setApiKeys(clientApiKeys(config.raw));
         setTtl(config.routingSessionAffinityTTL || DEFAULT_TTL);
         setState(profiles);
+        if (userReloadPending.current) {
+          userReloadPending.current = false;
+          setSaveError('');
+        }
       })
       .catch((err: unknown) => {
         if (isCurrent()) setLoadError(errorText(err, t));
@@ -159,7 +172,7 @@ export function useKeyProfiles(disabled: boolean) {
   // until it loads, a manager-hosted panel can neither delete a key nor save an alias.
   // A known list is kept, so the alias input does not turn off during every reload.
   const reload = useCallback(() => {
-    setSaveError('');
+    userReloadPending.current = true;
     refetch();
     if (!aliasStateKnown) reloadAliases();
   }, [aliasStateKnown, refetch, reloadAliases]);
@@ -177,6 +190,8 @@ export function useKeyProfiles(disabled: boolean) {
     savingRef.current = true;
     setSaving(true);
     setSaveError('');
+    // The error a pending user reload would clear is gone; keep the one this write sets.
+    userReloadPending.current = false;
     return true;
   };
   const endWrite = () => {
@@ -194,6 +209,27 @@ export function useKeyProfiles(disabled: boolean) {
       if (err instanceof AliasStateUnknownError) reloadAliases();
     } else if (err instanceof UnknownApiKeyError) {
       setSaveError(t('quota_management.key_profiles.errors.unknown_key'));
+      refetch();
+    } else if (err instanceof ConfigChangedError) {
+      // A conditional write found a newer config and wrote nothing: show the stored state.
+      setSaveError(t('quota_management.key_profiles.errors.config_changed'));
+      refetch();
+    } else if (err instanceof ConfigVersionUnavailableError) {
+      // Refused before any write, so the stored state is unchanged.
+      setSaveError(t('quota_management.key_profiles.errors.config_version_missing'));
+    } else if (err instanceof LegacyClaudeFallbackError) {
+      // Refused before any write, so the stored state is unchanged.
+      setSaveError(
+        t(
+          err.profile === 'default'
+            ? 'quota_management.key_profiles.errors.legacy_fallback_default'
+            : 'quota_management.key_profiles.errors.legacy_fallback_key'
+        )
+      );
+    } else if (err instanceof DefaultCopyUnconfirmedError) {
+      // The key may keep the copy: reload the stored state, so its row can tell. The
+      // text claims no reload: one that fails adds `reload_failed` to it.
+      setSaveError(t('quota_management.key_profiles.errors.copy_unconfirmed'));
       refetch();
     } else {
       setSaveError(errorText(err, t));
@@ -246,6 +282,104 @@ export function useKeyProfiles(disabled: boolean) {
       setState(saved);
       if (nextTTL !== undefined) setTtl(nextTTL.trim());
       refetch();
+      return true;
+    } catch (err) {
+      if (isCurrent()) failWrite(err);
+      return false;
+    } finally {
+      endWrite();
+    }
+  };
+
+  /**
+   * Change only the Codex speed and / or flag of the shared profile (`key` null) or of
+   * one key profile, as the speed table does on a click; resolves true when it wrote.
+   * The profiles are read again first, and the change is decided on the stored state
+   * rather than on the snapshot the table was opened with:
+   * - a key that the config read before the profiles no longer lists was deleted
+   *   elsewhere: nothing is written, and the key list is reloaded (`UnknownApiKeyError`);
+   * - nothing is written, and the stored state is shown, when the reread shows that the
+   *   change no longer applies (no speed, key profiles not used, or a speed CPA puts on
+   *   no request) or that the row already gets the requested values, so a key on the
+   *   Default profile is not detached by a click on the value it already inherits;
+   * - the Default profile gets a PATCH of the changed field alone, which keeps every
+   *   other field, also one changed elsewhere after the reread;
+   * - a key write is conditional on the config version read before the profiles, so a
+   *   change saved elsewhere after the reread fails it (`ConfigChangedError`) instead of
+   *   being undone. A key that owns a profile in that version gets a PATCH of the changed
+   *   field alone: the version guarantees the profile still exists, so the merge cannot
+   *   create one holding only that field, and no other field is sent. A key without its
+   *   own profile gets a complete copy of the stored Default profile, written only once
+   *   CPA has loaded the version and shows the Default that was copied, since the
+   *   profiles CPA had loaded can be behind an edit of the file; a copy CPA does not
+   *   confirm is reported, not deleted (`saveKeyDefaultCopy`,
+   *   `DefaultCopyUnconfirmedError`). When the version and the profiles disagree on
+   *   whether the key owns a profile, the profiles are behind such an edit, so nothing is
+   *   written either. A config read without a usable version (no ETag, or a weak,
+   *   wildcard or list value) refuses the key write (`ConfigVersionUnavailableError`):
+   *   unconditional, it could undo a change saved elsewhere after the reread, or bring
+   *   back a profile deleted meanwhile;
+   * - a write is refused (`LegacyClaudeFallbackError`) while the Default profile, or the
+   *   key's own profile for a key speed write, keeps its Claude fallback in the legacy
+   *   block beside an empty `providers.claude.fallback`: CPA would drop that block and
+   *   turn the fallback off, while a save of the whole profile in the editor keeps it.
+   */
+  const saveCodexSpeed = async (key: string | null, patch: CodexSpeedPatch) => {
+    if (!state || state.unsupportedBackend || (key !== null && !state.supported)) return false;
+    if (!beginWrite()) return false;
+    try {
+      // Read first, so the profiles below are at least as new as this version.
+      const snapshot = await routingProfilesApi.configSnapshot();
+      if (!isCurrent()) return false;
+      // Also before a click that writes nothing, which would leave a deleted key shown.
+      if (key !== null && !snapshot.clientKeys.has(key)) throw new UnknownApiKeyError();
+      if (key !== null && !snapshot.version) throw new ConfigVersionUnavailableError();
+      const stored = await routingProfilesApi.get();
+      if (!isCurrent()) return false;
+      if (
+        stored.unsupportedBackend ||
+        !stored.speedSupported ||
+        (key !== null && !stored.supported)
+      ) {
+        setState(stored);
+        return false;
+      }
+      const own =
+        key === null ? null : (stored.keys.find((entry) => entry.key === key)?.profile ?? null);
+      // `/config` reads the file, `/routing/profiles` the config CPA has loaded; they
+      // differ until the hot reload after an edit of the file.
+      if (key !== null && snapshot.profiledKeys.has(key) !== (own !== null))
+        throw new ConfigChangedError();
+      // What the row's requests get now. Under `supported: false` only the Default row
+      // gets this far, and CPA ignores its stored mode, as in `buildSpeedRows`.
+      const { providers } = own ?? stored.shared;
+      if (
+        codexSpeedUse(providers, !stored.supported) === 'unused' ||
+        holdsCodexSpeed(providers.codex, patch)
+      ) {
+        setState(stored);
+        return false;
+      }
+      // Every routing write runs CPA's legacy merge on the shared profile, and a key
+      // speed write on that key's own profile too; the copy carries its whole fallback.
+      const legacy = snapshot.legacyClaudeFallback;
+      if (legacy.shared) throw new LegacyClaudeFallbackError('default');
+      if (key !== null && legacy.keys.has(key)) throw new LegacyClaudeFallbackError('key');
+      const { version } = snapshot;
+      const saved =
+        key === null
+          ? await routingProfilesApi.saveSharedCodexSpeed(patch)
+          : own
+            ? await routingProfilesApi.saveKeyCodexSpeed(key, patch, version)
+            : await routingProfilesApi.saveKeyDefaultCopy(
+                key,
+                withCodexSpeed(copyOfShared(stored.shared), patch),
+                stored,
+                version
+              );
+      if (!isCurrent()) return false;
+      useConfigStore.getState().clearCache();
+      setState(saved);
       return true;
     } catch (err) {
       if (isCurrent()) failWrite(err);
@@ -317,6 +451,13 @@ export function useKeyProfiles(disabled: boolean) {
   );
   // `addKey` refuses an alias unless the service is reachable and its state is known.
   const aliasesEditable = Boolean(aliasServiceBase) && aliasStateKnown;
+  // A failed write reloads the stored state to show its outcome. When that reload fails
+  // too, the rows are still those of an earlier load: say so beside the write error
+  // instead of letting the write error hide it.
+  const error =
+    saveError && loadError
+      ? `${saveError} ${t('quota_management.key_profiles.errors.reload_failed', { message: loadError })}`
+      : saveError || loadError;
 
   return {
     state,
@@ -327,10 +468,11 @@ export function useKeyProfiles(disabled: boolean) {
     aliasesEditable,
     loading,
     saving,
-    error: saveError || loadError,
+    error,
     reload,
     saveKeyProfile,
     saveShared,
+    saveCodexSpeed,
     addKey,
     removeKey,
   };

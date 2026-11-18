@@ -1,7 +1,7 @@
 import {
   effectiveFallbackTarget,
   type CodexSpeed,
-  type ProviderRouting,
+  type CodexSpeedPatch,
   type RoutingProfile,
   type RoutingProfilesState,
 } from '@/features/personal-quota-support/services/api/routingProfiles';
@@ -11,9 +11,10 @@ import type { KeyDisplayRow } from './keyProfilesModel';
 /**
  * Whether CPA puts a profile's Codex speed on requests:
  * - `applies`: Codex runs on subscriptions, or its stored mode is locked (CPA ignores it);
- * - `claude_fallback`: Codex uses an API key, whose requests get no speed tier, but Claude
- *   falls back to Codex. CPA runs that leg on Codex subscriptions with this profile's speed,
- *   so the speed applies to it alone;
+ * - `claude_fallback`: Codex uses an API key, whose tier the profile neither sets nor
+ *   overrides, but Claude falls back to Codex. CPA
+ *   runs that leg on Codex subscriptions with this profile's speed, so the speed applies
+ *   to it alone;
  * - `unused`: Codex uses an API key and Claude does not fall back to Codex.
  */
 export type CodexSpeedUse = 'applies' | 'claude_fallback' | 'unused';
@@ -40,7 +41,11 @@ export interface SpeedRow {
   id: string;
   /** The client key the row is for; `null` for the Default row. Its `key` is raw: never render it. */
   keyRow: KeyDisplayRow | null;
-  /** Effective Codex values: the key's own profile, else the Default profile. */
+  /**
+   * Effective Codex values: the key's own profile, else the Default profile. Under
+   * `supported: false` every request uses the Default profile, so a key row shows
+   * the Default values even when the key has its own profile.
+   */
   speed: CodexSpeed;
   ignoreClientTier: boolean;
   disabledReason: SpeedDisabledReason;
@@ -48,11 +53,13 @@ export interface SpeedRow {
   claudeFallbackOnly: boolean;
 }
 
-export type CodexSpeedPatch = Partial<Pick<ProviderRouting, 'speed' | 'ignoreClientTier'>>;
+export type { CodexSpeedPatch };
 
 /**
  * The Default row, then one row per client key in list order. A key without its own
- * profile shows the Default profile's values; the table never merges the two.
+ * profile shows the Default profile's values; the table never merges the two. Under
+ * `supported: false` CPA ignores key profiles, so every key row shows the Default
+ * profile's values, which its requests get, and its own profile stays only as the badge.
  */
 export function buildSpeedRows(state: RoutingProfilesState, rows: KeyDisplayRow[]): SpeedRow[] {
   const toRow = (
@@ -76,7 +83,11 @@ export function buildSpeedRows(state: RoutingProfilesState, rows: KeyDisplayRow[
   return [
     toRow('default', null, state.shared),
     ...rows.map((row) =>
-      toRow(`key-${sha256Hex(row.key).toLowerCase()}`, row, row.profile ?? state.shared)
+      toRow(
+        `key-${sha256Hex(row.key).toLowerCase()}`,
+        row,
+        (state.supported && row.profile) || state.shared
+      )
     ),
   ];
 }

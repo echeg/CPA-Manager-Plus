@@ -5643,10 +5643,10 @@
       "row_label": "速度",
       "row_aria": "{{provider}} 速度",
       "ignore_client_tier": "忽略客户端发送的等级",
-      "ignore_client_tier_hint": "开启：即使客户端请求自己的等级，也使用此速度。关闭：使用客户端发送的等级，仅当客户端未发送时才使用此速度。",
+      "ignore_client_tier_hint": "开启：即使客户端请求自己的等级，也使用此速度。关闭：如果 CPA 转换请求后仍保留客户端的等级，则使用该等级；否则使用此速度。转换会丢弃无法识别的等级，例如 flex。",
       "ultrafast_hint": "极速仅适用于支持它的模型。只支持快速的模型使用快速；其他模型不使用速度等级。",
-      "api_mode_hint": "通过 API 密钥计费的请求不会使用速度等级。已保存的速度会保留给订阅模式。",
-      "claude_fallback_hint": "此处的 Codex 请求通过 API 密钥计费，不会使用速度等级。此速度仅用于回退到 Codex 订阅的 Claude 请求。",
+      "api_mode_hint": "配置不会设置或覆盖通过 API 密钥计费的请求的速度等级。已保存的值会保留给订阅模式。",
+      "claude_fallback_hint": "此处的 Codex 请求通过 API 密钥计费，配置不会设置或覆盖其速度等级。此速度仅用于回退到 Codex 订阅的 Claude 请求。",
       "table_title": "Codex 速度",
       "table_default_row": "默认配置",
       "table_column_profile": "配置",
@@ -5657,7 +5657,7 @@
       "table_speed_option": "{{label}}：{{speed}}",
       "table_flag_aria": "{{label}}：忽略客户端发送的等级",
       "table_reason_read_only": "此路由模式不使用密钥配置。",
-      "table_reason_api_mode": "此处 Codex 使用 API 密钥；API 密钥请求不会使用速度等级。",
+      "table_reason_api_mode": "此处 Codex 使用 API 密钥；配置不会设置或覆盖 API 密钥请求的速度等级。",
       "table_read_only": "此路由模式不使用密钥配置，因此密钥行为只读。默认配置的速度仍然生效。",
       "table_default_hint": "修改标记为“默认”的密钥会为其创建独立配置：默认配置的完整副本加上新值。",
       "table_loading": "正在加载配置…",
@@ -5746,7 +5746,13 @@
         "provider_speed": "{{provider}}（{{speed}}）"
       },
       "errors": {
-        "unknown_key": "此密钥已在配置页面中删除，密钥列表已重新加载。"
+        "unknown_key": "此密钥已在配置页面中删除，因此未保存任何内容。",
+        "config_changed": "配置在读取后已在别处更改，因此未保存任何内容。请检查当前值后重试。",
+        "config_version_missing": "CPA 的响应中没有可用的配置版本（ETag），因此无法在此更改密钥的速度，否则可能撤销在别处所做的更改。未保存任何内容；请在该密钥的配置文件编辑器中更改速度。",
+        "copy_unconfirmed": "该密钥现在可能拥有自己的配置文件：一份未能确认的默认配置文件副本。请刷新以确认它是否已有自己的配置文件；如果该密钥应跟随默认配置文件，请将其重置为默认。",
+        "legacy_fallback_default": "默认配置文件将 Claude 回退保存在旧的 claude-fallback 块中，旁边是空的 providers.claude.fallback；此更改会让 CPA 删除该块，从而关闭回退。未保存任何内容；请先在“配置档”中保存一次默认配置文件，再更改速度。",
+        "legacy_fallback_key": "此密钥的配置文件将 Claude 回退保存在旧的 claude-fallback 块中，旁边是空的 providers.claude.fallback；此更改会让 CPA 删除该块，从而关闭回退。未保存任何内容；请先在“配置档”中保存一次该密钥的配置文件，再更改速度。",
+        "reload_failed": "无法加载当前值，因此显示的值可能已过时：{{message}}"
       },
       "editor": {
         "sticky": "会话粘性",
