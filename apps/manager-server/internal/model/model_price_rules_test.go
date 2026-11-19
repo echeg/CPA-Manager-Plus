@@ -1,6 +1,9 @@
 package model
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 func TestNormalizeModelPriceContextTiersSortsAndRejectsDuplicates(t *testing.T) {
 	tiers, err := NormalizeModelPriceContextTiers([]ModelPriceContextTier{
@@ -209,6 +212,53 @@ func TestModelPriceForContextThresholdAndServiceTierUsesRuleRateForZeroBase(t *t
 
 	effective, ok := ModelPriceForContextThresholdAndServiceTier(price, 272_000, "fast")
 	if !ok || effective.Prompt != 3 || !effective.PromptConfigured || effective.Completion != 30 {
+		t.Fatalf("effective = %#v, ok = %v", effective, ok)
+	}
+}
+
+func TestModelPriceForContextThresholdAndServiceTierComparesUnsetCacheRatesAsBilled(t *testing.T) {
+	price := ModelPrice{
+		Prompt: 2, Completion: 10, PromptConfigured: true, CompletionConfigured: true,
+		ContextTiers: []ModelPriceContextTier{{
+			ThresholdTokens: 272_000, Prompt: 4, Completion: 15, CacheCreation: 5,
+			PromptConfigured: true, CompletionConfigured: true, CacheCreationConfigured: true,
+		}},
+		ServiceTiers: []ModelPriceServiceTier{{
+			Mode: "fast", ServiceTier: "priority", Prompt: 4, Completion: 20, CacheRead: 0.4, CacheCreation: 4,
+			PromptConfigured: true, CompletionConfigured: true, CacheReadConfigured: true, CacheCreationConfigured: true,
+		}},
+	}
+
+	// The base sets no cache rates, so it is billed at 0.2 (a tenth of the
+	// prompt rate) and 2 (the prompt rate); both rule rates double that. The
+	// context tier is billed at 0.4 (a tenth of 4) and its own 5.
+	effective, ok := ModelPriceForContextThresholdAndServiceTier(price, 272_000, "fast")
+	if !ok {
+		t.Fatal("context tier with fast rule did not resolve")
+	}
+	if math.Abs(effective.CacheRead-0.8) > 1e-9 || !effective.CacheReadConfigured {
+		t.Fatalf("cache read = %v (configured %v), want 0.8", effective.CacheRead, effective.CacheReadConfigured)
+	}
+	if math.Abs(effective.CacheCreation-10) > 1e-9 || !effective.CacheCreationConfigured {
+		t.Fatalf("cache write = %v (configured %v), want 10", effective.CacheCreation, effective.CacheCreationConfigured)
+	}
+}
+
+func TestModelPriceForContextThresholdAndServiceTierUsesRuleRateForExplicitZeroBaseCacheRate(t *testing.T) {
+	price := ModelPrice{
+		Prompt: 2, Completion: 10, CacheRead: 0,
+		PromptConfigured: true, CompletionConfigured: true, CacheReadConfigured: true,
+		ContextTiers: []ModelPriceContextTier{{
+			ThresholdTokens: 272_000, Prompt: 4, Completion: 15, PromptConfigured: true, CompletionConfigured: true,
+		}},
+		ServiceTiers: []ModelPriceServiceTier{{
+			Mode: "fast", ServiceTier: "priority", CacheRead: 0.5, CacheReadConfigured: true,
+		}},
+	}
+
+	// An explicit zero base rate is billed at 0, so there is no ratio.
+	effective, ok := ModelPriceForContextThresholdAndServiceTier(price, 272_000, "fast")
+	if !ok || effective.CacheRead != 0.5 || !effective.CacheReadConfigured {
 		t.Fatalf("effective = %#v, ok = %v", effective, ok)
 	}
 }

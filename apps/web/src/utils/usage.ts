@@ -1302,6 +1302,7 @@ export function calculateCost(
   const price = contextTier
     ? serviceTierPrice
       ? scaleContextTierPriceForServiceTier(
+          behaviorModel,
           ratioBasePrice(behaviorModel, basePrice),
           contextTier,
           serviceTierPrice
@@ -1312,19 +1313,8 @@ export function calculateCost(
       : basePrice;
   const promptPrice = Number(price.prompt) || 0;
   const completionPrice = Number(price.completion) || 0;
-  const configuredCacheReadPrice = Number(price.cacheRead) || 0;
-  const cacheReadPrice = isConfiguredPriceValue(configuredCacheReadPrice, price.cacheReadConfigured)
-    ? configuredCacheReadPrice
-    : isGpt56Model(behaviorModel)
-      ? promptPrice * 0.1
-      : Number(price.cache) || 0;
-  const configuredCacheCreationPrice = Number(price.cacheCreation) || 0;
-  const cacheCreationPrice = isConfiguredPriceValue(
-    configuredCacheCreationPrice,
-    price.cacheCreationConfigured
-  )
-    ? configuredCacheCreationPrice
-    : promptPrice * (isGpt56Model(behaviorModel) ? 1.25 : 1);
+  const cacheReadPrice = billedCacheReadRate(behaviorModel, price);
+  const cacheCreationPrice = billedCacheCreationRate(behaviorModel, price);
   const readTokens = cachedTokens + cacheReadTokens;
   const promptTokens = Math.max(inputTokens - readTokens - cacheCreationTokens, 0);
   const inputMultiplier = longContext ? 2 : 1;
@@ -1422,6 +1412,22 @@ function ratioBasePrice(modelName: string, price: ModelPrice): ModelPrice {
   };
 }
 
+// The cache-read rate calculateCost charges: the configured rate, else a tenth
+// of the prompt rate for GPT-5.6 and the legacy cache rate for other models.
+function billedCacheReadRate(modelName: string, price: ModelPrice): number {
+  const cacheRead = Number(price.cacheRead) || 0;
+  if (isConfiguredPriceValue(cacheRead, price.cacheReadConfigured)) return cacheRead;
+  return isGpt56Model(modelName) ? (Number(price.prompt) || 0) * 0.1 : Number(price.cache) || 0;
+}
+
+// The cache-write rate calculateCost charges: the configured rate, else the
+// prompt rate (1.25 times it for GPT-5.6).
+function billedCacheCreationRate(modelName: string, price: ModelPrice): number {
+  const cacheCreation = Number(price.cacheCreation) || 0;
+  if (isConfiguredPriceValue(cacheCreation, price.cacheCreationConfigured)) return cacheCreation;
+  return (Number(price.prompt) || 0) * (isGpt56Model(modelName) ? 1.25 : 1);
+}
+
 function scaleModelPriceRate(contextRate: unknown, baseRate: unknown, ruleRate: unknown): number {
   const base = Number(baseRate) || 0;
   const rule = Number(ruleRate) || 0;
@@ -1429,10 +1435,13 @@ function scaleModelPriceRate(contextRate: unknown, baseRate: unknown, ruleRate: 
 }
 
 // A service-tier rule inside an active context tier scales each rate it
-// configures by rule rate / base rate (the rule rate itself when the base is 0),
-// so the tier surcharge stacks on top of the long-context premium. Mirrors
+// configures by rule rate / base rate, so the tier surcharge stacks on top of
+// the long-context premium. Cache-read and cache-write rates are compared as
+// billed, so an unset rate counts as its fallback; a base rate billed at zero
+// has no ratio and the rule rate is used as is. Mirrors
 // ScaleModelPriceContextTierForServiceTier on the server.
 function scaleContextTierPriceForServiceTier(
+  modelName: string,
   base: ModelPrice,
   contextTier: ModelPriceContextTier,
   rule: ModelPriceServiceTier
@@ -1450,10 +1459,18 @@ function scaleContextTierPriceForServiceTier(
       ? scaleModelPriceRate(context.cache, base.cache, rule.cache)
       : context.cache,
     cacheRead: rule.cacheReadConfigured
-      ? scaleModelPriceRate(context.cacheRead, base.cacheRead, rule.cacheRead)
+      ? scaleModelPriceRate(
+          billedCacheReadRate(modelName, context),
+          billedCacheReadRate(modelName, base),
+          rule.cacheRead
+        )
       : context.cacheRead,
     cacheCreation: rule.cacheCreationConfigured
-      ? scaleModelPriceRate(context.cacheCreation, base.cacheCreation, rule.cacheCreation)
+      ? scaleModelPriceRate(
+          billedCacheCreationRate(modelName, context),
+          billedCacheCreationRate(modelName, base),
+          rule.cacheCreation
+        )
       : context.cacheCreation,
     promptConfigured: rule.promptConfigured ? true : context.promptConfigured,
     completionConfigured: rule.completionConfigured ? true : context.completionConfigured,

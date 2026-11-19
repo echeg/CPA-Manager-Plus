@@ -126,14 +126,8 @@ func costForSegment(
 ) float64 {
 	readTokens := cachedTokens + cacheReadTokens
 	promptTokens := maxInt64(inputTokens-readTokens-cacheCreationTokens, 0)
-	cacheReadPrice := price.CacheRead
-	if !configuredPriceValue(cacheReadPrice, price.CacheReadConfigured) {
-		cacheReadPrice = fallbackPrice(price.Cache, price.Prompt*0.1)
-	}
-	cacheCreationPrice := price.CacheCreation
-	if !configuredPriceValue(cacheCreationPrice, price.CacheCreationConfigured) {
-		cacheCreationPrice = price.Prompt
-	}
+	cacheReadPrice := model.BilledCacheReadRate(price)
+	cacheCreationPrice := model.BilledCacheCreationRate(price)
 
 	return float64(promptTokens)*price.Prompt*inputMultiplier/PerMillion +
 		float64(cachedTokens)*price.Cache*inputMultiplier/PerMillion +
@@ -243,13 +237,6 @@ func maxInt64(left, right int64) int64 {
 		return left
 	}
 	return right
-}
-
-func fallbackPrice(value float64, fallback float64) float64 {
-	if value > 0 {
-		return value
-	}
-	return fallback
 }
 
 func isModelFamily(modelName string, family string) bool {

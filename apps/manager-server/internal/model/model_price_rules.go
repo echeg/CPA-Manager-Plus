@@ -248,11 +248,35 @@ func ModelPriceForServiceTier(price ModelPrice, serviceTier string) (ModelPrice,
 	return effective, true
 }
 
+// BilledCacheReadRate returns the cache-read rate the cost path charges for a
+// price: the configured rate, else the legacy cache rate, else a tenth of the
+// prompt rate.
+func BilledCacheReadRate(price ModelPrice) float64 {
+	if price.CacheReadConfigured || price.CacheRead > 0 {
+		return price.CacheRead
+	}
+	if price.Cache > 0 {
+		return price.Cache
+	}
+	return price.Prompt * 0.1
+}
+
+// BilledCacheCreationRate returns the cache-write rate the cost path charges
+// for a price: the configured rate, else the prompt rate.
+func BilledCacheCreationRate(price ModelPrice) float64 {
+	if price.CacheCreationConfigured || price.CacheCreation > 0 {
+		return price.CacheCreation
+	}
+	return price.Prompt
+}
+
 // ScaleModelPriceContextTierForServiceTier applies a service-tier rule to an
 // effective context-tier price by ratio. Each rate the rule configures is
 // multiplied by rule rate / base rate, so a tier surcharge stacks on top of the
-// long-context premium. A zero base rate has no ratio, so the rule rate is used
-// as is. Rates the rule leaves unconfigured keep the context-tier value.
+// long-context premium. Cache-read and cache-write rates are compared as
+// billed, so an unset rate counts as the rate billing falls back to. A base
+// rate billed at zero has no ratio, so the rule rate is used as is. Rates the
+// rule leaves unconfigured keep the context-tier value.
 func ScaleModelPriceContextTierForServiceTier(base ModelPrice, contextPrice ModelPrice, rule ModelPriceServiceTier) ModelPrice {
 	effective := contextPrice
 	effective.ContextTiers = nil
@@ -269,11 +293,11 @@ func ScaleModelPriceContextTierForServiceTier(base ModelPrice, contextPrice Mode
 		effective.Cache = scaleModelPriceRate(contextPrice.Cache, base.Cache, rule.Cache)
 	}
 	if rule.CacheReadConfigured {
-		effective.CacheRead = scaleModelPriceRate(contextPrice.CacheRead, base.CacheRead, rule.CacheRead)
+		effective.CacheRead = scaleModelPriceRate(BilledCacheReadRate(contextPrice), BilledCacheReadRate(base), rule.CacheRead)
 		effective.CacheReadConfigured = true
 	}
 	if rule.CacheCreationConfigured {
-		effective.CacheCreation = scaleModelPriceRate(contextPrice.CacheCreation, base.CacheCreation, rule.CacheCreation)
+		effective.CacheCreation = scaleModelPriceRate(BilledCacheCreationRate(contextPrice), BilledCacheCreationRate(base), rule.CacheCreation)
 		effective.CacheCreationConfigured = true
 	}
 	return effective
