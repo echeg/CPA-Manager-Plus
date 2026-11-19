@@ -1299,15 +1299,19 @@ export function calculateCost(
   const serviceTierPrice = longContextOverridesServiceTier
     ? undefined
     : selectServiceTierPrice(basePrice, serviceTier);
+  // Inside a context tier both the rule path and the standard path inherit the
+  // same filled-in GPT-5.6 base cache rates, as on the server, so a rule that
+  // leaves cache rates unset never bills them below the standard tier.
+  const contextBasePrice = contextTier ? enrichGpt56BasePrice(behaviorModel, basePrice) : basePrice;
   const price = contextTier
     ? serviceTierPrice
       ? scaleContextTierPriceForServiceTier(
           behaviorModel,
-          ratioBasePrice(behaviorModel, basePrice),
+          contextBasePrice,
           contextTier,
           serviceTierPrice
         )
-      : applyContextTierPrice(basePrice, contextTier)
+      : applyContextTierPrice(contextBasePrice, contextTier)
     : serviceTierPrice
       ? applyServiceTierPrice(basePrice, serviceTierPrice)
       : basePrice;
@@ -1393,9 +1397,10 @@ function applyServiceTierPrice(price: ModelPrice, tier: ModelPriceServiceTier): 
 }
 
 // Mirrors the server's GPT-5.6 base enrichment (enrichGPT56BasePrice), which
-// applies only to the official GPT-5.6 models, so the ratio of a service-tier
-// rule is taken against the same cache rates the server divides by.
-function ratioBasePrice(modelName: string, price: ModelPrice): ModelPrice {
+// applies only to the official GPT-5.6 models and runs before a context tier
+// applies, so the context tier inherits the same cache rates and the ratio of a
+// service-tier rule is taken against the same cache rates the server divides by.
+function enrichGpt56BasePrice(modelName: string, price: ModelPrice): ModelPrice {
   if (!getOfficialGpt56Price(modelName)) return price;
   const prompt = Number(price.prompt) || 0;
   const cacheReadConfigured = isConfiguredPriceValue(price.cacheRead, price.cacheReadConfigured);

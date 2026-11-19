@@ -1577,7 +1577,10 @@ describe('calculateCost model price preference', () => {
     // Fast ratio 2.5 on input and output: 10 x 2.5 = 25, 40 x 2.5 = 100.
     for (const serviceTier of ['priority', 'fast']) {
       expect(
-        calculateCost({ tokens, __modelName: 'gpt-5.6-sol', service_tier: serviceTier }, modelPrices)
+        calculateCost(
+          { tokens, __modelName: 'gpt-5.6-sol', service_tier: serviceTier },
+          modelPrices
+        )
       ).toBeCloseTo(125);
     }
     expect(
@@ -1702,23 +1705,28 @@ describe('calculateCost model price preference', () => {
   });
 
   it('takes the rule ratio against the filled-in GPT-5.6 base cache rates', () => {
+    const tokens = {
+      input_tokens: 1_000_000,
+      cache_read_tokens: 500_000,
+      cache_creation_tokens: 100_000,
+    };
     // The base has no cache rates, so GPT-5.6 fills them from the prompt rate
     // (0.5 and 6.25). The Fast rule sets none, so the context tier keeps them:
     // 400k prompt at 25 = 10, 500k reads at 0.5 = 0.25, 100k writes at 6.25 = 0.625.
     expect(
       calculateCost(
-        {
-          tokens: {
-            input_tokens: 1_000_000,
-            cache_read_tokens: 500_000,
-            cache_creation_tokens: 100_000,
-          },
-          __modelName: 'gpt-5.6-sol',
-          service_tier: 'fast',
-        },
+        { tokens, __modelName: 'gpt-5.6-sol', service_tier: 'fast' },
         gpt56SolFastContextPrices()
       )
     ).toBeCloseTo(10.875);
+    // The standard tier inherits the same cache rates, so Fast never bills them
+    // lower: 400k prompt at 10 = 4, 500k reads at 0.5 = 0.25, 100k writes at 6.25 = 0.625.
+    expect(
+      calculateCost(
+        { tokens, __modelName: 'gpt-5.6-sol', service_tier: 'default' },
+        gpt56SolFastContextPrices()
+      )
+    ).toBeCloseTo(4.875);
   });
 
   it('takes the rule ratio against the billed cache-read rate on a non-official GPT-5.6 model', () => {

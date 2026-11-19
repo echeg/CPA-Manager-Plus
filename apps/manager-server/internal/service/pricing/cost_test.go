@@ -256,6 +256,11 @@ func TestContextTierRuleRatioUsesEnrichedGPT56BaseCacheRates(t *testing.T) {
 	if got := CostForModelWithServiceTier("gpt-5.6-sol", "fast", tokens, prices); math.Abs(got-10.875) > 0.000001 {
 		t.Fatalf("fast long-context cache cost = %v, want 10.875", got)
 	}
+	// The standard tier inherits the same cache rates, so Fast never bills them
+	// lower: 400k prompt at 10 = 4, 500k reads at 0.5 = 0.25, 100k writes at 6.25 = 0.625.
+	if got := CostForModelWithServiceTier("gpt-5.6-sol", "default", tokens, prices); math.Abs(got-4.875) > 0.000001 {
+		t.Fatalf("standard long-context cache cost = %v, want 4.875", got)
+	}
 }
 
 func TestContextTierRuleRatioUsesBilledCacheReadOnNonOfficialGPT56Model(t *testing.T) {

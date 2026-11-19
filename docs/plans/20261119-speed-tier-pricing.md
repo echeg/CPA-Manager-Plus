@@ -130,6 +130,7 @@
 
 - A context-tier rate that the context tier does not configure is the base rate, as today, before scaling.
 - ➕ Cache-read and cache-write rates are compared as billed: an unset base or context-tier cache rate counts as the rate the cost path falls back to (`BilledCacheReadRate` / `BilledCacheCreationRate` on the server, `billedCacheReadRate` / `billedCacheCreationRate` on the web), so "base rate 0" means billed at 0. Found in internal review: with the stored 0 an unset base cache-write rate gave a Fast request above the threshold a lower cache-write price than a standard one.
+- ➕ Above a context threshold the web fills blank official GPT-5.6 cache rates from the base input rate on both the rule path and the standard path, as the server already does (`enrichGpt56BasePrice` in `usage.ts`). Found in internal review: only the rule path did this, so a Fast rule without cache rates billed cache below the standard tier. The remaining open questions are in `docs/backlog/cache-rate-fallback-gaps.md`.
 - Worked example, `gpt-6.2-sol`: base 2 / 10, context tier above 272k 4 / 15, Ultrafast rule 6 / 30. Ratios 3 and 3, so the long-context Ultrafast price is 12 / 45.
 - Sync merge, per model with a stored source other than `manual`:
   - context tiers: `imported + stored tiers whose threshold is not imported`
