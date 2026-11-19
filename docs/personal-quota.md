@@ -464,8 +464,13 @@ or more characters (`sk-abcdef`, `team-sk-abcdef`) is shown masked, as an alias 
 The prefix counts only when no letter or digit comes before it, so words such as `task-runner`,
 `risk-engine` or `assess-candidates` are shown as they are. The panel uses the same
 rule wherever it masks text, such as failure summaries and account-action evidence;
-there a prefix right after a JSON escape (`\n`), a percent-encoding (`%3D`) or a
-terminal color code (`ESC[31m`, also with the ESC escaped or stripped) is still masked. Any other key is shown as a mask such as `sk******yz`. The CP format is
+there a prefix right after a JSON escape (`\n`), a hex or octal escape (`\x3d`,
+`\075`), a percent-encoding (`%3D`) or a terminal color code (`ESC[31m`, also with
+the ESC escaped or stripped) is still masked. A prefix that does follow a letter or
+digit is masked too when a real key comes after it: 20 or more key characters with
+at least 16 letters and digits in a row (`xsk-abcdef1234567890abcdef`). A long
+hyphenated name (`task-runner-production-eu-west-1`, `task-<UUID>`) has no such run
+and is shown as it is; an id such as `task-<32 hex digits>` has one and is masked. Any other key is shown as a mask such as `sk******yz`. The CP format is
 produced by `bridex-cp`; if it changes, these labels fall back to the mask. Raw keys
 stay in memory and in request bodies; they are never
 rendered (except in the add form's key field before the key is added), logged,

@@ -35,7 +35,8 @@ export function maskApiKey(key: string): string {
 // A `sk-`, `csk-` (Cerebras) or `sess-` key (group 2) counts only after a
 // boundary (group 1): the start of the text, a character other than a letter or
 // digit, or one of these, which end in a letter or digit: a JSON escape (`\n`,
-// `\u001b`), a percent-encoding (`%3D`), or a terminal color or erase-line code
+// `\u001b`), a hex or octal escape (`\x3d`, `\075`), a percent-encoding (`%3D`),
+// or a terminal color or erase-line code
 // (`ESC[31m`, `ESC[K`). The code counts with its ESC, raw or JSON-escaped, or
 // with the ESC stripped; a stripped run must start with a code that has a digit
 // anywhere in it (`[31m`, `[1;m`, grep's `[01;31m[K`), so a bracketed label
@@ -51,7 +52,19 @@ export function maskApiKey(key: string): string {
 // parse. The other key prefixes (group 3) match anywhere.
 const API_KEY_MASK_REGEX =
   // eslint-disable-next-line no-control-regex -- matches the raw ESC of a terminal color code
-  /(^|(?:\x1b|\\u001[bB])\[[0-9;:]*[mK]|\[[;:]*[0-9][0-9;:]*[mK](?:\[[;:]*[mK])*|\\u[0-9A-Fa-f]{4}|\\[bfnrt]|%[0-9A-Fa-f]{2}|[^A-Za-z0-9])(sk-proj-[A-Za-z0-9-_]{6,}|sk-ant-[A-Za-z0-9-_]{6,}|csk-[A-Za-z0-9-_]{6,}|sk-[A-Za-z0-9-_]{6,}|sess-[A-Za-z0-9-_]{6,})|(ghp_[A-Za-z0-9]{6,}|github_pat_[A-Za-z0-9_]{20,}|AIza[0-9A-Za-z-_]{8,}|hf_[A-Za-z0-9]{6,}|pk_[A-Za-z0-9]{6,}|rk_[A-Za-z0-9]{6,})/g;
+  /(^|(?:\x1b|\\u001[bB])\[[0-9;:]*[mK]|\[[;:]*[0-9][0-9;:]*[mK](?:\[[;:]*[mK])*|\\u[0-9A-Fa-f]{4}|\\x[0-9A-Fa-f]{2}|\\[0-7]{1,3}|\\[bfnrt]|%[0-9A-Fa-f]{2}|[^A-Za-z0-9])(sk-proj-[A-Za-z0-9-_]{6,}|sk-ant-[A-Za-z0-9-_]{6,}|csk-[A-Za-z0-9-_]{6,}|sk-[A-Za-z0-9-_]{6,}|sess-[A-Za-z0-9-_]{6,})|(ghp_[A-Za-z0-9]{6,}|github_pat_[A-Za-z0-9_]{20,}|AIza[0-9A-Za-z-_]{8,}|hf_[A-Za-z0-9]{6,}|pk_[A-Za-z0-9]{6,}|rk_[A-Za-z0-9]{6,})/g;
+// The boundary rule above cannot list every text that may come right before a
+// key, so a second pass masks by the shape of the key itself, whatever comes
+// before it: an `sk-`, `csk-` or `sess-` prefix, 20 or more key characters, and
+// among them 16 or more letters and digits in a row. The keys this panel meets
+// have such a run (an OpenAI or Cerebras key, the 32 base62 characters of a CP
+// key), while a long hyphenated name such as `task-runner-production-eu-west-1`
+// or `task-<UUID>` does not. An id such as `task-<32 hex digits>` does and is
+// masked; that errs on the safe side. The candidate regex takes the whole run of
+// key characters at once and the run test reads it once, so a long text is read
+// in linear time.
+const API_KEY_SHAPE_REGEX = /(?:c?sk|sess)-[A-Za-z0-9_-]{20,}/g;
+const API_KEY_SHAPE_ALNUM_RUN_REGEX = /[A-Za-z0-9]{16}/;
 const AUTHORIZATION_MASK_REGEX = /\b(authorization\s*[:=]\s*)(?:bearer\s+)?[^\s,"'{}]+/gi;
 const BEARER_MASK_REGEX = /\bbearer\s+[A-Za-z0-9._~+/=-]{8,}/gi;
 const TOKEN_FIELD_MASK_REGEX =
@@ -79,6 +92,9 @@ export function maskSensitiveText(value: string): string {
       API_KEY_MASK_REGEX,
       (_match, boundary: string | undefined, boundedKey: string | undefined, key: string) =>
         boundedKey !== undefined ? `${boundary}${maskApiKey(boundedKey)}` : maskApiKey(key)
+    )
+    .replace(API_KEY_SHAPE_REGEX, (candidate) =>
+      API_KEY_SHAPE_ALNUM_RUN_REGEX.test(candidate) ? maskApiKey(candidate) : candidate
     )
     .replace(COOKIE_JSON_FIELD_MASK_REGEX, '$1[redacted]$2')
     .replace(COOKIE_MASK_REGEX, '$1: [redacted]');

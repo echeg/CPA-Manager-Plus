@@ -148,6 +148,51 @@ describe('maskSensitiveText', () => {
     }
   );
 
+  it.each([
+    ['a hex escape', `key\\x3d${key}`, `key\\x3d${masked}`],
+    ['an upper-case hex escape', `key\\x3D${key}`, `key\\x3D${masked}`],
+    ['an octal escape', `key\\075${key}`, `key\\075${masked}`],
+  ])('masks a key after %s', (_case, input, expected) => {
+    expect(maskSensitiveText(input)).toBe(expected);
+  });
+
+  // A real key has a long tail with a long run of letters and digits, so it is
+  // masked whatever comes before it.
+  it.each([
+    ['an OpenAI-style key', 'xsk-abcdef1234567890abcdef', 'xsk******ef'],
+    ['a key after a digit', 'id9sk-abcdef1234567890abcdef', 'id9sk******ef'],
+    ['a Cerebras key', 'xcsk-abcdef1234567890abcdef', 'xcs******ef'],
+    ['a session key', 'xsess-abcdef1234567890abcdef', 'xse******ef'],
+    [
+      'a CP key with an instance name',
+      'xsk-bx-ecwowk-0123456789abcdefghijABCDEFGHIJ01',
+      'xsk******01',
+    ],
+    ['a key after a bare [m', '[msk-abcdef1234567890abcdef', '[msk******ef'],
+  ])('masks %s glued to a letter or digit', (_case, input, expected) => {
+    expect(maskSensitiveText(input)).toBe(expected);
+  });
+
+  it.each([
+    'task-runner-production-eu-west-1',
+    'kiosk-berlin-alexanderplatz-terminal-02',
+    'assess-candidates-for-the-second-round',
+    'task-123e4567-e89b-12d3-a456-426614174000',
+  ])('leaves the long hyphenated name %s unchanged', (name) => {
+    expect(maskSensitiveText(name)).toBe(name);
+  });
+
+  it('masks a short key after a boundary inside a long hyphenated name', () => {
+    expect(maskSensitiveText('task-runner-list_sk-abc123')).toBe('task-runner-list_sk******23');
+  });
+
+  it('reads a long run of glued prefixes without a key in linear time', () => {
+    const run = 'xsk-a-'.repeat(20000);
+    const startedAt = performance.now();
+    expect(maskSensitiveText(run)).toBe(run);
+    expect(performance.now() - startedAt).toBeLessThan(1000);
+  });
+
   // A rescan from every code of a run took seconds at this size (40000 codes
   // took about 8 s); a single pass takes milliseconds, so the bound is loose.
   it.each([
