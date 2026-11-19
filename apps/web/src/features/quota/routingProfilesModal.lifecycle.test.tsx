@@ -546,6 +546,57 @@ describe('routing profiles modal states', () => {
     );
   });
 
+  test('supported: false shows no off note or warning in a key editor with a stored off', async () => {
+    // CPA ignores key profiles in this mode, so their `disabled` refuses nothing.
+    const codexOff: RoutingProfile = {
+      ...shared(),
+      providers: {
+        ...shared().providers,
+        codex: { ...shared().providers.codex, disabled: true },
+      },
+    };
+    const bothOff: RoutingProfile = {
+      ...codexOff,
+      providers: {
+        ...codexOff.providers,
+        claude: { ...codexOff.providers.claude, disabled: true },
+      },
+    };
+    keyProfiles = makeKeyProfiles(
+      profilesState({
+        supported: false,
+        providerToggleSupported: true,
+        keys: [
+          // Claude falls back to the switched-off Codex here.
+          { key: RAW_ALPHA, profile: codexOff },
+          { key: RAW_BETA, profile: bothOff },
+        ],
+      })
+    );
+    await mount();
+    const codexEnabled = i18n.t('quota_management.provider_routing.enabled_label', {
+      provider: 'Codex',
+    });
+    for (const index of [0, 1]) {
+      await click(buttonIn(keyRows()[index], 'data-profile-edit'));
+      const editor = editors()[0];
+      expect(editor.props.readOnly).toBe(true);
+      const codexSwitch = editor
+        .findAllByType(ToggleSwitch)
+        .find((node) => node.props.ariaLabel === codexEnabled)!;
+      expect(codexSwitch.props.checked).toBe(false);
+      expect(codexSwitch.props.disabled).toBe(true);
+      for (const attr of [
+        'data-provider-off',
+        'data-provider-codex-fallback-off',
+        'data-key-profile-no-provider',
+      ]) {
+        expect(editor.findAll((node) => node.props[attr] !== undefined)).toHaveLength(0);
+      }
+      await click(editorCancel());
+    }
+  });
+
   test('Edit is disabled while the profiles reload unless that editor is open', async () => {
     keyProfiles = makeKeyProfiles(profilesState(), { loading: true });
     await mount();

@@ -301,8 +301,8 @@ export function useKeyProfiles(disabled: boolean) {
    * - a key that the config read before the profiles no longer lists was deleted
    *   elsewhere: nothing is written, and the key list is reloaded (`UnknownApiKeyError`);
    * - nothing is written, and the stored state is shown, when the reread shows that the
-   *   change no longer applies (no speed, key profiles not used, or a speed CPA puts on
-   *   no request) or that the row already gets the requested values, so a key on the
+   *   change no longer applies (no speed, key profiles not used, a Codex switched off, or
+   *   a speed CPA puts on no request) or that the row already gets the requested values, so a key on the
    *   Default profile is not detached by a click on the value it already inherits;
    * - the Default profile gets a PATCH of the changed field alone, which keeps every
    *   other field, also one changed elsewhere after the reread;
@@ -353,9 +353,10 @@ export function useKeyProfiles(disabled: boolean) {
       if (key !== null && snapshot.profiledKeys.has(key) !== (own !== null))
         throw new ConfigChangedError();
       // What the row's requests get now. Under `supported: false` only the Default row
-      // gets this far, and CPA ignores its stored mode, as in `buildSpeedRows`.
+      // gets this far, and CPA ignores its stored mode and `disabled`, as in `buildSpeedRows`.
       const { providers } = own ?? stored.shared;
       if (
+        (stored.supported && providers.codex.disabled) ||
         codexSpeedUse(providers, !stored.supported) === 'unused' ||
         holdsCodexSpeed(providers.codex, patch)
       ) {

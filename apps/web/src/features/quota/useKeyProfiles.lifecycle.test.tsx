@@ -1133,6 +1133,88 @@ describe('useKeyProfiles Codex speed', () => {
     expect(hook.saving).toBe(false);
   });
 
+  /** The profile with one provider switched off and nothing else changed. */
+  const switchedOff = (profile: RoutingProfile, provider: 'claude' | 'codex'): RoutingProfile => ({
+    ...profile,
+    providers: {
+      ...profile.providers,
+      [provider]: { ...profile.providers[provider], disabled: true },
+    },
+  });
+
+  test('writes nothing when the stored row has Codex switched off', async () => {
+    await mount();
+    const saveKey = vi.spyOn(routingProfilesApi, 'saveKeyDefaultCopy');
+    const saveKeyField = vi.spyOn(routingProfilesApi, 'saveKeyCodexSpeed');
+    const saveField = vi.spyOn(routingProfilesApi, 'saveSharedCodexSpeed');
+    // Another tab switched Codex off in the Default profile and in KEY_B's own profile.
+    const stored = {
+      ...profilesState([{ key: KEY_B, profile: switchedOff(ownProfile(), 'codex') }]),
+      providerToggleSupported: true,
+      shared: switchedOff(sharedProfile(), 'codex'),
+    };
+    vi.mocked(routingProfilesApi.get).mockResolvedValue(stored);
+    let result = true;
+    await act(async () => {
+      // KEY_A inherits the Default profile, so it must not get an own profile now.
+      result = await hook.saveCodexSpeed(KEY_A, { speed: 'fast' });
+    });
+    expect(result).toBe(false);
+    expect(hook.state).toBe(stored);
+    for (const key of [null, KEY_B]) {
+      result = true;
+      await act(async () => {
+        result = await hook.saveCodexSpeed(key, { speed: 'fast' });
+      });
+      expect(result).toBe(false);
+    }
+    expect(saveKey).not.toHaveBeenCalled();
+    expect(saveKeyField).not.toHaveBeenCalled();
+    expect(saveField).not.toHaveBeenCalled();
+    expect(hook.saving).toBe(false);
+  });
+
+  test('writes nothing when a switched-off Claude was the only use of the speed', async () => {
+    await mount();
+    const saveKey = vi.spyOn(routingProfilesApi, 'saveKeyDefaultCopy');
+    // Codex on an API key, Claude falls back to Codex but is switched off: no request
+    // reaches that fallback, so the Default speed is unused.
+    const shared = switchedOff(sharedProfile(), 'claude');
+    shared.providers.codex = { ...shared.providers.codex, mode: 'api' };
+    vi.mocked(routingProfilesApi.get).mockResolvedValue({
+      ...profilesState(),
+      providerToggleSupported: true,
+      shared,
+    });
+    let result = true;
+    await act(async () => {
+      result = await hook.saveCodexSpeed(KEY_A, { speed: 'fast' });
+    });
+    expect(result).toBe(false);
+    expect(saveKey).not.toHaveBeenCalled();
+  });
+
+  test('a Default speed is written under supported: false even with a stored Codex off', async () => {
+    const locked = {
+      ...profilesState(),
+      supported: false,
+      providerToggleSupported: true,
+      shared: switchedOff(sharedProfile(), 'codex'),
+    };
+    vi.mocked(routingProfilesApi.get).mockResolvedValue(locked);
+    await mount();
+    const saveField = vi
+      .spyOn(routingProfilesApi, 'saveSharedCodexSpeed')
+      .mockResolvedValue(locked);
+    let result = false;
+    await act(async () => {
+      result = await hook.saveCodexSpeed(null, { speed: 'fast' });
+    });
+    // CPA ignores `disabled` there and applies the shared speed to every request.
+    expect(result).toBe(true);
+    expect(saveField).toHaveBeenCalledExactlyOnceWith({ speed: 'fast' });
+  });
+
   test('a Default speed is written under supported: false even with a stored API key mode', async () => {
     const locked = { ...profilesState(), supported: false, shared: speedUnused(sharedProfile()) };
     vi.mocked(routingProfilesApi.get).mockResolvedValue(locked);

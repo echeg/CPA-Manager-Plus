@@ -53,7 +53,8 @@ export interface KeyProfileEditorProps {
   /**
    * Only the provider mode and fallback are locked: CPA ignores them in Home or
    * scheduler-plugin mode (`supported: false`), where the default profile stays
-   * editable. A save keeps the stored `providers` block.
+   * editable. A save keeps the stored `providers` block. A key profile is `readOnly`
+   * there and gets this flag too, so a stored `disabled` shows no off note or warning.
    */
   fallbackReadOnly?: boolean;
   /** `false` on a backend without `providers`: API key choices are disabled. */

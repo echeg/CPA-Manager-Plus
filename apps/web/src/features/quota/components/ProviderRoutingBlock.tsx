@@ -214,6 +214,13 @@ export function ProviderRoutingBlock({
           labelPosition="left"
         />
       </div>
+      {/* Right under the switch, apart from the mode's own backend hint below: the mode
+          still works here. The mode lock and that hint already explain a locked switch. */}
+      {providersSupported && !providerToggleSupported && !modeLocked && (
+        <p className={styles.hint} data-provider-toggle-old-backend>
+          {t('quota_management.provider_routing.requires_backend')}
+        </p>
+      )}
       {off && (
         <p className={styles.hint} data-provider-off>
           {t('quota_management.provider_routing.off_hint', { provider: label })}
@@ -238,12 +245,6 @@ export function ProviderRoutingBlock({
         )}
         {!providersSupported && (
           <p className={styles.hint} data-provider-routing-old-backend>
-            {t('quota_management.provider_routing.requires_backend')}
-          </p>
-        )}
-        {/* The mode lock and the hint above already explain a locked Enabled switch. */}
-        {providersSupported && !providerToggleSupported && !modeLocked && (
-          <p className={styles.hint} data-provider-toggle-old-backend>
             {t('quota_management.provider_routing.requires_backend')}
           </p>
         )}

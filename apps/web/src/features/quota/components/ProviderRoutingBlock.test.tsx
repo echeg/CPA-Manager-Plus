@@ -531,6 +531,24 @@ describe('ProviderRoutingBlock Enabled switch', () => {
     expect(byData('data-provider-off')).toHaveLength(1);
   });
 
+  test('a Codex that is off in Subscription mode locks the speed and the flag, keeping them', async () => {
+    // `applies` leaves the row enabled on its own, so only the off state locks it here.
+    await mount({
+      provider: 'codex',
+      speedSupported: true,
+      providerToggleSupported: true,
+      speedUse: 'applies',
+      value: routing({ disabled: true, speed: 'ultrafast', ignoreClientTier: true }),
+    });
+    const flag = root()
+      .findAllByType(ToggleSwitch)
+      .find((node) => node.props.label === 'Ignore the tier the client sends')!;
+    expect(speedTabs()!.props.disabled).toBe(true);
+    expect(speedTabs()!.props.activeTab).toBe('ultrafast');
+    expect(flag.props.disabled).toBe(true);
+    expect(flag.props.checked).toBe(true);
+  });
+
   test('a Codex that is off hides the Claude fallback note too', async () => {
     await mount({
       provider: 'codex',
@@ -570,6 +588,9 @@ describe('ProviderRoutingBlock Enabled switch', () => {
     expect(enabledSwitch().props.checked).toBe(true);
     const [hint] = byData('data-provider-toggle-old-backend');
     expect(hint.children.join('')).toBe('Requires an updated CPA backend.');
+    // Beside the switch, not under the mode tabs, which still work on this backend.
+    expect(hint.parent!.props['data-provider-routing']).toBe('claude');
+    expect(modeTabs()!.props.disabled).toBe(false);
   });
 
   test('without providers support the existing backend hint covers the switch', async () => {
@@ -579,9 +600,10 @@ describe('ProviderRoutingBlock Enabled switch', () => {
     expect(byData('data-provider-toggle-old-backend')).toHaveLength(0);
   });
 
-  test('the switch is off by default when the prop is omitted', async () => {
+  test('the switch is locked, and shows on, when providerToggleSupported is omitted', async () => {
     await mount();
     expect(enabledSwitch().props.disabled).toBe(true);
+    expect(enabledSwitch().props.checked).toBe(true);
   });
 
   test('under the mode lock a stored off locks nothing and shows no off hint', async () => {

@@ -156,6 +156,9 @@ export function RoutingProfilesModal({
         // hook refuses a save while the profiles load.
         saving={saving || loading}
         readOnly={readOnly}
+        // CPA ignores a key profile while read-only (`supported: false`), so a stored
+        // `disabled` must not claim that requests are refused.
+        fallbackReadOnly={readOnly}
         onSave={(profile) => void saveKey(row.key, profile)}
         onCancel={() => setEditing(null)}
       />

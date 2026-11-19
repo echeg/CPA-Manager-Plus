@@ -166,9 +166,10 @@ block of every profile editor has a **Speed** row below the fallback:
 The row is disabled in API key mode, with an explanation: the profile neither sets
 nor overrides the tier of requests billed to an API key. The stored values stay in
 the profile and are shown, so switching back to Subscription restores them. The exception is a profile whose Claude
-falls back to Codex: CPA runs that fallback on Codex subscriptions with the profile's
+is enabled and falls back to Codex: CPA runs that fallback on Codex subscriptions with the profile's
 Codex speed, so the row stays enabled in Codex API key mode, with a note that the
-speed applies only to those Claude requests. In Home mode or with a scheduler plugin
+speed applies only to those Claude requests. A switched-off Claude sends nothing to
+that fallback, so the row is disabled again. In Home mode or with a scheduler plugin
 (`supported: false`) the Default profile's row stays enabled even with a stored API
 key mode, because CPA ignores the mode there and keeps applying the default speed. Subscription mode with an API-key
 fallback keeps the row enabled. The Claude block has no speed. Both fields are saved
@@ -283,8 +284,8 @@ routing:
 ## Routing profiles per API key
 
 CPA routes each client API key through a profile: sticky session and pool selection,
-then for Claude and Codex each the mode, the preferred subscription and the fallback,
-plus the Codex speed and the ignore-client-tier flag
+then for Claude and Codex each whether it is enabled, the mode, the preferred
+subscription and the fallback, plus the Codex speed and the ignore-client-tier flag
 (see [Per-provider mode and API-key fallback](#per-provider-mode-and-api-key-fallback);
 an older backend has a preferred subscription per provider and the Claude → Codex
 fallback). A key without its own profile uses the default profile, which is the
@@ -339,8 +340,8 @@ a time.
   for confirmation, then deletes the key's profile with a `null` PATCH.
 - **+ Profile for a key**, which picks a key that still uses the default and opens a
   new profile for it, started from a copy of the default profile. Sticky sessions,
-  the provider modes, the fallbacks and the Codex speed and flag stay as they were
-  until changed; an empty profile would silently turn them off and run Codex at
+  which providers are switched off, the provider modes, the fallbacks and the Codex
+  speed and flag stay as they were until changed; an empty profile would silently turn them off and run Codex at
   Standard.
 
 Only one editor is open at a time. In every editor, pool selection has two slots,
@@ -436,8 +437,9 @@ navigation writes.
 
 Every save first reads the stored profiles again and decides on them, not on the
 values the table was opened with. It writes nothing, and shows the stored values,
-when the row's speed is no longer used (Codex moved to API key mode without a Claude
-fallback to Codex) or the row already gets the clicked value, so a key marked
+when the row's speed is no longer used (Codex switched off, or moved to API key mode
+without an enabled Claude that falls back to Codex) or the row already gets the
+clicked value, so a key marked
 **Default** keeps the default profile when that already has the speed. Otherwise
 the Default row sends only the changed field with one `PATCH /v8/management/config`;
 PATCH merges objects, so every other field of the default profile, also one changed
