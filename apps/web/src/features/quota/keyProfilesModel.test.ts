@@ -567,6 +567,38 @@ describe('chainSummary', () => {
     );
   });
 
+  test('a disabled provider shows as off instead of its leg', () => {
+    const claudeOff = withProvider('claude', claudeRouting({ disabled: true }));
+    expect(chainSummary(claudeOff, files, true, t)).toBe(
+      'Sticky session · Claude: off · Codex: Automatic · reserves → round-robin'
+    );
+    const codexOff = withProvider(
+      'codex',
+      codexRouting({ disabled: true, mode: 'api', apiCredential: 'codex-key-1', speed: 'fast' }),
+      withProvider(
+        'claude',
+        claudeRouting({ fallback: { ...claudeRouting().fallback, target: 'off' } })
+      )
+    );
+    expect(chainSummary(codexOff, files, true, t, apiKeys)).toBe(
+      'Sticky session · Claude: claude-bob@example.com.json · Codex: off · reserves → round-robin'
+    );
+  });
+
+  test('a Claude fallback into a disabled Codex reads as no fallback, the stored target kept', () => {
+    for (const mode of ['auto', 'always'] as const) {
+      const value = withProvider(
+        'codex',
+        codexRouting({ disabled: true }),
+        withProvider('claude', claudeRouting({ fallback: { ...claudeRouting().fallback, mode } }))
+      );
+      expect(chainSummary(value, files, true, t)).toBe(
+        'Sticky session · Claude: claude-bob@example.com.json · Codex: off · reserves → round-robin'
+      );
+      expect(value.providers.claude.fallback).toMatchObject({ target: 'codex', mode });
+    }
+  });
+
   test('an API-key fallback for each provider', () => {
     const value = withProvider(
       'codex',

@@ -5658,6 +5658,7 @@
       "table_flag_aria": "{{label}}：忽略客户端发送的等级",
       "table_reason_read_only": "此路由模式不使用密钥配置。",
       "table_reason_api_mode": "此处 Codex 使用 API 密钥；配置不会设置或覆盖 API 密钥请求的速度等级。",
+      "table_reason_codex_off": "此配置已关闭 Codex；其请求会被拒绝。",
       "table_read_only": "此路由模式不使用密钥配置，因此密钥行为只读。默认配置的速度仍然生效。",
       "table_default_hint": "修改标记为“默认”的密钥会为其创建独立配置：默认配置的完整副本加上新值。",
       "table_loading": "正在加载配置…",
@@ -5743,7 +5744,8 @@
         "to_api_key": "{{provider}}：{{account}} → API 密钥",
         "api_key": "{{provider}}：API 密钥 {{key}}",
         "api_key_unset": "{{provider}}：未选择 API 密钥",
-        "provider_speed": "{{provider}}（{{speed}}）"
+        "provider_speed": "{{provider}}（{{speed}}）",
+        "provider_off": "{{provider}}：已关闭"
       },
       "errors": {
         "unknown_key": "此密钥已在配置页面中删除，因此未保存任何内容。",

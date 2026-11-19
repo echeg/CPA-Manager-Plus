@@ -173,7 +173,11 @@ const noApiKeyLabels: ApiKeyLabelSource = {
 const SUMMARY = 'quota_management.key_profiles.summary';
 const CODEX_SPEED = 'quota_management.codex_speed';
 
-/** One provider's leg of the chain: preferred account and fallback, or its API key. */
+/**
+ * One provider's leg of the chain: preferred account and fallback, or its API key,
+ * or `off` when the profile disables the provider. Like the stored mode, the stored
+ * `disabled` is shown whatever the lock.
+ */
 function providerSummary(
   provider: ApiProvider,
   profile: RoutingProfile,
@@ -183,6 +187,7 @@ function providerSummary(
 ): string {
   const routing = profile.providers[provider];
   const name = PROVIDER_LABELS[provider];
+  if (routing.disabled) return t(`${SUMMARY}.provider_off`, { provider: name });
   if (routing.mode === 'api') {
     const key = chosenApiKeyLabel(
       provider,
@@ -202,7 +207,11 @@ function providerSummary(
           speed: t(`${CODEX_SPEED}.speed_${routing.speed}`),
         })
       : name;
-  switch (effectiveFallbackTarget(routing)) {
+  const target = effectiveFallbackTarget(routing);
+  // CPA skips a fallback into a disabled Codex, so that leg reads as no fallback.
+  if (target === 'codex' && profile.providers.codex.disabled)
+    return t(`${SUMMARY}.account`, { provider: label, account });
+  switch (target) {
     case 'codex':
       return routing.fallback.mode === 'always'
         ? t(`${SUMMARY}.codex_forced`, { provider: label })

@@ -361,6 +361,15 @@ describe('provider routing saves with the real key profiles hook', () => {
     root()
       .findAllByType(ProviderRoutingBlock)
       .find((item) => item.props.provider === 'codex')!;
+  const claudeBlock = () =>
+    root()
+      .findAllByType(ProviderRoutingBlock)
+      .find((item) => item.props.provider === 'claude')!;
+  /** `state` with KEY_B's profile replaced. */
+  const withKeyBProfile = (state: RoutingProfilesState, bProfile: RoutingProfile) => ({
+    ...state,
+    keys: [{ key: KEY_B, profile: bProfile }],
+  });
 
   test('a Codex speed edited in the Default profile is saved and shown again after a reload', async () => {
     const state = withProviders(profilesState(profile('priority')));
@@ -442,6 +451,49 @@ describe('provider routing saves with the real key profiles hook', () => {
     });
     // The read-back matched, so the draft closed.
     expect(editors()).toHaveLength(0);
+  });
+  test('Claude switched off for a key is saved, read back and shown off after a reopen', async () => {
+    const before = profile('priority');
+    const state = { ...withProviders(profilesState(before)), providerToggleSupported: true };
+    vi.mocked(routingProfilesApi.get).mockResolvedValue(state);
+    const after = withSuggested({
+      ...before,
+      providers: {
+        ...before.providers,
+        claude: { ...before.providers.claude, disabled: true },
+      },
+    });
+    // The backend stores what the PATCH sent, so the read-back and the next load see it.
+    const patch = vi.spyOn(apiClient, 'patch').mockImplementation(async () => {
+      vi.mocked(routingProfilesApi.get).mockResolvedValue(withKeyBProfile(state, after));
+      return {};
+    });
+    await mount();
+    await openProfileEditor('data-profile-row');
+    const claudeToggle = () => claudeBlock().findByType(ToggleSwitch);
+    expect(claudeToggle().props.checked).toBe(true);
+    expect(claudeToggle().props.disabled).toBe(false);
+    await act(async () => claudeToggle().props.onChange(false));
+    await click(buttonWith('data-key-profile-save'));
+
+    expect(patch).toHaveBeenCalledTimes(1);
+    const body = patch.mock.calls[0][1] as {
+      routing: { 'key-profiles': Record<string, { providers: Record<string, unknown> }> };
+    };
+    expect(body.routing['key-profiles'][KEY_B].providers).toMatchObject({
+      claude: { mode: 'subscription', disabled: true },
+      codex: { disabled: false },
+    });
+    expect(editors()).toHaveLength(0);
+
+    // A fresh panel load shows the stored off state in the editor and its summary.
+    await act(async () => renderer?.unmount());
+    await mount();
+    await openProfileEditor('data-profile-row');
+    expect(claudeToggle().props.checked).toBe(false);
+    expect(text(root().find((node) => node.props['data-key-profile-summary']))).toContain(
+      i18n.t('quota_management.key_profiles.summary.provider_off', { provider: 'Claude' })
+    );
   });
 });
 
@@ -587,6 +639,51 @@ describe('Codex speed button and table with the real key profiles hook', () => {
     expect(badge()).toBe('own');
     expect(speedOption('key', 'ultrafast').props['aria-pressed']).toBe(true);
     expect(JSON.stringify(renderer!.toJSON())).not.toContain(KEY_A);
+  });
+
+  test("a speed click on a key on the Default profile keeps the Default's stored disabled", async () => {
+    const base = withSharedSpeed(profilesState(profile('priority')), 'fast');
+    const state: RoutingProfilesState = {
+      ...base,
+      providerToggleSupported: true,
+      shared: {
+        ...base.shared,
+        providers: {
+          ...base.shared.providers,
+          claude: { ...base.shared.providers.claude, disabled: true },
+        },
+      },
+    };
+    vi.mocked(routingProfilesApi.get).mockResolvedValue(state);
+    const copy = withCodexSpeed(copyOfShared(state.shared), { speed: 'ultrafast' });
+    vi.spyOn(apiClient, 'getRaw').mockResolvedValue({
+      headers: { etag: '"cfg-1"' },
+      data: storedConfig(),
+    } as never);
+    vi.spyOn(apiClient, 'patchRaw').mockResolvedValue({
+      headers: { etag: '"cfg-2"' },
+      data: {},
+    } as never);
+    const patch = vi.spyOn(apiClient, 'patch').mockImplementation(async () => {
+      vi.mocked(routingProfilesApi.get).mockResolvedValue({
+        ...state,
+        keys: [...state.keys, { key: KEY_A, profile: copy }],
+      });
+      return {};
+    });
+    await mount();
+    await click(buttonWith('data-open-speed'));
+    await click(speedOption('key', 'ultrafast'));
+
+    expect(patch).toHaveBeenCalledTimes(1);
+    const body = patch.mock.calls[0][1] as {
+      routing: { 'key-profiles': Record<string, { providers: Record<string, unknown> }> };
+    };
+    expect(body.routing['key-profiles'][KEY_A].providers).toMatchObject({
+      claude: { disabled: true },
+      codex: { speed: 'ultrafast', disabled: false },
+    });
+    expect(root().findAll((node) => node.props['data-codex-speed-error'])).toHaveLength(0);
   });
 
   test('a copy of a Default profile CPA has not reloaded yet is never written', async () => {

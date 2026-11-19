@@ -53,6 +53,7 @@ const dynamicProviderRoutingKeys = [
     'api_key',
     'api_key_unset',
     'provider_speed',
+    'provider_off',
   ].map((key) => `quota_management.key_profiles.summary.${key}`),
   ...['speed_standard', 'speed_fast', 'speed_ultrafast'].map(
     (key) => `quota_management.codex_speed.${key}`

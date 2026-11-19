@@ -137,11 +137,13 @@ function SpeedTable({ state, rows, busy, onWrite }: SpeedTableProps) {
   const reasonText = (row: SpeedRow) =>
     row.disabledReason === 'read_only'
       ? t('quota_management.codex_speed.table_reason_read_only')
-      : row.disabledReason === 'api_mode'
-        ? t('quota_management.codex_speed.table_reason_api_mode')
-        : row.claudeFallbackOnly
-          ? t('quota_management.codex_speed.claude_fallback_hint')
-          : '';
+      : row.disabledReason === 'codex_off'
+        ? t('quota_management.codex_speed.table_reason_codex_off')
+        : row.disabledReason === 'api_mode'
+          ? t('quota_management.codex_speed.table_reason_api_mode')
+          : row.claudeFallbackOnly
+            ? t('quota_management.codex_speed.claude_fallback_hint')
+            : '';
 
   const renderRow = (row: SpeedRow) => {
     const label = rowLabel(row);

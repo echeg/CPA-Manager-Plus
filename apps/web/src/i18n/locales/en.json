@@ -5663,6 +5663,7 @@
       "table_flag_aria": "Ignore the tier the client sends for {{label}}",
       "table_reason_read_only": "Key profiles are not used in this routing mode.",
       "table_reason_api_mode": "Codex uses an API key here; the profile does not set or override the tier of API key requests.",
+      "table_reason_codex_off": "Codex is turned off in this profile; its requests are refused.",
       "table_read_only": "Key profiles are not used in this routing mode, so key rows are read-only. The Default profile speed still applies.",
       "table_default_hint": "A change on a key marked Default gives the key its own profile: a full copy of the Default profile with the new value.",
       "table_loading": "Loading profiles…",
@@ -5748,7 +5749,8 @@
         "to_api_key": "{{provider}}: {{account}} → API key",
         "api_key": "{{provider}}: API key {{key}}",
         "api_key_unset": "{{provider}}: API key not chosen",
-        "provider_speed": "{{provider}} ({{speed}})"
+        "provider_speed": "{{provider}} ({{speed}})",
+        "provider_off": "{{provider}}: off"
       },
       "errors": {
         "unknown_key": "This key was removed on the Config page, so nothing was saved.",

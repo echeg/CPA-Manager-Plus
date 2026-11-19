@@ -82,6 +82,21 @@ describe('codexSpeedUse', () => {
     expect(codexSpeedUse({ ...fallback.providers, claude: claudeApi }, false)).toBe('unused');
   });
 
+  test('a disabled Claude no longer counts as a fallback to Codex unless the mode is locked', () => {
+    const fallback = viaClaude(codex({ mode: 'api' }));
+    const claudeOff = { ...fallback.providers.claude, disabled: true };
+    expect(codexSpeedUse({ ...fallback.providers, claude: claudeOff }, false)).toBe('unused');
+    expect(codexSpeedUse({ ...fallback.providers, claude: claudeOff }, true)).toBe('applies');
+    // Claude off does not change a Codex on subscriptions.
+    const sub = viaClaude(codex());
+    expect(
+      codexSpeedUse(
+        { ...sub.providers, claude: { ...sub.providers.claude, disabled: true } },
+        false
+      )
+    ).toBe('applies');
+  });
+
   test('a locked mode applies the speed, also with a stored API key mode', () => {
     // CPA ignores the stored mode and fallback target while it is locked.
     expect(codexSpeedUse(profile(codex({ mode: 'api' })).providers, true)).toBe('applies');
@@ -153,6 +168,46 @@ describe('buildSpeedRows', () => {
     );
     expect(locked.every((row) => !row.claudeFallbackOnly)).toBe(true);
     expect(locked[0].disabledReason).toBe('');
+  });
+
+  test('a row whose Codex is off is codex_off, before the api_mode check', () => {
+    const rows = buildSpeedRows(
+      state({ shared: viaClaude(codex({ mode: 'api', disabled: true })) }),
+      keyRows({
+        [RAW_BETA]: profile(codex({ disabled: true })),
+        [RAW_GAMMA]: profile(codex({ mode: 'api' })),
+      })
+    );
+    expect(rows.map((row) => row.disabledReason)).toEqual([
+      'codex_off',
+      'codex_off',
+      'codex_off',
+      'api_mode',
+    ]);
+    // A Claude fallback into a disabled Codex is not run, so it does not mark the row.
+    expect(rows.every((row) => !row.claudeFallbackOnly)).toBe(true);
+  });
+
+  test('under supported: false a stored Codex off is ignored, as CPA ignores it', () => {
+    const rows = buildSpeedRows(
+      state({ supported: false, shared: profile(codex({ disabled: true })) }),
+      keyRows({ [RAW_BETA]: profile(codex({ disabled: true })) })
+    );
+    expect(rows.map((row) => row.disabledReason)).toEqual([
+      '',
+      'read_only',
+      'read_only',
+      'read_only',
+    ]);
+  });
+
+  test('Claude off with Codex in API key mode leaves the speed unused', () => {
+    const shared = viaClaude(codex({ mode: 'api' }));
+    shared.providers.claude = { ...shared.providers.claude, disabled: true };
+    expect(buildSpeedRows(state({ shared }), [])[0]).toMatchObject({
+      disabledReason: 'api_mode',
+      claudeFallbackOnly: false,
+    });
   });
 
   test('under supported: false every key row is read_only and the Default row stays enabled', () => {

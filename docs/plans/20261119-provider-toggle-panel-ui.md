@@ -137,14 +137,14 @@
 - [x] run `npm test` and `npm run type-check` - must pass before task 5
 
 ### Task 5: Summary and speed table
-- [ ] in `keyProfilesModel.ts` `providerSummary`, return `t(\`${SUMMARY}.provider_off\`, { provider })` when the provider is disabled (before the mode check), showing the stored value as the summary already does for the stored mode; when Claude is enabled, its effective target is `codex` and Codex is disabled, render Claude's leg as without fallback (the `account` text), since CPA skips that fallback
-- [ ] keep `CodexSpeedUse` as `'applies' | 'claude_fallback' | 'unused'`; in `codexSpeedUse(providers, modeLocked)`, a disabled Claude no longer counts as a fallback to Codex unless `modeLocked`
-- [ ] extend `SpeedDisabledReason` with `'codex_off'`; `buildSpeedRows` sets it when `state.supported && providers.codex.disabled`, before the `api_mode` check (and `claudeFallbackOnly` is false then); `CodexSpeedModal.tsx` shows its reason text like `api_mode`
-- [ ] add `quota_management.key_profiles.summary.provider_off` and the `codex_speed` reason string in en, ru, zh-CN and zh-TW; add `provider_off` to the dynamic summary keys checked by `keyProfiles.locale.test.ts`
-- [ ] write tests: `keyProfilesModel.test.ts` summary for Claude off, Codex off, and Claude falling back to a disabled Codex in `auto` and `always` (rendered without fallback, stored target unchanged); `codexSpeedModel.test.ts` `codexSpeedUse` / `buildSpeedRows` for Codex off, Codex off under `supported: false` (no `codex_off`), and Claude off with Codex in API key mode (`unused`)
-- [ ] write tests in `codexSpeedModal.lifecycle.test.tsx`: a Codex-off row has disabled buttons with the reason; a speed click on a key without its own profile, while the Default profile has `claude.disabled: true`, sends `claude.disabled: true` in the new key profile's PATCH
-- [ ] write a round-trip test in `profilesKeysFlow.lifecycle.test.tsx`: toggle Claude off for a key, save, the mocked GET then returns `disabled: true`, and the reopened editor's toggle is off and the summary shows `provider_off`
-- [ ] run `npm test` - must pass before task 6
+- [x] in `keyProfilesModel.ts` `providerSummary`, return `t(\`${SUMMARY}.provider_off\`, { provider })` when the provider is disabled (before the mode check), showing the stored value as the summary already does for the stored mode; when Claude is enabled, its effective target is `codex` and Codex is disabled, render Claude's leg as without fallback (the `account` text), since CPA skips that fallback
+- [x] keep `CodexSpeedUse` as `'applies' | 'claude_fallback' | 'unused'`; in `codexSpeedUse(providers, modeLocked)`, a disabled Claude no longer counts as a fallback to Codex unless `modeLocked`
+- [x] extend `SpeedDisabledReason` with `'codex_off'`; `buildSpeedRows` sets it when `state.supported && providers.codex.disabled`, before the `api_mode` check (and `claudeFallbackOnly` is false then); `CodexSpeedModal.tsx` shows its reason text like `api_mode`
+- [x] add `quota_management.key_profiles.summary.provider_off` and the `codex_speed` reason string in en, ru, zh-CN and zh-TW; add `provider_off` to the dynamic summary keys checked by `keyProfiles.locale.test.ts`
+- [x] write tests: `keyProfilesModel.test.ts` summary for Claude off, Codex off, and Claude falling back to a disabled Codex in `auto` and `always` (rendered without fallback, stored target unchanged); `codexSpeedModel.test.ts` `codexSpeedUse` / `buildSpeedRows` for Codex off, Codex off under `supported: false` (no `codex_off`), and Claude off with Codex in API key mode (`unused`)
+- [x] write tests in `codexSpeedModal.lifecycle.test.tsx`: a Codex-off row has disabled buttons with the reason; a speed click on a key without its own profile, while the Default profile has `claude.disabled: true`, sends `claude.disabled: true` in the new key profile's PATCH (⚠️ the PATCH-body half lives in `profilesKeysFlow.lifecycle.test.tsx`: `codexSpeedModal.lifecycle.test.tsx` mocks the hook, so it cannot see the request body)
+- [x] write a round-trip test in `profilesKeysFlow.lifecycle.test.tsx`: toggle Claude off for a key, save, the mocked GET then returns `disabled: true`, and the reopened editor's toggle is off and the summary shows `provider_off`
+- [x] run `npm test` - must pass before task 6
 
 ### Task 6: Verify acceptance criteria
 - [ ] confirm each Success Criterion maps to a test from Tasks 1-5; add any missing one

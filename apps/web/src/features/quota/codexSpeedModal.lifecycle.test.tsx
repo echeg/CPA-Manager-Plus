@@ -339,6 +339,22 @@ describe('codex speed modal failure and disabled paths', () => {
     expect(keyProfiles.saveCodexSpeed).not.toHaveBeenCalled();
   });
 
+  test('a row whose profile turns Codex off is disabled with the reason', async () => {
+    const offBeta = betaProfile(codex({ disabled: true, speed: 'fast' }));
+    keyProfiles = makeKeyProfiles(profilesState({ keys: [{ key: RAW_BETA, profile: offBeta }] }));
+    await mount();
+    const [defaultRow, alpha, beta] = rows();
+    expect(speedButtons(beta).every((button) => button.props.disabled)).toBe(true);
+    expect(flag(beta).props.disabled).toBe(true);
+    expect(text(beta)).toContain(i18n.t('quota_management.codex_speed.table_reason_codex_off'));
+    expect([defaultRow, alpha, beta].map(reasonOf)).toEqual(['', '', 'codex_off']);
+    expect(speedButtons(alpha).some((button) => button.props.disabled)).toBe(false);
+    // The stored value stays visible, and a click writes nothing.
+    expect(pressed(beta)).toEqual(['fast']);
+    await click(speedButton(beta, 'ultrafast'));
+    expect(keyProfiles.saveCodexSpeed).not.toHaveBeenCalled();
+  });
+
   test('a row in API key mode stays editable with a note while Claude falls back to Codex', async () => {
     // The Default profile sends Claude's fallback to Codex: that leg runs on Codex
     // subscriptions with the profile's Codex speed. Beta has its own profile without it.
