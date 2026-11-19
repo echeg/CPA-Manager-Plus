@@ -248,6 +248,63 @@ func ModelPriceForServiceTier(price ModelPrice, serviceTier string) (ModelPrice,
 	return effective, true
 }
 
+// ScaleModelPriceContextTierForServiceTier applies a service-tier rule to an
+// effective context-tier price by ratio. Each rate the rule configures is
+// multiplied by rule rate / base rate, so a tier surcharge stacks on top of the
+// long-context premium. A zero base rate has no ratio, so the rule rate is used
+// as is. Rates the rule leaves unconfigured keep the context-tier value.
+func ScaleModelPriceContextTierForServiceTier(base ModelPrice, contextPrice ModelPrice, rule ModelPriceServiceTier) ModelPrice {
+	effective := contextPrice
+	effective.ContextTiers = nil
+	effective.ServiceTiers = nil
+	if rule.PromptConfigured {
+		effective.Prompt = scaleModelPriceRate(contextPrice.Prompt, base.Prompt, rule.Prompt)
+		effective.PromptConfigured = true
+	}
+	if rule.CompletionConfigured {
+		effective.Completion = scaleModelPriceRate(contextPrice.Completion, base.Completion, rule.Completion)
+		effective.CompletionConfigured = true
+	}
+	if rule.CacheConfigured {
+		effective.Cache = scaleModelPriceRate(contextPrice.Cache, base.Cache, rule.Cache)
+	}
+	if rule.CacheReadConfigured {
+		effective.CacheRead = scaleModelPriceRate(contextPrice.CacheRead, base.CacheRead, rule.CacheRead)
+		effective.CacheReadConfigured = true
+	}
+	if rule.CacheCreationConfigured {
+		effective.CacheCreation = scaleModelPriceRate(contextPrice.CacheCreation, base.CacheCreation, rule.CacheCreation)
+		effective.CacheCreationConfigured = true
+	}
+	return effective
+}
+
+func scaleModelPriceRate(contextRate, baseRate, ruleRate float64) float64 {
+	if baseRate > 0 {
+		return contextRate * (ruleRate / baseRate)
+	}
+	return ruleRate
+}
+
+// ModelPriceForContextThresholdAndServiceTier resolves a rollup band and a
+// recorded service tier together. It reports false when no context tier is
+// active (the base band or an unknown threshold). An active tier without a
+// matching service-tier rule returns the plain context-tier price.
+func ModelPriceForContextThresholdAndServiceTier(price ModelPrice, thresholdTokens int64, serviceTier string) (ModelPrice, bool) {
+	if thresholdTokens <= 0 {
+		return ModelPrice{}, false
+	}
+	contextPrice, ok := ModelPriceForContextThreshold(price, thresholdTokens)
+	if !ok {
+		return ModelPrice{}, false
+	}
+	rule, ok := SelectModelPriceServiceTier(price, serviceTier)
+	if !ok {
+		return contextPrice, true
+	}
+	return ScaleModelPriceContextTierForServiceTier(price, contextPrice, rule), true
+}
+
 // ModelPriceStructureRevision changes only when the set of priced model IDs or
 // their context-tier thresholds changes. Rate-only updates, including explicit
 // service-tier rules, intentionally keep the revision stable because pricing

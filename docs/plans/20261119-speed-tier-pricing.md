@@ -72,11 +72,11 @@
 ## Implementation Steps
 
 ### Task 1: Scale a context-tier price by a service-tier rule (server model)
-- [ ] in `apps/manager-server/internal/model/model_price_rules.go`, add a function that takes the base price, the effective context-tier price and a service-tier rule, and returns the context-tier price with each rate the rule configures scaled by `rule rate / base rate` (see Technical Details for the zero and unconfigured cases)
-- [ ] add a function that resolves the price for a context threshold and a service tier together: no active context tier returns not found; an active tier without a matching rule returns the plain context-tier price; with a matching rule it returns the scaled price
-- [ ] write tests in `model_price_rules_test.go`: `gpt-6.2-sol` (base 2 / 10, context 4 / 15, Ultrafast rule 6 / 30) gives 12 / 45; a rule that configures only input and output leaves the cache rates of the context tier unchanged
-- [ ] write tests for the edge cases: base rate 0 with a configured rule rate, a rule matched by `Mode` and by `ServiceTier`, an unknown tier, and the base band (`-1`)
-- [ ] run `npm run manager-server:test` - must pass before task 2
+- [x] in `apps/manager-server/internal/model/model_price_rules.go`, add a function that takes the base price, the effective context-tier price and a service-tier rule, and returns the context-tier price with each rate the rule configures scaled by `rule rate / base rate` (see Technical Details for the zero and unconfigured cases)
+- [x] add a function that resolves the price for a context threshold and a service tier together: no active context tier returns not found; an active tier without a matching rule returns the plain context-tier price; with a matching rule it returns the scaled price
+- [x] write tests in `model_price_rules_test.go`: `gpt-6.2-sol` (base 2 / 10, context 4 / 15, Ultrafast rule 6 / 30) gives 12 / 45; a rule that configures only input and output leaves the cache rates of the context tier unchanged
+- [x] write tests for the edge cases: base rate 0 with a configured rule rate, a rule matched by `Mode` and by `ServiceTier`, an unknown tier, and the base band (`-1`)
+- [x] run `npm run manager-server:test` - must pass before task 2
 
 ### Task 2: Apply the scaled price in the server cost path
 - [ ] in `costForPriceWithServiceTier` (`apps/manager-server/internal/service/pricing/cost.go:276`), when a context tier is active and the price has a rule for the service tier, cost the tokens with the scaled price from Task 1; every other branch stays as it is
