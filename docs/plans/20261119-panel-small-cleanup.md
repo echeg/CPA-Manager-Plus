@@ -73,12 +73,12 @@
 - [x] run `npm run test:web` - must pass before task 4
 
 ### Task 4: Describe a switched-off provider in the Guide
-- [ ] add one sentence to `guide.intro_key_routing` in `apps/web/src/i18n/locales/en.json`, `ru.json`, `zh-CN.json` and `zh-TW.json`: a profile can switch a provider off; CPA then answers that provider's requests with 403 before any selection, and Claude's fallback to a switched-off Codex does not run
-- [ ] add the same to `apps/docs/en/manual/guide.md` and `apps/docs/manual/guide.md`, with the note that the switch is ignored under a scheduler plugin
-- [ ] in `apps/web/src/features/guide/diagrams/key-routing.workflow.json`, add a "provider off -> 403" branch after profile resolution and note in the "Fallback per provider" card that a fallback to a switched-off Codex is skipped; keep `meta.title`
-- [ ] regenerate the page: `node ~/.agents/skills/archify/bin/archify.mjs deliver workflow <abs path>/key-routing.workflow.json <abs path>/key-routing.html --quality showcase --json`; accept it only when the command exits 0 and reports all checks passed. If archify is not available, leave the JSON change, mark this item with ⚠️ and do not edit the HTML
-- [ ] run `npx vitest run src/features/guide src/i18n` in `apps/web` (diagram titles, theme contract, locale parity), updating `GuidePage.test.tsx` only if a check names text that changed
-- [ ] run `npm run test:web` - must pass before task 5
+- [x] add one sentence to `guide.intro_key_routing` in `apps/web/src/i18n/locales/en.json`, `ru.json`, `zh-CN.json` and `zh-TW.json`: a profile can switch a provider off; CPA then answers that provider's requests with 403 before any selection, and Claude's fallback to a switched-off Codex does not run
+- [x] add the same to `apps/docs/en/manual/guide.md` and `apps/docs/manual/guide.md`, with the note that the switch is ignored under a scheduler plugin
+- [x] in `apps/web/src/features/guide/diagrams/key-routing.workflow.json`, add a "provider off -> 403" branch after profile resolution and note in the "Fallback per provider" card that a fallback to a switched-off Codex is skipped; keep `meta.title`
+- [x] regenerate the page: `node ~/.agents/skills/archify/bin/archify.mjs deliver workflow <abs path>/key-routing.workflow.json <abs path>/key-routing.html --quality showcase --json`; accept it only when the command exits 0 and reports all checks passed. If archify is not available, leave the JSON change, mark this item with ⚠️ and do not edit the HTML
+- [x] run `npx vitest run src/features/guide src/i18n` in `apps/web` (diagram titles, theme contract, locale parity), updating `GuidePage.test.tsx` only if a check names text that changed (no check named changed text; new checks for the intro, the diagram source and the generated page were added to `guideWiring.test.ts`)
+- [x] run `npm run test:web` - must pass before task 5
 
 ### Task 5: Verify acceptance criteria
 - [ ] verify the four items of the Overview

@@ -5,6 +5,8 @@ import zhCN from '@/i18n/locales/zh-CN.json';
 import zhTW from '@/i18n/locales/zh-TW.json';
 import layoutSource from '@/components/layout/MainLayout.tsx?raw';
 import routesSource from '@/router/MainRoutes.tsx?raw';
+import keyRoutingSource from './diagrams/key-routing.workflow.json';
+import keyRoutingHtml from './diagrams/key-routing.html?raw';
 
 const getPath = (value: unknown, keyPath: string) =>
   keyPath.split('.').reduce<unknown>((current, key) => {
@@ -82,6 +84,34 @@ describe('guide app wiring', () => {
     // The error semantics of the pool intro stay in place.
     expect(en.guide.intro_pool_selection).toContain('without Retry-After');
     expect(en.guide.intro_pool_selection).toContain('unavailable error');
+  });
+
+  it('describes a switched-off provider in the key routing intro of every locale', () => {
+    expect(en.guide.intro_key_routing).toContain('switch a provider off');
+    expect(en.guide.intro_key_routing).toContain('403 before any selection');
+    expect(en.guide.intro_key_routing).toContain('switched-off Codex does not run');
+    for (const [localeName, locale] of Object.entries({ en, ru, zhCN, zhTW })) {
+      expect(locale.guide.intro_key_routing, localeName).toContain('403');
+    }
+  });
+
+  it('shows the provider-off branch in the key routing diagram and its generated page', () => {
+    const disabled = keyRoutingSource.nodes.find((node) => node.id === 'disabled');
+    expect(disabled?.label).toBe('Provider off');
+    expect(disabled?.sublabel).toBe('403 provider_disabled');
+    expect(
+      keyRoutingSource.edges.some((edge) => edge.from === 'profile' && edge.to === 'disabled')
+    ).toBe(true);
+
+    const fallbackCard = keyRoutingSource.cards.find(
+      (card) => card.title === 'Fallback per provider'
+    );
+    expect(fallbackCard?.items).toContain('A fallback to a switched-off Codex is skipped');
+
+    // The committed page must be regenerated from this source, not left behind it.
+    expect(keyRoutingHtml).toContain('Provider off');
+    expect(keyRoutingHtml).toContain('403 provider_disabled');
+    expect(keyRoutingHtml).toContain('A fallback to a switched-off Codex is skipped');
   });
 
   it('uses the agreed sidebar labels', () => {
