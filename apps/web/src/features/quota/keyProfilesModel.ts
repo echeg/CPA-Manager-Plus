@@ -25,7 +25,7 @@ import { preferredAccountOptions, withPickerRule } from './routingModel';
  * its target because CPA stores no Codex mode or mappings. Claude's mode and
  * mappings are kept under every target: they survive as hidden values. The Codex
  * speed and flag are carried for both providers; the reader keeps Claude's at the
- * defaults.
+ * defaults. `disabled` is carried for both providers.
  */
 function normalizeProviderRouting(
   provider: ApiProvider,
@@ -39,6 +39,7 @@ function normalizeProviderRouting(
       fallback: { target, mode: 'auto', mappings: [] },
       speed: routing.speed,
       ignoreClientTier: routing.ignoreClientTier,
+      disabled: routing.disabled,
     };
   const fallback = normalizeFallbackSettings({
     enabled: false,
@@ -51,6 +52,7 @@ function normalizeProviderRouting(
     fallback: { target, mode: fallback.mode, mappings: fallback.mappings },
     speed: routing.speed,
     ignoreClientTier: routing.ignoreClientTier,
+    disabled: routing.disabled,
   };
 }
 
@@ -105,6 +107,7 @@ const copyOfProviderRouting = (routing: ProviderRouting): ProviderRouting => ({
   },
   speed: routing.speed,
   ignoreClientTier: routing.ignoreClientTier,
+  disabled: routing.disabled,
 });
 
 /** A new key profile starts as an independent copy of the shared profile, hidden values included. */

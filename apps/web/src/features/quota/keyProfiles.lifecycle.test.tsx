@@ -95,6 +95,7 @@ const profilesState = (overrides: Partial<RoutingProfilesState> = {}): RoutingPr
   unsupportedBackend: false,
   providersSupported: true,
   speedSupported: true,
+  providerToggleSupported: false,
   apiCredentials: { claude: [], codex: [] },
   shared: shared(),
   keys: [{ key: RAW_BETA, profile: betaProfile() }],
@@ -302,6 +303,7 @@ describe('quota settings bar on a backend with /routing/profiles', () => {
       fallback: { target: 'off', mode: 'auto', mappings: [] },
       speed: 'standard',
       ignoreClientTier: false,
+      disabled: false,
     };
     keyProfiles = makeKeyProfiles(profilesState({ supported: false, shared: stored }));
     await mount();

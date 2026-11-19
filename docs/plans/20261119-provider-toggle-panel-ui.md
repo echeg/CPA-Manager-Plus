@@ -102,14 +102,15 @@
 ## Implementation Steps
 
 ### Task 1: Read, normalize, copy and send `disabled`
-- [ ] add `disabled: boolean` to `ProviderRouting` in `routingProfiles.ts` (doc comment: both providers; keeps the other fields); `defaultProviderRouting()` and `providersFromClaudeFallback` set `false`; update every `ProviderRouting` literal in source and tests so type-check passes
-- [ ] `readProviderRouting` reads `raw.disabled === true` for both providers
-- [ ] in `keyProfilesModel.ts`, add `disabled: routing.disabled` to both return branches of `normalizeProviderRouting` and to `copyOfProviderRouting` (they build objects field by field; `profileDirty` compares the normalized profiles and `profileBody` reads `normalizeProfile`)
-- [ ] add `providerToggleSupported: boolean` to `RoutingProfilesState`, set in `readRoutingProfiles` from the presence of `disabled` in `shared.providers.claude` and `shared.providers.codex` (a helper like `hasCodexSpeed`), `false` in `unsupportedRoutingProfiles`
-- [ ] `profileBody`, `keyProfilePatch` and `sharedProfilePatch` take `providerToggleSupported = false` as a new last argument; when true and `providersSupported`, both provider blocks carry `disabled` (an explicit `false` when on, so re-enabling overwrites a stored `true`); when false the key is never sent
-- [ ] write tests in `routingProfiles.test.ts`: reading `disabled: true` / absent / `false` for each provider; `providerToggleSupported` true with the key, false without it and for `unsupportedRoutingProfiles`; `profileBody` of a profile built through `normalizeProfile` sends `disabled: true` and explicit `disabled: false` for both providers only when supported, never on an old backend or without `providers`
-- [ ] write tests in `keyProfilesModel.test.ts`: `profileDirty` is true when only `providers.claude.disabled` or only `providers.codex.disabled` differs; `normalizeProfile` and `copyOfShared` keep `disabled: true`
-- [ ] run `npm test` (affected files) and `npm run type-check` in `apps/web` - must pass before task 2
+- [x] add `disabled: boolean` to `ProviderRouting` in `routingProfiles.ts` (doc comment: both providers; keeps the other fields); `defaultProviderRouting()` and `providersFromClaudeFallback` set `false`; update every `ProviderRouting` literal in source and tests so type-check passes
+- [x] `readProviderRouting` reads `raw.disabled === true` for both providers
+- [x] in `keyProfilesModel.ts`, add `disabled: routing.disabled` to both return branches of `normalizeProviderRouting` and to `copyOfProviderRouting` (they build objects field by field; `profileDirty` compares the normalized profiles and `profileBody` reads `normalizeProfile`)
+- [x] add `providerToggleSupported: boolean` to `RoutingProfilesState`, set in `readRoutingProfiles` from the presence of `disabled` in `shared.providers.claude` and `shared.providers.codex` (a helper like `hasCodexSpeed`), `false` in `unsupportedRoutingProfiles`
+- [x] `profileBody`, `keyProfilePatch` and `sharedProfilePatch` take `providerToggleSupported = false` as a new last argument; when true and `providersSupported`, both provider blocks carry `disabled` (an explicit `false` when on, so re-enabling overwrites a stored `true`); when false the key is never sent
+- [x] write tests in `routingProfiles.test.ts`: reading `disabled: true` / absent / `false` for each provider; `providerToggleSupported` true with the key, false without it and for `unsupportedRoutingProfiles`; `profileBody` of a profile built through `normalizeProfile` sends `disabled: true` and explicit `disabled: false` for both providers only when supported, never on an old backend or without `providers`
+- [x] write tests in `keyProfilesModel.test.ts`: `profileDirty` is true when only `providers.claude.disabled` or only `providers.codex.disabled` differs; `normalizeProfile` and `copyOfShared` keep `disabled: true`
+- [x] ➕ `saveKeyDefaultCopy` passes `from.providerToggleSupported` to `keyProfilePatch`, so a speed-table copy of the Default keeps its stored `disabled` (tested in `routingProfiles.test.ts`)
+- [x] run `npm test` (affected files) and `npm run type-check` in `apps/web` - must pass before task 2
 
 ### Task 2: Thread support through the save paths
 - [ ] in `useKeyProfiles.ts`, pass `state.providerToggleSupported` to the two `routingProfilesApi` save calls (`saveSharedProfile`, `saveKeyProfile`) next to `state.speedSupported`, and add the matching last parameter to those API methods so they pass it to `sharedProfilePatch` / `keyProfilePatch`

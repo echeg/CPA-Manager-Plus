@@ -79,6 +79,7 @@ const profilesState = (overrides: Partial<RoutingProfilesState> = {}): RoutingPr
   unsupportedBackend: false,
   providersSupported: true,
   speedSupported: true,
+  providerToggleSupported: false,
   apiCredentials: { claude: [], codex: [] },
   shared: shared(),
   keys: [{ key: RAW_BETA, profile: betaProfile() }],
@@ -217,6 +218,7 @@ describe('routing profiles modal rows', () => {
           fallback: { target: 'off', mode: 'auto', mappings: [] },
           speed: 'standard',
           ignoreClientTier: false,
+          disabled: false,
         },
       },
     };

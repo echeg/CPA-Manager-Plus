@@ -113,6 +113,7 @@ const profilesState = (keys: RoutingProfilesState['keys'] = []): RoutingProfiles
   unsupportedBackend: false,
   providersSupported: true,
   speedSupported: true,
+  providerToggleSupported: false,
   apiCredentials: { claude: [], codex: [] },
   shared: sharedProfile(),
   keys,

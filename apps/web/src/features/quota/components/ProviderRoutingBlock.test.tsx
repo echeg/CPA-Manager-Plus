@@ -34,6 +34,7 @@ const routing = (patch: Partial<ProviderRouting> = {}): ProviderRouting => ({
   fallback: { target: 'off', mode: 'auto', mappings },
   speed: 'standard',
   ignoreClientTier: false,
+  disabled: false,
   ...patch,
 });
 const keyOptions: ApiKeyOption[] = [

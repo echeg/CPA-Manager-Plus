@@ -19,6 +19,7 @@ const codex = (overrides: Partial<ProviderRouting> = {}): ProviderRouting => ({
   fallback: { target: 'off', mode: 'auto', mappings: [] },
   speed: 'standard',
   ignoreClientTier: false,
+  disabled: false,
   ...overrides,
 });
 
@@ -50,6 +51,7 @@ const state = (overrides: Partial<RoutingProfilesState> = {}): RoutingProfilesSt
   unsupportedBackend: false,
   providersSupported: true,
   speedSupported: true,
+  providerToggleSupported: false,
   apiCredentials: { claude: [], codex: [] },
   shared: profile(codex({ speed: 'fast', ignoreClientTier: true })),
   keys: [],

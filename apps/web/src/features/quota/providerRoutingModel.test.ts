@@ -374,6 +374,7 @@ describe('withApiModeNormalization', () => {
       fallback: { target: 'codex', mode: 'always', mappings },
       speed: 'standard',
       ignoreClientTier: false,
+      disabled: false,
     };
     const codex: ProviderRouting = {
       mode: 'api',
@@ -381,6 +382,7 @@ describe('withApiModeNormalization', () => {
       fallback: { target: 'api', mode: 'auto', mappings: [] },
       speed: 'fast',
       ignoreClientTier: true,
+      disabled: false,
     };
     expect(withApiModeNormalization({ claude, codex })).toEqual({
       claude: { ...claude, fallback: { target: 'off', mode: 'always', mappings } },
@@ -401,6 +403,7 @@ describe('withApiModeNormalization', () => {
       fallback: { target: 'api', mode: 'auto', mappings },
       speed: 'standard',
       ignoreClientTier: false,
+      disabled: false,
     };
     const codex = defaultProviderRouting();
     const result = withApiModeNormalization({ claude, codex });

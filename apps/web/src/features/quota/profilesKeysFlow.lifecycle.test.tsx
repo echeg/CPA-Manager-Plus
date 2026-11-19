@@ -69,6 +69,7 @@ const profilesState = (bProfile: RoutingProfile): RoutingProfilesState => ({
   unsupportedBackend: false,
   providersSupported: true,
   speedSupported: true,
+  providerToggleSupported: false,
   apiCredentials: { claude: [], codex: [] },
   shared: { ...profile('reserves'), selection: { primary: 'reserves', tiebreak: 'round-robin' } },
   keys: [{ key: KEY_B, profile: bProfile }],
@@ -253,6 +254,7 @@ describe('provider routing saves with the real key profiles hook', () => {
           fallback: { target: 'off', mode: 'auto', mappings: [] },
           speed: 'standard',
           ignoreClientTier: false,
+          disabled: false,
         },
       },
     });
@@ -308,6 +310,7 @@ describe('provider routing saves with the real key profiles hook', () => {
           fallback: { target: 'api', mode: 'auto', mappings: [] },
           speed: 'standard',
           ignoreClientTier: false,
+          disabled: false,
         },
       },
     });

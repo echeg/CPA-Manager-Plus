@@ -116,6 +116,7 @@ const providersProfile = (): RoutingProfile => ({
       },
       speed: 'standard',
       ignoreClientTier: false,
+      disabled: false,
     },
     codex: {
       mode: 'api',
@@ -123,6 +124,7 @@ const providersProfile = (): RoutingProfile => ({
       fallback: { target: 'off', mode: 'auto', mappings: [] },
       speed: 'standard',
       ignoreClientTier: false,
+      disabled: false,
     },
   },
 });
@@ -184,6 +186,7 @@ describe('reading routing profiles', () => {
       selectionOptions: options,
       providersSupported: false,
       speedSupported: false,
+      providerToggleSupported: false,
       apiCredentials: { claude: [], codex: [] },
     });
   });
@@ -202,6 +205,7 @@ describe('reading routing profiles', () => {
         },
         speed: 'standard',
         ignoreClientTier: false,
+        disabled: false,
       },
       codex: {
         mode: 'subscription',
@@ -209,6 +213,7 @@ describe('reading routing profiles', () => {
         fallback: { target: 'off', mode: 'auto', mappings: [] },
         speed: 'standard',
         ignoreClientTier: false,
+        disabled: false,
       },
     });
     const disabled = readRoutingProfiles({
@@ -259,6 +264,7 @@ describe('reading routing profiles', () => {
         fallback: { target: 'off', mode: 'auto', mappings: [] },
         speed: 'standard',
         ignoreClientTier: false,
+        disabled: false,
       },
       codex: {
         mode: 'subscription',
@@ -266,6 +272,7 @@ describe('reading routing profiles', () => {
         fallback: { target: 'off', mode: 'auto', mappings: [] },
         speed: 'standard',
         ignoreClientTier: false,
+        disabled: false,
       },
     });
   });
@@ -1864,5 +1871,167 @@ describe('Codex speed', () => {
       InvalidRoutingConfigError
     );
     expect(mocks.get).not.toHaveBeenCalled();
+  });
+});
+
+describe('provider toggle', () => {
+  /** A backend that serves `disabled`: both shared provider blocks hold it. */
+  const toggleProviders = (claude?: unknown, codex?: unknown) => {
+    const providers = rawProviders();
+    return {
+      claude: { ...providers.claude, ...(claude === undefined ? {} : { disabled: claude }) },
+      codex: { ...providers.codex, ...(codex === undefined ? {} : { disabled: codex }) },
+    };
+  };
+  const toggleResponse = (claude?: unknown, codex?: unknown) =>
+    providersResponse({ providers: toggleProviders(claude, codex) }, [
+      { key: RAW_KEY, profile: { ...rawShared(), providers: toggleProviders(codex, claude) } },
+    ]);
+  const blocks = (body: Record<string, unknown>) =>
+    body.providers as Record<'claude' | 'codex', Record<string, unknown>>;
+
+  it.each([
+    ['true', true, true],
+    ['false', false, false],
+    ['absent', undefined, false],
+    ['a non-boolean value', 'yes', false],
+  ])('reads disabled %s for each provider', (_name, raw, expected) => {
+    const claudeOff = readRoutingProfiles(toggleResponse(raw, false));
+    expect(claudeOff.shared.providers.claude.disabled).toBe(expected);
+    expect(claudeOff.shared.providers.codex.disabled).toBe(false);
+    // The key profile swaps the two values.
+    expect(claudeOff.keys[0].profile.providers.codex.disabled).toBe(expected);
+    expect(claudeOff.keys[0].profile.providers.claude.disabled).toBe(false);
+    const codexOff = readRoutingProfiles(toggleResponse(false, raw));
+    expect(codexOff.shared.providers.codex.disabled).toBe(expected);
+    expect(codexOff.shared.providers.claude.disabled).toBe(false);
+  });
+
+  it('reads both providers as enabled on an older backend', () => {
+    const state = readRoutingProfiles(response());
+    expect(state.shared.providers.claude.disabled).toBe(false);
+    expect(state.shared.providers.codex.disabled).toBe(false);
+  });
+
+  it('marks the backend as toggle-capable when both shared provider blocks hold disabled', () => {
+    expect(readRoutingProfiles(toggleResponse(false, false)).providerToggleSupported).toBe(true);
+    expect(readRoutingProfiles(toggleResponse(true, true)).providerToggleSupported).toBe(true);
+  });
+
+  it('marks a backend without disabled in the shared provider blocks as not toggle-capable', () => {
+    expect(readRoutingProfiles(providersResponse()).providerToggleSupported).toBe(false);
+    expect(readRoutingProfiles(response()).providerToggleSupported).toBe(false);
+    // One block alone is not enough.
+    expect(readRoutingProfiles(toggleResponse(false)).providerToggleSupported).toBe(false);
+    expect(readRoutingProfiles(toggleResponse(undefined, false)).providerToggleSupported).toBe(
+      false
+    );
+    // A key profile with `disabled` does not make up for a shared profile without it.
+    const keyOnly = providersResponse({}, [
+      { key: RAW_KEY, profile: { ...rawShared(), providers: toggleProviders(true, true) } },
+    ]);
+    expect(readRoutingProfiles(keyOnly).providerToggleSupported).toBe(false);
+  });
+
+  it('marks the unsupported backend as not toggle-capable', async () => {
+    mocks.get.mockRejectedValueOnce(Object.assign(new Error('nf'), { status: 404 }));
+    await expect(routingProfilesApi.get()).resolves.toMatchObject({
+      providerToggleSupported: false,
+    });
+  });
+
+  it('sends disabled in both provider blocks, explicit false when on, only when supported', () => {
+    const profile = providersProfile();
+    profile.providers.claude.disabled = true;
+    const body = blocks(profileBody(profile, options, true, false, true));
+    expect(body.claude.disabled).toBe(true);
+    expect(body.codex.disabled).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(body.codex, 'disabled')).toBe(true);
+    profile.providers.claude.disabled = false;
+    profile.providers.codex.disabled = true;
+    const swapped = blocks(profileBody(profile, options, true, true, true));
+    expect(swapped.claude.disabled).toBe(false);
+    expect(swapped.codex).toMatchObject({ disabled: true, speed: 'standard' });
+  });
+
+  it('keeps the other fields of a disabled provider in the body', () => {
+    const profile = providersProfile();
+    profile.providers.claude.disabled = true;
+    const on = blocks(profileBody(providersProfile(), options, true, false, true));
+    const off = blocks(profileBody(profile, options, true, false, true));
+    expect(off.claude).toEqual({ ...on.claude, disabled: true });
+  });
+
+  it('threads the toggle flag through the key and shared patches', () => {
+    const profile = providersProfile();
+    profile.providers.codex.disabled = true;
+    const key = keyProfilePatch(RAW_KEY, profile, options, true, false, true).routing as Record<
+      string,
+      Record<string, Record<string, unknown>>
+    >;
+    expect(blocks(key['key-profiles'][RAW_KEY]).codex.disabled).toBe(true);
+    expect(blocks(key['key-profiles'][RAW_KEY]).claude.disabled).toBe(false);
+    const shared = sharedProfilePatch(profile, undefined, options, true, false, true)
+      .routing as Record<string, unknown>;
+    expect(blocks(shared).codex.disabled).toBe(true);
+    expect(blocks(shared).claude.disabled).toBe(false);
+  });
+
+  it.each([
+    ['without the toggle flag', false],
+    ['by default', undefined],
+  ])('never sends disabled %s', (_name, toggleSupported) => {
+    const profile = providersProfile();
+    profile.providers.claude.disabled = true;
+    profile.providers.codex.disabled = true;
+    const bodies = [
+      profileBody(profile, options, true, true, toggleSupported),
+      (
+        keyProfilePatch(RAW_KEY, profile, options, true, true, toggleSupported).routing as Record<
+          string,
+          Record<string, Record<string, unknown>>
+        >
+      )['key-profiles'][RAW_KEY],
+      sharedProfilePatch(profile, undefined, options, true, true, toggleSupported)
+        .routing as Record<string, unknown>,
+    ];
+    for (const body of bodies) {
+      expect(blocks(body).claude).not.toHaveProperty('disabled');
+      expect(blocks(body).codex).not.toHaveProperty('disabled');
+    }
+  });
+
+  it('never sends disabled to a backend without providers, whatever the toggle flag says', () => {
+    const profile = providersProfile();
+    profile.providers.claude.disabled = true;
+    const body = profileBody(profile, options, false, true, true);
+    expect(body).not.toHaveProperty('providers');
+    expect(JSON.stringify(body)).not.toContain('disabled');
+  });
+
+  it('a key copy of the Default carries its disabled on a toggle-capable backend', async () => {
+    // The Default stores Claude off and serves `speed`, which the copy write requires.
+    const providers = () => {
+      const raw = toggleProviders(true, false);
+      return { ...raw, codex: { ...raw.codex, speed: 'standard' } };
+    };
+    const shared = { ...rawShared(), providers: providers() };
+    const before = { ...providersResponse({ providers: providers() }, []) };
+    const after = providersResponse({ providers: providers() }, [
+      { key: RAW_KEY, profile: shared },
+    ]);
+    const from = readRoutingProfiles(before);
+    expect(from.providerToggleSupported).toBe(true);
+    mocks.patchRaw.mockResolvedValueOnce({ headers: { etag: '"v2"' }, data: {} });
+    mocks.patch.mockResolvedValue({});
+    let reads = 0;
+    mocks.get.mockImplementation(async () => (reads++ === 0 ? before : after));
+    await routingProfilesApi.saveKeyDefaultCopy(RAW_KEY, from.shared, from, '"v1"');
+    const [, body] = mocks.patch.mock.calls[0] as [string, Record<string, unknown>];
+    const entry = (body.routing as Record<string, Record<string, Record<string, unknown>>>)[
+      'key-profiles'
+    ][RAW_KEY];
+    expect(blocks(entry).claude.disabled).toBe(true);
+    expect(blocks(entry).codex.disabled).toBe(false);
   });
 });

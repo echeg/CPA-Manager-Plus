@@ -466,6 +466,7 @@ describe('KeyProfileEditor', () => {
       },
       speed: 'standard',
       ignoreClientTier: false,
+      disabled: false,
     });
     expect(saved.providers.codex).toEqual({
       mode: 'api',
@@ -473,6 +474,7 @@ describe('KeyProfileEditor', () => {
       fallback: { target: 'off', mode: 'auto', mappings: [] },
       speed: 'standard',
       ignoreClientTier: false,
+      disabled: false,
     });
   });
 
@@ -493,6 +495,7 @@ describe('KeyProfileEditor', () => {
       },
       speed: 'standard',
       ignoreClientTier: false,
+      disabled: false,
     });
     expect(saved.preferredAccounts).toEqual({ claude: 'claude-a' });
   });
@@ -544,6 +547,7 @@ describe('KeyProfileEditor', () => {
           fallback: { target: 'off', mode: 'auto', mappings: [] },
           speed: 'standard',
           ignoreClientTier: false,
+          disabled: false,
         },
       },
     };
@@ -644,6 +648,7 @@ describe('KeyProfileEditor', () => {
           fallback: { target: 'api', mode: 'auto', mappings: [] },
           speed: 'standard',
           ignoreClientTier: false,
+          disabled: false,
         },
       },
     };

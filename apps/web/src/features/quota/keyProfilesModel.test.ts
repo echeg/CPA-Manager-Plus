@@ -57,6 +57,7 @@ const claudeRouting = (patch: Partial<ProviderRouting> = {}): ProviderRouting =>
   },
   speed: 'standard',
   ignoreClientTier: false,
+  disabled: false,
   ...patch,
 });
 
@@ -125,6 +126,7 @@ describe('normalizeProfile with providers', () => {
   test('trims the API credential and builds keys in a fixed order', () => {
     const messy = withProvider('claude', {
       ignoreClientTier: false,
+      disabled: false,
       speed: 'standard',
       fallback: { mappings: [], mode: 'always', target: 'api' },
       apiCredential: '  claude-key  ',
@@ -133,7 +135,7 @@ describe('normalizeProfile with providers', () => {
     const normalized = normalizeProfile(messy, options);
     expect(normalized.providers.claude.apiCredential).toBe('claude-key');
     expect(JSON.stringify(normalized.providers.claude)).toBe(
-      '{"mode":"subscription","apiCredential":"claude-key","fallback":{"target":"api","mode":"always","mappings":[]},"speed":"standard","ignoreClientTier":false}'
+      '{"mode":"subscription","apiCredential":"claude-key","fallback":{"target":"api","mode":"always","mappings":[]},"speed":"standard","ignoreClientTier":false,"disabled":false}'
     );
     expect(
       profileDirty(
@@ -162,6 +164,7 @@ describe('normalizeProfile with providers', () => {
       },
       speed: 'standard',
       ignoreClientTier: false,
+      disabled: false,
     });
     // The backend stores target off for API key mode, so a read-back with off is equal.
     const stored = withProvider(
@@ -199,6 +202,7 @@ describe('normalizeProfile with providers', () => {
         fallback,
         speed: 'standard',
         ignoreClientTier: false,
+        disabled: false,
       });
     const a = codex({ target: 'api', mode: 'always', mappings: [{ from: 'x', to: 'y' }] });
     const b = codex({ target: 'api', mode: 'auto', mappings: [] });
@@ -208,6 +212,7 @@ describe('normalizeProfile with providers', () => {
       fallback: { target: 'api', mode: 'auto', mappings: [] },
       speed: 'standard',
       ignoreClientTier: false,
+      disabled: false,
     });
     expect(profileDirty(a, b, options)).toBe(false);
   });
@@ -236,6 +241,7 @@ describe('normalizeProfile with providers', () => {
           fallback: { target: 'off', mode: 'auto', mappings: [] },
           speed: 'standard',
           ignoreClientTier: false,
+          disabled: false,
         }),
         options
       )
@@ -288,7 +294,47 @@ describe('normalizeProfile with the Codex speed', () => {
   });
 });
 
+describe('normalizeProfile with a disabled provider', () => {
+  const disabledProvider = (provider: 'claude' | 'codex', base: RoutingProfile = profile()) =>
+    withProvider(provider, { ...base.providers[provider], disabled: true }, base);
+
+  test('keeps disabled true for both providers, with the other fields as they are', () => {
+    const both = disabledProvider('codex', disabledProvider('claude'));
+    const normalized = normalizeProfile(both, options);
+    expect(normalized.providers.claude.disabled).toBe(true);
+    expect(normalized.providers.codex.disabled).toBe(true);
+    const enabled = normalizeProfile(profile(), options);
+    expect(normalized.providers.claude).toEqual({ ...enabled.providers.claude, disabled: true });
+    expect(normalized.providers.codex).toEqual({ ...enabled.providers.codex, disabled: true });
+  });
+
+  test('a change of only the Claude or only the Codex disabled is dirty', () => {
+    expect(profileDirty(profile(), disabledProvider('claude'), options)).toBe(true);
+    expect(profileDirty(profile(), disabledProvider('codex'), options)).toBe(true);
+    expect(profileDirty(disabledProvider('claude'), disabledProvider('codex'), options)).toBe(true);
+    expect(profileDirty(disabledProvider('claude'), disabledProvider('claude'), options)).toBe(
+      false
+    );
+  });
+
+  test('keeps disabled under API key mode', () => {
+    const api = withProvider('claude', claudeRouting({ mode: 'api', disabled: true }));
+    expect(normalizeProfile(api, options).providers.claude.disabled).toBe(true);
+  });
+});
+
 describe('copyOfShared', () => {
+  test('copies disabled of both providers', () => {
+    const shared = withProvider('codex', { ...profile().providers.codex, disabled: true });
+    shared.providers.claude = { ...shared.providers.claude, disabled: true };
+    const copy = copyOfShared(shared);
+    expect(copy.providers.claude.disabled).toBe(true);
+    expect(copy.providers.codex.disabled).toBe(true);
+    expect(copy).toEqual(shared);
+    copy.providers.claude.disabled = false;
+    expect(shared.providers.claude.disabled).toBe(true);
+  });
+
   test('copies the Codex speed and flag into an independent copy', () => {
     const shared = withProvider('codex', {
       ...profile().providers.codex,
@@ -328,6 +374,7 @@ describe('copyOfShared', () => {
         fallback: { target: 'off', mode: 'auto', mappings: [] },
         speed: 'standard',
         ignoreClientTier: false,
+        disabled: false,
       })
     );
     const copy = copyOfShared(shared);
@@ -442,6 +489,7 @@ describe('chainSummary', () => {
     fallback: { target: 'off', mode: 'auto', mappings: [] },
     speed: 'standard',
     ignoreClientTier: false,
+    disabled: false,
     ...patch,
   });
 
