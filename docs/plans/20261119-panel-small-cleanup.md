@@ -52,10 +52,10 @@
 ## Implementation Steps
 
 ### Task 1: Delete the unused subscription routing components
-- [ ] confirm with a search of `apps/web/src` that `SubscriptionRouting.tsx`, `SubscriptionAccounts.tsx` and `SubscriptionRouting.module.scss` are imported only by each other
-- [ ] delete the three files from `apps/web/src/features/quota/components/`
-- [ ] run `npm run type-check` and the quota tests (`npx vitest run src/features/quota` in `apps/web`)
-- [ ] run `npm run test:web` - must pass before task 2
+- [x] confirm with a search of `apps/web/src` that `SubscriptionRouting.tsx`, `SubscriptionAccounts.tsx` and `SubscriptionRouting.module.scss` are imported only by each other
+- [x] delete the three files from `apps/web/src/features/quota/components/`
+- [x] run `npm run type-check` and the quota tests (`npx vitest run src/features/quota` in `apps/web`)
+- [x] run `npm run test:web` - must pass before task 2
 
 ### Task 2: Fix the seven lint warnings
 - [ ] type the three `any` casts in `apps/web/src/features/accounts/AccountsPage.test.tsx` (`:13326`, `:13496`, `:17794`)
