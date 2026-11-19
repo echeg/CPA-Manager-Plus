@@ -88,8 +88,8 @@
 - [x] run `npm run build` in `apps/web` and confirm the single-file panel builds
 
 ### Task 6: [Final] Update documentation
-- [ ] update "How keys are shown" in `docs/personal-quota.md` for the new masking rule
-- [ ] delete the four backlog entries this plan closes: `docs/backlog/unused-subscription-routing-components.md`, `web-lint-warnings.md`, `sensitive-text-mask-matches-inside-words.md`, `guide-disabled-provider.md`; keep an entry, rewritten, for any item that was only partly done
+- [x] update "How keys are shown" in `docs/personal-quota.md` for the new masking rule
+- [x] delete the four backlog entries this plan closes: `docs/backlog/unused-subscription-routing-components.md`, `web-lint-warnings.md`, `sensitive-text-mask-matches-inside-words.md`, `guide-disabled-provider.md`; keep an entry, rewritten, for any item that was only partly done
 
 ## Technical Details
 - Mask boundary: `(?<![A-Za-z0-9])` before each of `sk-proj-`, `sk-ant-`, `sk-` and `sess-`. `_`, `-`, `/`, `=`, `:`, quotes and whitespace still allow a match, so `api_key_sk-...` stays masked.
