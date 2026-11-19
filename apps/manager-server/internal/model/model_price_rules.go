@@ -305,6 +305,54 @@ func ModelPriceForContextThresholdAndServiceTier(price ModelPrice, thresholdToke
 	return ScaleModelPriceContextTierForServiceTier(price, contextPrice, rule), true
 }
 
+// MergeSyncedModelPriceContextTiers combines the context tiers stored for a
+// synced model with the tiers a price import provides. An imported tier
+// replaces the stored tier with the same threshold; stored tiers at other
+// thresholds are kept, so hand-made tiers survive a sync. The result is
+// normalized.
+func MergeSyncedModelPriceContextTiers(stored, imported []ModelPriceContextTier) ([]ModelPriceContextTier, error) {
+	importedThresholds := make(map[int64]struct{}, len(imported))
+	for _, tier := range imported {
+		importedThresholds[tier.ThresholdTokens] = struct{}{}
+	}
+	merged := append([]ModelPriceContextTier(nil), imported...)
+	for _, tier := range stored {
+		if _, replaced := importedThresholds[tier.ThresholdTokens]; replaced {
+			continue
+		}
+		merged = append(merged, tier)
+	}
+	return NormalizeModelPriceContextTiers(merged)
+}
+
+// MergeSyncedModelPriceServiceTiers combines the service-tier rules stored for
+// a synced model with the rules a price import provides. A stored rule is
+// dropped when any of its identifiers (Mode or ServiceTier) is also used by an
+// imported rule, so the imported rule replaces it; this also covers a stored
+// Mode equal to an imported ServiceTier, which would otherwise make the set
+// ambiguous. Every other stored rule is kept. The result is normalized.
+func MergeSyncedModelPriceServiceTiers(stored, imported []ModelPriceServiceTier) ([]ModelPriceServiceTier, error) {
+	claimed := make(map[string]struct{}, len(imported)*2)
+	for _, tier := range imported {
+		claimed[normalizeModelPriceServiceTierIdentifier(tier.Mode)] = struct{}{}
+		claimed[normalizeModelPriceServiceTierIdentifier(tier.ServiceTier)] = struct{}{}
+	}
+	merged := append([]ModelPriceServiceTier(nil), imported...)
+	for _, tier := range stored {
+		_, modeClaimed := claimed[normalizeModelPriceServiceTierIdentifier(tier.Mode)]
+		_, serviceTierClaimed := claimed[normalizeModelPriceServiceTierIdentifier(tier.ServiceTier)]
+		if modeClaimed || serviceTierClaimed {
+			continue
+		}
+		merged = append(merged, tier)
+	}
+	return NormalizeModelPriceServiceTiers(merged)
+}
+
+func normalizeModelPriceServiceTierIdentifier(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
+}
+
 // ModelPriceStructureRevision changes only when the set of priced model IDs or
 // their context-tier thresholds changes. Rate-only updates, including explicit
 // service-tier rules, intentionally keep the revision stable because pricing

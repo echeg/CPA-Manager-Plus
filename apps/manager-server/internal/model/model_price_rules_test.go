@@ -250,3 +250,79 @@ func closeTo(got, want float64) bool {
 	diff := got - want
 	return diff < 1e-9 && diff > -1e-9
 }
+
+func TestMergeSyncedModelPriceContextTiers(t *testing.T) {
+	stored := []ModelPriceContextTier{
+		{ThresholdTokens: 272_000, Prompt: 4, PromptConfigured: true},
+		{ThresholdTokens: 128_000, Prompt: 3, PromptConfigured: true},
+	}
+	imported := []ModelPriceContextTier{{ThresholdTokens: 272_000, Prompt: 5, PromptConfigured: true}}
+	merged, err := MergeSyncedModelPriceContextTiers(stored, imported)
+	if err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+	if len(merged) != 2 ||
+		merged[0].ThresholdTokens != 128_000 || merged[0].Prompt != 3 ||
+		merged[1].ThresholdTokens != 272_000 || merged[1].Prompt != 5 {
+		t.Fatalf("merged context tiers = %+v", merged)
+	}
+
+	onlyStored, err := MergeSyncedModelPriceContextTiers(stored, nil)
+	if err != nil || len(onlyStored) != 2 || onlyStored[0].ThresholdTokens != 128_000 {
+		t.Fatalf("stored-only merge = %+v, err %v", onlyStored, err)
+	}
+	onlyImported, err := MergeSyncedModelPriceContextTiers(nil, imported)
+	if err != nil || len(onlyImported) != 1 || onlyImported[0].Prompt != 5 {
+		t.Fatalf("imported-only merge = %+v, err %v", onlyImported, err)
+	}
+	empty, err := MergeSyncedModelPriceContextTiers(nil, nil)
+	if err != nil || empty != nil {
+		t.Fatalf("empty merge = %+v, err %v", empty, err)
+	}
+}
+
+func TestMergeSyncedModelPriceServiceTiers(t *testing.T) {
+	storedFast := ModelPriceServiceTier{Mode: "fast", ServiceTier: "priority", Prompt: 4, PromptConfigured: true}
+	storedUltrafast := ModelPriceServiceTier{Mode: "ultrafast", ServiceTier: "ultrafast", Prompt: 6, PromptConfigured: true}
+	importedFast := ModelPriceServiceTier{Mode: "fast", ServiceTier: "priority", Prompt: 5, PromptConfigured: true}
+
+	merged, err := MergeSyncedModelPriceServiceTiers(
+		[]ModelPriceServiceTier{storedFast, storedUltrafast},
+		[]ModelPriceServiceTier{importedFast},
+	)
+	if err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+	if len(merged) != 2 ||
+		merged[0].Mode != "fast" || merged[0].Prompt != 5 ||
+		merged[1].Mode != "ultrafast" || merged[1].Prompt != 6 {
+		t.Fatalf("merged service tiers = %+v", merged)
+	}
+
+	// A stored rule that shares only ServiceTier with an imported rule is
+	// replaced, as is one whose Mode equals an imported ServiceTier.
+	storedPriority := ModelPriceServiceTier{Mode: "turbo", ServiceTier: "priority", Prompt: 7, PromptConfigured: true}
+	storedCrossed := ModelPriceServiceTier{Mode: "Priority ", ServiceTier: "boost", Prompt: 8, PromptConfigured: true}
+	for _, stored := range []ModelPriceServiceTier{storedPriority, storedCrossed} {
+		got, err := MergeSyncedModelPriceServiceTiers([]ModelPriceServiceTier{stored}, []ModelPriceServiceTier{importedFast})
+		if err != nil {
+			t.Fatalf("merge with %+v: %v", stored, err)
+		}
+		if len(got) != 1 || got[0].Mode != "fast" || got[0].Prompt != 5 {
+			t.Fatalf("merge with %+v = %+v, want only the imported rule", stored, got)
+		}
+	}
+
+	onlyStored, err := MergeSyncedModelPriceServiceTiers([]ModelPriceServiceTier{storedUltrafast}, nil)
+	if err != nil || len(onlyStored) != 1 || onlyStored[0].Mode != "ultrafast" {
+		t.Fatalf("stored-only merge = %+v, err %v", onlyStored, err)
+	}
+	onlyImported, err := MergeSyncedModelPriceServiceTiers(nil, []ModelPriceServiceTier{importedFast})
+	if err != nil || len(onlyImported) != 1 || onlyImported[0].Prompt != 5 {
+		t.Fatalf("imported-only merge = %+v, err %v", onlyImported, err)
+	}
+	empty, err := MergeSyncedModelPriceServiceTiers(nil, nil)
+	if err != nil || empty != nil {
+		t.Fatalf("empty merge = %+v, err %v", empty, err)
+	}
+}

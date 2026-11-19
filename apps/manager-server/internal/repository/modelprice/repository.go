@@ -404,6 +404,21 @@ func (r *repository) UpsertSynced(ctx context.Context, prices map[string]model.M
 			result.Skipped++
 			continue
 		}
+		// Keep stored rules the import does not provide, so hand-made tier
+		// rules and context tiers survive a sync. A model stored as manual is
+		// skipped as a whole by the upsert below, so the merge never reaches it.
+		if stored, ok := beforePrices[modelID]; ok {
+			price.ContextTiers, err = model.MergeSyncedModelPriceContextTiers(stored.ContextTiers, price.ContextTiers)
+			if err != nil {
+				result.Skipped++
+				continue
+			}
+			price.ServiceTiers, err = model.MergeSyncedModelPriceServiceTiers(stored.ServiceTiers, price.ServiceTiers)
+			if err != nil {
+				result.Skipped++
+				continue
+			}
+		}
 		if price.Source == "" {
 			price.Source = "sync"
 		}

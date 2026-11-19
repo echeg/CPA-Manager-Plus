@@ -100,12 +100,13 @@
 - [x] run `npm run manager-server:test` - must pass before task 5
 
 ### Task 5: Keep stored rules a sync does not provide
-- [ ] in `apps/manager-server/internal/model/model_price_rules.go`, add two pure merge functions: context tiers merge by `ThresholdTokens`; service-tier rules merge by key, where a stored rule is dropped when an imported rule has the same `Mode` or the same `ServiceTier`. The result is normalized
-- [ ] in `UpsertSynced` (`apps/manager-server/internal/repository/modelprice/repository.go:444-455`), write the merge of the stored rules (from `beforePrices`) and the imported ones instead of the imported ones alone; a model stored with source `manual` is still skipped as a whole
-- [ ] write tests for the merge functions: imported replaces the same key, a stored rule with another key survives, a stored rule sharing only `ServiceTier` with an imported one is dropped, empty inputs on either side
-- [ ] write tests in `repository_test.go`: a model with source `models.dev` keeps a stored `ultrafast` rule and gets the imported `fast` rate; a model with source `litellm` and an import without rules keeps its stored Fast rule and 272k context tier; a new model gets exactly the imported rules
-- [ ] write a test that a sync which keeps a stored context threshold does not change `ModelPriceStructureRevision`, and that the existing tests for raw deletion (`TestModelPriceUpsertSynced*`) still pass
-- [ ] run `npm run manager-server:test` - must pass before task 6
+- [x] in `apps/manager-server/internal/model/model_price_rules.go`, add two pure merge functions: context tiers merge by `ThresholdTokens`; service-tier rules merge by key, where a stored rule is dropped when an imported rule has the same `Mode` or the same `ServiceTier`. The result is normalized
+- [x] in `UpsertSynced` (`apps/manager-server/internal/repository/modelprice/repository.go:444-455`), write the merge of the stored rules (from `beforePrices`) and the imported ones instead of the imported ones alone; a model stored with source `manual` is still skipped as a whole
+- [x] write tests for the merge functions: imported replaces the same key, a stored rule with another key survives, a stored rule sharing only `ServiceTier` with an imported one is dropped, empty inputs on either side
+- [x] write tests in `repository_test.go`: a model with source `models.dev` keeps a stored `ultrafast` rule and gets the imported `fast` rate; a model with source `litellm` and an import without rules keeps its stored Fast rule and 272k context tier; a new model gets exactly the imported rules
+- [x] write a test that a sync which keeps a stored context threshold does not change `ModelPriceStructureRevision`, and that the existing tests for raw deletion (`TestModelPriceUpsertSynced*`) still pass
+- [x] ➕ updated `TestStoreCompatModelPricesAndAPIKeyAliases` (`internal/store/store_compat_test.go`), which pinned the old replace-on-sync behaviour; a stored rule is dropped when any of its identifiers is used by an imported rule, which also covers a stored `Mode` equal to an imported `ServiceTier`
+- [x] run `npm run manager-server:test` - must pass before task 6
 
 ### Task 6: Verify acceptance criteria
 - [ ] verify the three items of the Overview against the code and tests

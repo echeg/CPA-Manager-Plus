@@ -545,6 +545,8 @@ func TestStoreCompatModelPricesAndAPIKeyAliases(t *testing.T) {
 		t.Fatalf("prices = %#v", prices)
 	}
 
+	// A sync keeps stored context tiers at thresholds it does not provide and
+	// replaces the stored fast rule with the imported one as a whole.
 	result, err := db.UpsertSyncedModelPrices(context.Background(), map[string]ModelPrice{
 		"gpt-a": {
 			Prompt: 5, Completion: 6, Cache: 1, CacheRead: 0.75, CacheCreation: 4,
@@ -577,9 +579,12 @@ func TestStoreCompatModelPricesAndAPIKeyAliases(t *testing.T) {
 	}
 	if prices["gpt-a"].Prompt != 5 || prices["gpt-a"].CacheRead != 0.75 ||
 		prices["gpt-a"].CacheCreation != 4 || prices["gpt-a"].SyncedAtMS == nil ||
-		prices["gpt-a"].Source != "litellm" || len(prices["gpt-a"].ContextTiers) != 1 ||
-		prices["gpt-a"].ContextTiers[0].ThresholdTokens != 128_000 || len(prices["gpt-a"].ServiceTiers) != 1 ||
-		prices["gpt-a"].ServiceTiers[0].Mode != "fast" || prices["gpt-a"].ServiceTiers[0].Prompt != 11 {
+		prices["gpt-a"].Source != "litellm" || len(prices["gpt-a"].ContextTiers) != 3 ||
+		prices["gpt-a"].ContextTiers[0].ThresholdTokens != 32_000 ||
+		prices["gpt-a"].ContextTiers[1].ThresholdTokens != 128_000 || prices["gpt-a"].ContextTiers[1].Prompt != 7 ||
+		prices["gpt-a"].ContextTiers[2].ThresholdTokens != 200_000 || len(prices["gpt-a"].ServiceTiers) != 1 ||
+		prices["gpt-a"].ServiceTiers[0].Mode != "fast" || prices["gpt-a"].ServiceTiers[0].Prompt != 11 ||
+		prices["gpt-a"].ServiceTiers[0].CompletionConfigured {
 		t.Fatalf("synced price = %#v", prices["gpt-a"])
 	}
 

@@ -546,7 +546,6 @@ func TestModelPriceUpsertSyncedManualPriceAndNewModelRejectedWithRawDeletion(t *
 	}
 }
 
-
 func TestModelPriceStructureChangeAllowedAfterRawDeletionWithRetainedProjection(t *testing.T) {
 	ctx := context.Background()
 	db, repo := openTestDB(t)
@@ -602,7 +601,6 @@ func TestModelPriceUpsertSyncedStructureChangeAllowedAfterRawDeletionWithRetaine
 		t.Fatalf("expected model-b to be persisted")
 	}
 }
-
 
 func TestModelPriceStructureChangePreservesRetainedVerifierSystemError(t *testing.T) {
 	ctx := context.Background()
@@ -674,5 +672,150 @@ func TestModelPriceUpsertSyncedPreservesRetainedVerifierSystemError(t *testing.T
 	}
 	if _, ok := persisted["model-b"]; ok {
 		t.Fatal("model-b should not exist after verifier system error")
+	}
+}
+
+func TestModelPriceUpsertSyncedKeepsStoredServiceTierNotImported(t *testing.T) {
+	ctx := context.Background()
+	_, repo := openTestDB(t)
+
+	if err := repo.ReplaceAll(ctx, map[string]model.ModelPrice{
+		"gpt-6.2-sol": {
+			Prompt: 2, Completion: 10, PromptConfigured: true, CompletionConfigured: true,
+			Source: "models.dev",
+			ServiceTiers: []model.ModelPriceServiceTier{
+				{Mode: "fast", ServiceTier: "priority", Prompt: 4, PromptConfigured: true},
+				{Mode: "ultrafast", ServiceTier: "ultrafast", Prompt: 6, Completion: 30, PromptConfigured: true, CompletionConfigured: true},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("initial ReplaceAll: %v", err)
+	}
+
+	result, err := repo.UpsertSynced(ctx, map[string]model.ModelPrice{
+		"gpt-6.2-sol": {
+			Prompt: 2, Completion: 10, PromptConfigured: true, CompletionConfigured: true,
+			Source: "models.dev",
+			ServiceTiers: []model.ModelPriceServiceTier{
+				{Mode: "fast", ServiceTier: "priority", Prompt: 5, Completion: 25, PromptConfigured: true, CompletionConfigured: true},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("UpsertSynced: %v", err)
+	}
+	if result.Imported != 1 || result.Skipped != 0 {
+		t.Fatalf("unexpected sync result: %+v", result)
+	}
+
+	persisted, err := repo.LoadAll(ctx)
+	if err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+	tiers := persisted["gpt-6.2-sol"].ServiceTiers
+	if len(tiers) != 2 {
+		t.Fatalf("expected fast and ultrafast rules, got %+v", tiers)
+	}
+	if tiers[0].Mode != "fast" || tiers[0].Prompt != 5 || tiers[0].Completion != 25 {
+		t.Fatalf("expected imported fast rate, got %+v", tiers[0])
+	}
+	if tiers[1].Mode != "ultrafast" || tiers[1].Prompt != 6 || tiers[1].Completion != 30 {
+		t.Fatalf("expected stored ultrafast rule, got %+v", tiers[1])
+	}
+}
+
+func TestModelPriceUpsertSyncedKeepsStoredRulesWhenImportHasNone(t *testing.T) {
+	ctx := context.Background()
+	db, repo := openTestDB(t)
+
+	stored := map[string]model.ModelPrice{
+		"gpt-6.2-astra": {
+			Prompt: 1, Completion: 8, PromptConfigured: true, CompletionConfigured: true,
+			Source: "litellm",
+			ContextTiers: []model.ModelPriceContextTier{
+				{ThresholdTokens: 272000, Prompt: 2, Completion: 12, PromptConfigured: true, CompletionConfigured: true},
+			},
+			ServiceTiers: []model.ModelPriceServiceTier{
+				{Mode: "fast", ServiceTier: "priority", Prompt: 2.5, PromptConfigured: true},
+			},
+		},
+	}
+	if err := repo.ReplaceAll(ctx, stored); err != nil {
+		t.Fatalf("initial ReplaceAll: %v", err)
+	}
+	before, err := repo.LoadAll(ctx)
+	if err != nil {
+		t.Fatalf("LoadAll before: %v", err)
+	}
+	// Raw deletion rejects structure changes, so a sync that keeps the stored
+	// threshold must leave the structure revision as it was.
+	markRawDeleted(t, db)
+
+	result, err := repo.UpsertSynced(ctx, map[string]model.ModelPrice{
+		"gpt-6.2-astra": {Prompt: 1.25, Completion: 9, PromptConfigured: true, CompletionConfigured: true, Source: "litellm"},
+	})
+	if err != nil {
+		t.Fatalf("UpsertSynced: %v", err)
+	}
+	if result.Imported != 1 {
+		t.Fatalf("unexpected sync result: %+v", result)
+	}
+
+	after, err := repo.LoadAll(ctx)
+	if err != nil {
+		t.Fatalf("LoadAll after: %v", err)
+	}
+	price := after["gpt-6.2-astra"]
+	if price.Prompt != 1.25 || price.Completion != 9 {
+		t.Fatalf("expected imported base rates, got %+v", price)
+	}
+	if len(price.ContextTiers) != 1 || price.ContextTiers[0].ThresholdTokens != 272000 || price.ContextTiers[0].Prompt != 2 {
+		t.Fatalf("expected stored 272k context tier, got %+v", price.ContextTiers)
+	}
+	if len(price.ServiceTiers) != 1 || price.ServiceTiers[0].Mode != "fast" || price.ServiceTiers[0].Prompt != 2.5 {
+		t.Fatalf("expected stored fast rule, got %+v", price.ServiceTiers)
+	}
+	if got, want := model.ModelPriceStructureRevision(after), model.ModelPriceStructureRevision(before); got != want {
+		t.Fatalf("structure revision changed: %q -> %q", want, got)
+	}
+}
+
+func TestModelPriceUpsertSyncedNewModelGetsImportedRules(t *testing.T) {
+	ctx := context.Background()
+	_, repo := openTestDB(t)
+
+	if err := repo.ReplaceAll(ctx, map[string]model.ModelPrice{
+		"other-model": {
+			Prompt: 1, Completion: 2, Source: "models.dev",
+			ServiceTiers: []model.ModelPriceServiceTier{
+				{Mode: "ultrafast", ServiceTier: "ultrafast", Prompt: 3, PromptConfigured: true},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("initial ReplaceAll: %v", err)
+	}
+
+	importedTiers := []model.ModelPriceServiceTier{
+		{Mode: "fast", ServiceTier: "priority", Prompt: 5, PromptConfigured: true},
+	}
+	importedContext := []model.ModelPriceContextTier{
+		{ThresholdTokens: 200000, Prompt: 4, PromptConfigured: true},
+	}
+	if _, err := repo.UpsertSynced(ctx, map[string]model.ModelPrice{
+		"new-model": {Prompt: 2, Completion: 10, Source: "models.dev", ServiceTiers: importedTiers, ContextTiers: importedContext},
+	}); err != nil {
+		t.Fatalf("UpsertSynced: %v", err)
+	}
+
+	persisted, err := repo.LoadAll(ctx)
+	if err != nil {
+		t.Fatalf("LoadAll: %v", err)
+	}
+	price := persisted["new-model"]
+	if len(price.ServiceTiers) != 1 || price.ServiceTiers[0].Mode != "fast" || price.ServiceTiers[0].Prompt != 5 {
+		t.Fatalf("expected only the imported fast rule, got %+v", price.ServiceTiers)
+	}
+	if len(price.ContextTiers) != 1 || price.ContextTiers[0].ThresholdTokens != 200000 {
+		t.Fatalf("expected only the imported context tier, got %+v", price.ContextTiers)
 	}
 }
