@@ -93,11 +93,11 @@
 - [x] run `npm run test:web` and `npm run type-check` - must pass before task 4
 
 ### Task 4: Import every models.dev mode that carries a cost
-- [ ] in `readModelsDevServiceTiers` (`apps/manager-server/internal/service/modelprice/service.go:949`), read every entry of `experimental.modes` that has a `cost` block, in sorted mode order: `fast` keeps the rule `fast` / `priority`, any other mode `m` becomes the rule `m` / `m`
-- [ ] skip a mode without a `cost` block or without any rate, and return no rules when the set fails `NormalizeModelPriceServiceTiers`
-- [ ] extend `TestFetchModelsDevModelPrices` in `service_test.go` with a model that has `fast` and `ultrafast` costs and expects both rules
-- [ ] write tests for a mode without `cost` (today's `ultrafast` entries), a mode with an empty `cost`, and a model with no `modes`
-- [ ] run `npm run manager-server:test` - must pass before task 5
+- [x] in `readModelsDevServiceTiers` (`apps/manager-server/internal/service/modelprice/service.go:949`), read every entry of `experimental.modes` that has a `cost` block, in sorted mode order: `fast` keeps the rule `fast` / `priority`, any other mode `m` becomes the rule `m` / `m`
+- [x] skip a mode without a `cost` block or without any rate, and return no rules when the set fails `NormalizeModelPriceServiceTiers`
+- [x] extend `TestFetchModelsDevModelPrices` in `service_test.go` with a model that has `fast` and `ultrafast` costs and expects both rules
+- [x] write tests for a mode without `cost` (today's `ultrafast` entries), a mode with an empty `cost`, and a model with no `modes`
+- [x] run `npm run manager-server:test` - must pass before task 5
 
 ### Task 5: Keep stored rules a sync does not provide
 - [ ] in `apps/manager-server/internal/model/model_price_rules.go`, add two pure merge functions: context tiers merge by `ThresholdTokens`; service-tier rules merge by key, where a stored rule is dropped when an imported rule has the same `Mode` or the same `ServiceTier`. The result is normalized

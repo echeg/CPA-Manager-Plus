@@ -31,7 +31,8 @@ func TestFetchModelsDevModelPrices(t *testing.T) {
 		_, _ = w.Write([]byte(`{
 			"provider-a": {"models": {
 					"shared-model": {"name":"Shared A", "cost":{"input":1,"output":2,"cache_read":0.1,"cache_write":0.2,"tiers":[{"input":3,"output":4,"tier":{"type":"context","size":200000}}]},"experimental":{"modes":{"fast":{"cost":{"input":2.5,"output":5,"cache_read":0}}}}},
-				"unique-model": {"cost":{"input":3,"output":4}}
+				"unique-model": {"cost":{"input":3,"output":4}},
+				"multi-mode": {"cost":{"input":2,"output":10},"experimental":{"modes":{"ultrafast":{"cost":{"input":6,"output":30,"cache_read":0.6}},"fast":{"cost":{"input":4,"output":20}}}}}
 			}},
 			"provider-b": {"models": {
 				"shared-model": {"cost":{"input":1.5,"output":2.5,"cache_read":0.15,"cache_write":0.25}},
@@ -77,6 +78,21 @@ func TestFetchModelsDevModelPrices(t *testing.T) {
 		shared.ServiceTiers[0].Completion != 5 || !shared.ServiceTiers[0].CacheReadConfigured ||
 		shared.ServiceTiers[0].CacheRead != 0 {
 		t.Fatalf("service tiers = %#v", shared.ServiceTiers)
+	}
+
+	multiMode := prices["provider-a/multi-mode"].ServiceTiers
+	if len(multiMode) != 2 {
+		t.Fatalf("multi-mode service tiers = %#v", multiMode)
+	}
+	if multiMode[0].Mode != "fast" || multiMode[0].ServiceTier != "priority" ||
+		multiMode[0].Prompt != 4 || multiMode[0].Completion != 20 || multiMode[0].CacheReadConfigured {
+		t.Fatalf("multi-mode fast rule = %#v", multiMode[0])
+	}
+	if multiMode[1].Mode != "ultrafast" || multiMode[1].ServiceTier != "ultrafast" ||
+		multiMode[1].Prompt != 6 || multiMode[1].Completion != 30 ||
+		!multiMode[1].CacheReadConfigured || multiMode[1].CacheRead != 0.6 ||
+		!multiMode[1].CacheConfigured || multiMode[1].Cache != 0.6 || multiMode[1].CacheCreationConfigured {
+		t.Fatalf("multi-mode ultrafast rule = %#v", multiMode[1])
 	}
 
 	for _, alias := range []string{"shared-model", "unique-model", "same-rule"} {
@@ -178,6 +194,62 @@ func TestDecodeModelsDevContextTiersPreservesConfiguredZerosAndIgnoresUnsafeRule
 		}
 		if !strings.Contains(prices[modelID].RawJSON, `"tiers"`) {
 			t.Fatalf("raw tiers missing for %s: %s", modelID, prices[modelID].RawJSON)
+		}
+	}
+}
+
+func TestDecodeModelsDevServiceTiersSkipsModesWithoutRates(t *testing.T) {
+	prices, skipped, err := decodeModelsDevModelPrices(strings.NewReader(`{
+		"openai":{"models":{
+			"ultrafast-no-cost":{"cost":{"input":2,"output":10},"experimental":{"modes":{
+				"fast":{"cost":{"input":4,"output":20}},
+				"ultrafast":{"limit":{"context":272000}}
+			}}},
+			"ultrafast-only-no-cost":{"cost":{"input":2,"output":10},"experimental":{"modes":{"ultrafast":{"limit":{"context":272000}}}}},
+			"empty-cost":{"cost":{"input":2,"output":10},"experimental":{"modes":{
+				"fast":{"cost":{"input":4}},
+				"ultrafast":{"cost":{}}
+			}}},
+			"not-an-object":{"cost":{"input":2,"output":10},"experimental":{"modes":{"fast":"yes"}}},
+			"no-modes":{"cost":{"input":2,"output":10},"experimental":{}},
+			"empty-modes":{"cost":{"input":2,"output":10},"experimental":{"modes":{}}},
+			"no-experimental":{"cost":{"input":2,"output":10}},
+			"conflicting":{"cost":{"input":2,"output":10},"experimental":{"modes":{
+				"fast":{"cost":{"input":4}},
+				"priority":{"cost":{"input":5}}
+			}}}
+		}}
+	}`))
+	if err != nil {
+		t.Fatalf("decode models.dev prices: %v", err)
+	}
+	if skipped != 0 {
+		t.Fatalf("skipped = %d", skipped)
+	}
+
+	for _, modelID := range []string{"openai/ultrafast-no-cost", "openai/empty-cost"} {
+		tiers := prices[modelID].ServiceTiers
+		if len(tiers) != 1 || tiers[0].Mode != "fast" || tiers[0].ServiceTier != "priority" || tiers[0].Prompt != 4 {
+			t.Fatalf("%s service tiers = %#v", modelID, tiers)
+		}
+	}
+	for _, modelID := range []string{
+		"openai/ultrafast-only-no-cost",
+		"openai/not-an-object",
+		"openai/no-modes",
+		"openai/empty-modes",
+		"openai/no-experimental",
+		"openai/conflicting",
+	} {
+		price, ok := prices[modelID]
+		if !ok {
+			t.Fatalf("missing %s: %#v", modelID, prices)
+		}
+		if price.ServiceTiers != nil {
+			t.Fatalf("%s service tiers = %#v", modelID, price.ServiceTiers)
+		}
+		if price.Prompt != 2 || price.Completion != 10 {
+			t.Fatalf("%s base price = %#v", modelID, price)
 		}
 	}
 }
