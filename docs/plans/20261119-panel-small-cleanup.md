@@ -66,11 +66,11 @@
 - [x] run `npm run lint` (0 warnings), `npm run type-check` and `npm run test:web` - must pass before task 3
 
 ### Task 3: Do not mask `sk-` and `sess-` inside words
-- [ ] in `apps/web/src/utils/format.ts:35-36`, require that the `sk-proj-`, `sk-ant-`, `sk-` and `sess-` alternatives of `API_KEY_MASK_REGEX` are not preceded by a letter or digit
-- [ ] write tests in `format.test.ts` that `task-runner`, `kiosk-berlin`, `risk-engine` and `assess-candidates` stay unchanged
-- [ ] write tests that keys are still masked at the start of the text and after a space, `=`, `:`, a quote, `/` and `_` (`api_key_sk-...`), and inside a JSON string
-- [ ] check the labels that go through `sanitizeApiKeyDisplayText` (`apps/web/src/features/monitoring/model/apiKeys.ts:13`) with a test for a CP instance name such as `task-runner`
-- [ ] run `npm run test:web` - must pass before task 4
+- [x] in `apps/web/src/utils/format.ts:35-36`, require that the `sk-proj-`, `sk-ant-`, `sk-` and `sess-` alternatives of `API_KEY_MASK_REGEX` are not preceded by a letter or digit
+- [x] write tests in `format.test.ts` that `task-runner`, `kiosk-berlin`, `risk-engine` and `assess-candidates` stay unchanged
+- [x] write tests that keys are still masked at the start of the text and after a space, `=`, `:`, a quote, `/` and `_` (`api_key_sk-...`), and inside a JSON string
+- [x] check the labels that go through `sanitizeApiKeyDisplayText` (`apps/web/src/features/monitoring/model/apiKeys.ts:13`) with a test for a CP instance name such as `task-runner`
+- [x] run `npm run test:web` - must pass before task 4
 
 ### Task 4: Describe a switched-off provider in the Guide
 - [ ] add one sentence to `guide.intro_key_routing` in `apps/web/src/i18n/locales/en.json`, `ru.json`, `zh-CN.json` and `zh-TW.json`: a profile can switch a provider off; CPA then answers that provider's requests with 403 before any selection, and Claude's fallback to a switched-off Codex does not run
