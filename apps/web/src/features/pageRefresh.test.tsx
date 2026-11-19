@@ -819,6 +819,25 @@ describe('page refresh interactions', () => {
     expect(text(renderer.root)).not.toContain('Retained Store Plugin');
   });
 
+  it('reloads dashboard health and drops the old snapshot when the CPA base changes', async () => {
+    await mount(<DashboardPage />);
+    expect(mocks.status).toHaveBeenCalledOnce();
+    expect(mocks.errorLogs).toHaveBeenCalledOnce();
+    const version = () => renderer.root.findByType(VersionCard);
+    expect(version().props.collectorStatus.marker).toBe('last-good');
+
+    const next = deferred<unknown>();
+    mocks.status.mockReturnValueOnce(next.promise);
+    mocks.auth.apiBase = 'https://b.test';
+    await act(async () => { renderer.update(<DashboardPage />); });
+    expect(mocks.status).toHaveBeenCalledTimes(2);
+    expect(mocks.errorLogs).toHaveBeenCalledTimes(2);
+    expect(version().props.collectorStatus).toBeNull();
+
+    await act(async () => { next.resolve({ collector: { enabled: true }, marker: 'cpa-b' }); });
+    expect(version().props.collectorStatus.marker).toBe('cpa-b');
+  });
+
   it('attributes an error-log-only failure to logs while keeping collector health and last-known count', async () => {
     await mount(<DashboardPage />);
     mocks.errorLogs.mockRejectedValueOnce(new Error('logs offline'));

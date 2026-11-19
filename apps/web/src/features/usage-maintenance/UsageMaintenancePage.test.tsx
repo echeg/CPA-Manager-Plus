@@ -16,7 +16,7 @@ import {
   COMPACT_DOCKER_COMPOSE_COMMAND,
   COMPACT_DOCKER_RUN_COMMAND,
   COMPACT_USAGE_COMMAND,
-} from './UsageMaintenanceCapabilityViews';
+} from './usageMaintenanceCommands';
 
 const { mocks } = vi.hoisted(() => {
   (

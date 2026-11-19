@@ -30,6 +30,12 @@ Tests depend on the generated pages:
   `localStorage['archify-theme']`, styles both `data-theme` values, and exposes
   `Archify.theme.toggle`. If a newer archify version fails those checks, update
   `DiagramFrame.tsx` before replacing the HTML.
+- `../guideWiring.test.ts` checks the provider-off branch of `key-routing.workflow.json`: the
+  `disabled` node ("Provider off", "403 provider_disabled"), its lane label, the
+  `profile → disabled` edge, the "Fallback per provider" card item, and the "Profile per client
+  key" card item saying Home mode or a scheduler plugin ignores the switch. It also checks that
+  `key-routing.html` contains them, so a page left behind its source fails. If you rename them,
+  update that test too.
 
 The pages contain archify's viewer code, MIT-licensed: Copyright (c) 2026 tt-a1i (Archify) and
 Copyright (c) 2025 Cocoon AI (original "architecture-diagram-generator"). The notices are also

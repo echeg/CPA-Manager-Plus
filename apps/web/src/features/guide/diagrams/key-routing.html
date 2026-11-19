@@ -5037,7 +5037,7 @@
         <text x="54" y="200" class="t-dim" font-size="10" font-weight="600">02 / Subscription selection (Claude / Codex OAuth)</text>
 
         <rect data-graph-role="structural-frame" data-composition-frame-kind="lane" data-composition-frame-id="lane-2" x="40" y="304" width="1168" height="106" rx="10" class="c-lane" stroke-width="1"/>
-        <text x="54" y="326" class="t-dim" font-size="10" font-weight="600">03 / Fallback: Codex subscription or API key</text>
+        <text x="54" y="326" class="t-dim" font-size="10" font-weight="600">03 / Provider off, or fallback to a Codex subscription or API key</text>
 
         <!-- Phase headers -->
         <line x1="74.5" y1="35" x2="342" y2="35" class="a-default" stroke-width="1.1"/>
@@ -5057,11 +5057,12 @@
         <path data-edge-from="codex" data-edge-to="response" data-edge-key="0" data-composition-points="1119.5,338;1119.5,146" d="M 1119.5 338 L 1119.5 146" class="a-dashed" stroke-width="1.4" marker-end="url(#arrowhead-dashed)"/>
         <path data-edge-from="fail" data-edge-to="codex" data-edge-label="if enabled" data-edge-key="1" data-composition-points="973.5,372;1039.5,372" d="M 973.5 372 L 1039.5 372" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
         <path data-edge-from="preferred" data-edge-to="selection" data-edge-label="unset or unavailable" data-edge-key="2" data-composition-points="707,246;821,246" d="M 707 246 L 821 246" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="profile" data-edge-to="sticky" data-edge-label="resolve" data-edge-key="3" data-composition-points="371,120;416,120;416,212" d="M 371 120 L 416 120 L 416 212" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="request" data-edge-to="profile" data-edge-key="4" data-composition-points="193,120;221,120" d="M 193 120 L 221 120" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="selection" data-edge-to="fail" data-edge-key="5" data-composition-points="898.5,280;898.5,346" d="M 898.5 280 L 898.5 346" class="a-security" stroke-width="1.4" marker-end="url(#arrowhead-security)"/>
-        <path data-edge-from="selection" data-edge-to="response" data-edge-label="credential" data-edge-key="6" data-composition-points="976,246;1119.5,246;1119.5,146" d="M 976 246 L 1119.5 246 L 1119.5 146" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="sticky" data-edge-to="preferred" data-edge-label="no binding" data-edge-key="7" data-composition-points="491,246;557,246" d="M 491 246 L 557 246" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="profile" data-edge-to="disabled" data-edge-label="provider off" data-edge-key="3" data-composition-points="289,154;289,170;20,170;20,372;221,372" d="M 289 154 L 289 170 L 20 170 L 20 372 L 221 372" class="a-security" stroke-width="1.4" marker-end="url(#arrowhead-security)"/>
+        <path data-edge-from="profile" data-edge-to="sticky" data-edge-label="resolve" data-edge-key="4" data-composition-points="371,120;416,120;416,212" d="M 371 120 L 416 120 L 416 212" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="request" data-edge-to="profile" data-edge-key="5" data-composition-points="193,120;221,120" d="M 193 120 L 221 120" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="selection" data-edge-to="fail" data-edge-key="6" data-composition-points="898.5,280;898.5,346" d="M 898.5 280 L 898.5 346" class="a-security" stroke-width="1.4" marker-end="url(#arrowhead-security)"/>
+        <path data-edge-from="selection" data-edge-to="response" data-edge-label="credential" data-edge-key="7" data-composition-points="976,246;1119.5,246;1119.5,146" d="M 976 246 L 1119.5 246 L 1119.5 146" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="sticky" data-edge-to="preferred" data-edge-label="no binding" data-edge-key="8" data-composition-points="491,246;557,246" d="M 491 246 L 557 246" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
 
         <!-- Nodes -->
         <g id="node-request" data-node-id="request" data-node-label="Request" tabindex="0" role="button" aria-label="Focus Request, client key + model, Client key → routing profile (routing.key-profiles) › Inbound" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="client key + model" data-node-context="Client key → routing profile (routing.key-profiles) › Inbound">
@@ -5141,8 +5142,21 @@
         <text data-detail="fine" x="898.5" y="268" class="t-backend" font-size="7" text-anchor="middle">selection</text>
         </g>
 
-        <g id="node-fail" data-node-id="fail" data-node-label="Round failed" tabindex="0" role="button" aria-label="Focus Round failed, 429 / 5xx / cooldown, Fallback: Codex subscription or API key › Selection stages" aria-pressed="false" data-node-kind="security" data-node-sublabel="429 / 5xx / cooldown" data-node-context="Fallback: Codex subscription or API key › Selection stages">
-          <title>Round failed · 429 / 5xx / cooldown · Fallback: Codex subscription or API key › Selection stages</title>
+        <g id="node-disabled" data-node-id="disabled" data-node-label="Provider off" tabindex="0" role="button" aria-label="Focus Provider off, 403 provider_disabled, Provider off, or fallback to a Codex subscription or API key › Inbound" aria-pressed="false" data-node-kind="security" data-node-sublabel="403 provider_disabled" data-node-tag="disabled: true" data-node-context="Provider off, or fallback to a Codex subscription or API key › Inbound">
+          <title>Provider off · 403 provider_disabled · Provider off, or fallback to a Codex subscription or API key › Inbound · disabled: true</title>
+          <rect x="221" y="338" width="150" height="68" rx="6" class="c-mask"/>
+          <rect x="221" y="338" width="150" height="68" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(227 344) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="296" y="359" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Provider off</text>
+          <text data-detail="context" x="296" y="376" class="t-muted" font-size="8" text-anchor="middle">403 provider_disabled</text>
+        <text data-detail="fine" x="296" y="394" class="t-security" font-size="7" text-anchor="middle">disabled: true</text>
+        </g>
+
+        <g id="node-fail" data-node-id="fail" data-node-label="Round failed" tabindex="0" role="button" aria-label="Focus Round failed, 429 / 5xx / cooldown, Provider off, or fallback to a Codex subscription or API key › Selection stages" aria-pressed="false" data-node-kind="security" data-node-sublabel="429 / 5xx / cooldown" data-node-context="Provider off, or fallback to a Codex subscription or API key › Selection stages">
+          <title>Round failed · 429 / 5xx / cooldown · Provider off, or fallback to a Codex subscription or API key › Selection stages</title>
           <rect x="823.5" y="346" width="150" height="52" rx="6" class="c-mask"/>
           <rect x="823.5" y="346" width="150" height="52" rx="6" class="c-security" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(829.5 352) scale(0.6875)">
@@ -5153,8 +5167,8 @@
           <text data-detail="context" x="898.5" y="384" class="t-muted" font-size="8" text-anchor="middle">429 / 5xx / cooldown</text>
         </g>
 
-        <g id="node-codex" data-node-id="codex" data-node-label="Fallback target" tabindex="0" role="button" aria-label="Focus Fallback target, Codex or API key, Fallback: Codex subscription or API key › Outcome" aria-pressed="false" data-node-kind="external" data-node-sublabel="Codex or API key" data-node-tag="target: codex | api" data-node-context="Fallback: Codex subscription or API key › Outcome">
-          <title>Fallback target · Codex or API key · Fallback: Codex subscription or API key › Outcome · target: codex | api</title>
+        <g id="node-codex" data-node-id="codex" data-node-label="Fallback target" tabindex="0" role="button" aria-label="Focus Fallback target, Codex or API key, Provider off, or fallback to a Codex subscription or API key › Outcome" aria-pressed="false" data-node-kind="external" data-node-sublabel="Codex or API key" data-node-tag="target: codex | api" data-node-context="Provider off, or fallback to a Codex subscription or API key › Outcome">
+          <title>Fallback target · Codex or API key · Provider off, or fallback to a Codex subscription or API key › Outcome · target: codex | api</title>
           <rect x="1039.5" y="338" width="160" height="68" rx="6" class="c-mask"/>
           <rect x="1039.5" y="338" width="160" height="68" rx="6" class="c-external" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(1045.5 344) scale(0.6875)">
@@ -5176,17 +5190,21 @@
           <rect x="711" y="226" width="106" height="14" rx="3" class="c-mask"/>
           <text x="764" y="236" class="t-muted" font-size="8" text-anchor="middle">unset or unavailable</text>
         </g>
-        <g data-detail="context" data-edge-from="profile" data-edge-to="sticky" data-edge-label="resolve" data-edge-key="3">
+        <g data-detail="context" data-edge-from="profile" data-edge-to="disabled" data-edge-label="provider off" data-edge-key="3">
+          <rect x="120.7" y="150" width="67.6" height="14" rx="3" class="c-mask"/>
+          <text x="154.5" y="160" class="t-security" font-size="8" text-anchor="middle">provider off</text>
+        </g>
+        <g data-detail="context" data-edge-from="profile" data-edge-to="sticky" data-edge-label="resolve" data-edge-key="4">
           <rect x="371.7" y="100" width="43.6" height="14" rx="3" class="c-mask"/>
           <text x="393.5" y="110" class="t-muted" font-size="8" text-anchor="middle">resolve</text>
         </g>
 
 
-        <g data-detail="context" data-edge-from="selection" data-edge-to="response" data-edge-label="credential" data-edge-key="6">
+        <g data-detail="context" data-edge-from="selection" data-edge-to="response" data-edge-label="credential" data-edge-key="7">
           <rect x="1018.75" y="226" width="58" height="14" rx="3" class="c-mask"/>
           <text x="1047.75" y="236" class="t-backend" font-size="8" text-anchor="middle">credential</text>
         </g>
-        <g data-detail="context" data-edge-from="sticky" data-edge-to="preferred" data-edge-label="no binding" data-edge-key="7">
+        <g data-detail="context" data-edge-from="sticky" data-edge-to="preferred" data-edge-label="no binding" data-edge-key="8">
           <rect x="495" y="226" width="58" height="14" rx="3" class="c-mask"/>
           <text x="524" y="236" class="t-muted" font-size="8" text-anchor="middle">no binding</text>
         </g>
@@ -5405,6 +5423,8 @@
         <ul>
           <li>&bull; A key without its own profile uses the shared routing fields</li>
           <li>&bull; A key profile replaces the shared profile entirely: nothing is inherited</li>
+          <li>&bull; A profile can switch a provider off: its requests get 403 before any selection</li>
+          <li>&bull; The switch is ignored in Home mode or under a scheduler plugin</li>
         </ul>
       </div>
 
@@ -5427,6 +5447,7 @@
         <ul>
           <li>&bull; Claude: off, a Codex subscription (auto or always, with model mappings), or the profile&#39;s API key; Codex: off or its API key</li>
           <li>&bull; The API-key leg does not bind the session: the next request tries subscriptions again</li>
+          <li>&bull; A fallback to a switched-off Codex is skipped</li>
         </ul>
       </div>
     </div>

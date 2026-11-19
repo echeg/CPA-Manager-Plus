@@ -5,6 +5,8 @@ import zhCN from '@/i18n/locales/zh-CN.json';
 import zhTW from '@/i18n/locales/zh-TW.json';
 import layoutSource from '@/components/layout/MainLayout.tsx?raw';
 import routesSource from '@/router/MainRoutes.tsx?raw';
+import keyRoutingSource from './diagrams/key-routing.workflow.json';
+import keyRoutingHtml from './diagrams/key-routing.html?raw';
 
 const getPath = (value: unknown, keyPath: string) =>
   keyPath.split('.').reduce<unknown>((current, key) => {
@@ -82,6 +84,79 @@ describe('guide app wiring', () => {
     // The error semantics of the pool intro stay in place.
     expect(en.guide.intro_pool_selection).toContain('without Retry-After');
     expect(en.guide.intro_pool_selection).toContain('unavailable error');
+  });
+
+  it('describes a switched-off provider in the key routing intro of every locale', () => {
+    expect(en.guide.intro_key_routing).toContain('403 before any selection');
+    // Each locale must keep all four parts: the switch, the 403, the skipped Codex fallback
+    // and that Home mode or a scheduler plugin ignores the switch.
+    const phrases = {
+      en: [
+        'switch a provider off',
+        "Claude's fallback to a switched-off Codex does not run",
+        'In Home mode or under a scheduler plugin the switch is ignored',
+      ],
+      ru: [
+        'отключить провайдера',
+        'фолбэк Claude на отключённый Codex не выполняется',
+        'В режиме Home или с плагином-планировщиком этот переключатель не действует',
+      ],
+      zhCN: [
+        '关闭某个提供商',
+        'Claude 回退到已关闭的 Codex 也不会执行',
+        '在 Home 模式下或使用调度插件时，这个开关会被忽略',
+      ],
+      zhTW: [
+        '關閉某個供應商',
+        'Claude 退回到已關閉的 Codex 也不會執行',
+        '在 Home 模式下或使用排程外掛時，這個開關會被忽略',
+      ],
+    };
+    for (const [localeName, locale] of Object.entries({ en, ru, zhCN, zhTW })) {
+      const intro = locale.guide.intro_key_routing;
+      expect(intro, localeName).toContain('403');
+      for (const phrase of phrases[localeName as keyof typeof phrases]) {
+        expect(intro, localeName).toContain(phrase);
+      }
+    }
+  });
+
+  it('shows the provider-off branch in the key routing diagram and its generated page', () => {
+    const disabled = keyRoutingSource.nodes.find((node) => node.id === 'disabled');
+    expect(disabled?.label).toBe('Provider off');
+    expect(disabled?.sublabel).toBe('403 provider_disabled');
+    expect(
+      keyRoutingSource.edges.some((edge) => edge.from === 'profile' && edge.to === 'disabled')
+    ).toBe(true);
+    // The refusal is not a fallback step, so its lane must name it.
+    const disabledLane = keyRoutingSource.lanes.find((lane) => lane.id === disabled?.lane);
+    expect(disabledLane?.label).toBe(
+      'Provider off, or fallback to a Codex subscription or API key'
+    );
+
+    const fallbackCard = keyRoutingSource.cards.find(
+      (card) => card.title === 'Fallback per provider'
+    );
+    expect(fallbackCard?.items).toContain('A fallback to a switched-off Codex is skipped');
+    // The 403 is enforced only by CPA's native routing, so the card must say when it is not.
+    const profileCard = keyRoutingSource.cards.find(
+      (card) => card.title === 'Profile per client key'
+    );
+    expect(profileCard?.items).toContain(
+      'The switch is ignored in Home mode or under a scheduler plugin'
+    );
+
+    // The committed page must be regenerated from this source, not left behind it.
+    expect(keyRoutingHtml).toContain('Provider off');
+    expect(keyRoutingHtml).toContain('403 provider_disabled');
+    expect(keyRoutingHtml).toContain('data-edge-from="profile" data-edge-to="disabled"');
+    expect(keyRoutingHtml).toContain(
+      'Provider off, or fallback to a Codex subscription or API key'
+    );
+    expect(keyRoutingHtml).toContain('A fallback to a switched-off Codex is skipped');
+    expect(keyRoutingHtml).toContain(
+      'The switch is ignored in Home mode or under a scheduler plugin'
+    );
   });
 
   it('uses the agreed sidebar labels', () => {
