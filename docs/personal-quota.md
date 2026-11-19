@@ -11,7 +11,8 @@ views; provider totals; a default routing profile (sticky session and its TTL, p
 selection slots, and per provider a Subscription or API key mode, a preferred
 subscription and a fallback to a Codex subscription (Claude only) or to the profile's
 API key, or the legacy routing strategy on older backends); routing profiles per
-client API key;
+client API key, each provider of which can be switched off to limit a key to one
+provider;
 adding and deleting client API keys; the Codex speed (Standard, Fast or Ultrafast)
 of every routing profile, with a speed table for the Default profile and every key;
 per-account soft/hard quota reserves; Codex reset credits and Claude reset grants
@@ -178,11 +179,40 @@ key profile starts with the default profile's speed and flag (see
 [Routing profiles per API key](#routing-profiles-per-api-key)). On a backend without
 `speed` the panel shows no speed controls and sends neither field.
 
+**Enabled toggle.** On a backend that reports `disabled` in the provider blocks, each
+provider block of every profile editor (Default and key profiles) has an **Enabled**
+switch next to its title. Switching a provider off makes CPA refuse that provider's
+requests for every key that uses the profile, so a key can be made Codex-only or
+Claude-only. The rest of the block is disabled while the provider is off, with a note
+that it is off for this profile, and the Speed row shows no mode notes; the mode, API
+key, preferred subscription, fallback, mappings and Codex speed stay in the profile,
+so switching it back on restores them unchanged. The flag is saved as `disabled` in
+the provider block, together with the rest of the profile: `true` when off and an
+explicit `false` when on, so re-enabling overwrites a stored `true`. CPA still checks
+every field of a disabled provider, so an invalid field still blocks the save; the
+switch stays usable, so the provider can be switched back on to fix it. Both
+providers may be off; the editor then warns that the profile allows no provider,
+and the profile still saves.
+
+CPA answers a request to a disabled provider with 403 and the message `<provider> is
+disabled by the routing profile of this API key` (a key profile) or `<provider> is
+disabled by the routing profile` (the Default profile). The refusal covers streaming,
+non-streaming and count-tokens requests, requests pinned to an account of that
+provider, and Codex search and live sessions. A disabled Claude is refused even when
+its block keeps a fallback to Codex; CPA does not translate its requests to Codex.
+A disabled Codex stops the Claude to Codex fallback of the same profile in both
+Automatic and Force Codex now, so while Claude is on and falls back to Codex, the
+Claude block warns that this fallback will not run. A switch applies to new requests
+and connections; a Codex websocket already open keeps running until it closes.
+
 **Chain summary.** The profile list, the Keys modal and the editor footer show one
 entry per provider: `Claude: <preferred or Automatic> → Codex`, `Claude: Codex
 (forced)` (Force Codex now), `<Provider>: <preferred or Automatic> → API key`,
 `<Provider>: API key <label>` (API key mode), `<Provider>: API key not chosen`, and
-`<Provider>: <preferred or Automatic>` when the fallback is off. In Subscription
+`<Provider>: <preferred or Automatic>` when the fallback is off, and `<Provider>: off`
+for a provider switched off. A Claude block that falls back to a switched-off Codex
+is shown without the fallback (`Claude: <preferred or Automatic>`), since CPA skips
+it; the stored target is kept. In Subscription
 mode a Codex speed of Fast or Ultrafast is added to the provider name, as in
 `Codex (Fast): Automatic → API key`.
 
@@ -469,6 +499,12 @@ every control is disabled. The rows always show the stored values: after a faile
 shown above the table and the row keeps its stored speed. A row whose Codex mode is
 API key is disabled with the reason, unless the profile's Claude falls back to Codex:
 then the row stays editable, with a note that the speed applies only to that fallback.
+A row whose profile has Codex switched off keeps its place, with the speed buttons and
+the flag disabled and the reason that Codex is off and its requests are refused. A
+switched-off Claude no longer counts as a fallback to Codex, so a row in Codex API key
+mode whose Claude is off is disabled with the API key reason. A copy of the Default
+profile written for a key marked **Default** keeps the stored `disabled` of both
+providers.
 In Home mode or with a scheduler plugin
 (`supported: false`) the key rows are read-only and show the default profile's
 speed and flag, which every request gets there, also for a key with its own profile;
@@ -483,7 +519,10 @@ slim one. In the Profiles modal the key rows are read-only and **Reset to defaul
 and **+ Profile for a key** are hidden. The Default row stays editable except the
 mode and fallback of both provider blocks, which CPA ignores in this mode; the
 preferred subscriptions and the Codex speed stay editable, and a Save keeps the
-stored mode and fallback. In the
+stored mode and fallback. The **Enabled** switch is locked like the mode, and a Save
+keeps the stored `disabled`. CPA does not enforce `disabled` in this mode, so a stored
+off locks no other control and shows no off note or warning, and the speed table
+ignores it; the chain summary still names it as off, as it names the stored mode. In the
 Keys modal the profile select is read-only, while adding and deleting keys stay
 available. A backend without `GET /v8/management/routing/profiles` (404) keeps
 the legacy toolbar: the legacy strategy select, sticky-session
@@ -491,18 +530,22 @@ settings, preferred subscriptions, the fallback control and Save, with no
 Profiles or Keys button. Keys on such a backend are managed on the Config page. A
 backend with routing profiles but without per-provider routing keeps the slim
 toolbar without the standalone fallback control; its provider blocks offer only
-Subscription mode and the Codex target, and Save writes `claude-fallback`.
+Subscription mode and the Codex target, and Save writes `claude-fallback`. A backend
+whose provider blocks carry no `disabled` shows the **Enabled** switch on and locked,
+with "Requires an updated CPA backend", and the panel never sends `disabled`.
 
 This requires the custom CPA backend with per-key routing profiles
 ([echeg/CLIProxyAPI](https://github.com/echeg/CLIProxyAPI) `main` at `ced98b16`
 or later); API key mode and the API-key fallback also need a build with
 `routing.providers` and `api_credentials`, and the Codex speed needs a build with
 `speed` in the provider blocks, which replaced the global
-`oauth.providers.codex.fast-mode` flag (the panel no longer calls that path). The
+`oauth.providers.codex.fast-mode` flag (the panel no longer calls that path); the
+**Enabled** switch needs a build with `disabled` in the provider blocks. The
 Manager Server forwards the new
 endpoint unchanged. Profiles are stored under `routing.key-profiles`, keyed by the
 exact client key. A provider block without `mode` means `subscription`, without a
-fallback `target` means `off`, and a fallback without `mode` means `auto`;
+fallback `target` means `off`, without `disabled` means enabled, and a fallback
+without `mode` means `auto`;
 `api-credential` is a key's `auth_index`:
 
 ```yaml
@@ -527,6 +570,10 @@ routing:
       providers:
         claude: {api-credential: "claude-key-auth-index", fallback: {target: api}}
         codex: {mode: subscription, speed: ultrafast, ignore-client-tier: true}
+    "client-key-codex-only":
+      providers:
+        claude: {mode: subscription, fallback: {target: codex}, disabled: true} # refused with 403; settings kept
+        codex: {mode: subscription, disabled: false}
 ```
 
 An older backend stores the Claude fallback of a profile as

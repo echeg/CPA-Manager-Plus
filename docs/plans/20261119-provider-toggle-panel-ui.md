@@ -153,7 +153,7 @@
 - [x] run `npm run lint` in `apps/web` - no new errors or warnings in touched files
 
 ### Task 7: [Final] Update documentation
-- [ ] `docs/personal-quota.md`: describe the Enabled toggle per provider, what CPA does with a disabled provider (403, no fallback into a disabled Codex, open Codex websockets run until closed), the summary label, the speed table reason, behavior under a scheduler plugin, and the older-backend behavior
+- [x] `docs/personal-quota.md`: describe the Enabled toggle per provider, what CPA does with a disabled provider (403, no fallback into a disabled Codex, open Codex websockets run until closed), the summary label, the speed table reason, behavior under a scheduler plugin, and the older-backend behavior
 
 ## Technical Details
 
