@@ -116,8 +116,8 @@
 - [x] run `npm run test:web`, `npm run type-check` and `npm run lint` (no new warnings; 0 errors, the 7 warnings are the pre-existing ones in docs/backlog/web-lint-warnings.md)
 
 ### Task 7: [Final] Update documentation
-- [ ] update `apps/docs/en/manual/model-prices.md` and `apps/docs/manual/model-prices.md`: a tier rule now also applies above a context threshold, by ratio; a sync keeps rules the source does not provide; models.dev modes are imported by name
-- [ ] rewrite `docs/backlog/ultrafast-service-tier-priced-as-standard.md` to hold only what remains: a tier without a rule is costed at the base rate silently; a multiplier-only tier is ignored inside a context tier; one cache-write rate. Rename the file to match if the title changes
+- [x] update `apps/docs/en/manual/model-prices.md` and `apps/docs/manual/model-prices.md`: a tier rule now also applies above a context threshold, by ratio; a sync keeps rules the source does not provide; models.dev modes are imported by name
+- [x] rewrite `docs/backlog/ultrafast-service-tier-priced-as-standard.md` to hold only what remains: a tier without a rule is costed at the base rate silently; a multiplier-only tier is ignored inside a context tier; one cache-write rate. Rename the file to match if the title changes (renamed to `docs/backlog/service-tier-pricing-gaps.md`)
 
 ## Technical Details
 - Scaling rule, per rate (input, output, cache read, cache write):
