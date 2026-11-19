@@ -5811,6 +5811,10 @@
       "key_unknown_warning": "This API key is no longer configured. Choose another key or add it again in AI Providers.",
       "requires_backend": "Requires an updated CPA backend.",
       "locked": "Home mode or a scheduler plugin manages routing, so mode and fallback cannot be changed here.",
+      "enabled": "Enabled",
+      "enabled_label": "{{provider}} enabled",
+      "off_hint": "{{provider}} is off for this profile: CPA refuses its requests. The settings below are kept for when it is switched back on.",
+      "codex_off_fallback": "Codex is off for this profile, so this fallback to Codex will not run.",
       "errors": {
         "key_required": "Choose an API key.",
         "hidden_mappings": "The hidden Codex mapping table has an invalid row, and CPA rejects it even while unused. Choose Subscription mode and the Codex fallback to fix or remove the row."

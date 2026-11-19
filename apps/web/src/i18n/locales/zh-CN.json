@@ -5806,6 +5806,10 @@
       "key_unknown_warning": "此 API 密钥已不在配置中。请选择其他密钥，或在 AI 提供商中重新添加。",
       "requires_backend": "需要更新 CPA 后端。",
       "locked": "路由由 Home 模式或调度插件管理，因此无法在此更改模式和回退。",
+      "enabled": "启用",
+      "enabled_label": "启用 {{provider}}",
+      "off_hint": "此配置中 {{provider}} 已关闭：CPA 会拒绝其请求。下方设置会保留，重新启用后恢复。",
+      "codex_off_fallback": "此配置中 Codex 已关闭，因此回退到 Codex 不会执行。",
       "errors": {
         "key_required": "请选择一个 API 密钥。",
         "hidden_mappings": "隐藏的 Codex 映射表中有无效行，即使未使用，CPA 也会拒绝保存。请选择订阅模式和 Codex 回退，修正或删除该行。"

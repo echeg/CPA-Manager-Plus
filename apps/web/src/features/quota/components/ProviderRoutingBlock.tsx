@@ -5,6 +5,7 @@ import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import {
   CODEX_SPEEDS,
   FALLBACK_TARGETS,
+  effectiveFallbackTarget,
   type ApiProvider,
   type CodexSpeed,
   type FallbackTarget,
@@ -45,6 +46,10 @@ export interface ProviderRoutingBlockProps {
    * `claude_fallback` keeps it enabled with a note.
    */
   speedUse?: CodexSpeedUse;
+  /** `false` on a backend without the provider `disabled` flag: the Enabled switch is locked. */
+  providerToggleSupported?: boolean;
+  /** The draft's Codex is off: the Claude block warns that its Codex fallback will not run. */
+  codexDisabled?: boolean;
   onChange: (value: ProviderRouting) => void;
   onPreferredChange: (authIndex: string) => void;
 }
@@ -53,6 +58,8 @@ export interface ProviderRoutingBlockProps {
  * One provider's routing in a profile: Subscription mode with a preferred subscription
  * and a fallback target, or API key mode. Values hidden by the current mode or target
  * (the mapping table, the chosen key) stay in `value`, so switching back restores them.
+ * The Enabled switch works the same way: a provider switched off keeps its settings
+ * (disabled, not cleared), so switching it back on restores them unchanged.
  */
 export function ProviderRoutingBlock({
   provider,
@@ -66,6 +73,8 @@ export function ProviderRoutingBlock({
   providersSupported,
   speedSupported = false,
   speedUse = 'applies',
+  providerToggleSupported = false,
+  codexDisabled = false,
   onChange,
   onPreferredChange,
 }: ProviderRoutingBlockProps) {
@@ -73,7 +82,16 @@ export function ProviderRoutingBlock({
   const id = useId();
   const label = PROVIDER_LABELS[provider];
   const noKeys = apiKeyOptions.length === 0;
-  const routingLocked = disabled || modeLocked;
+  // CPA does not enforce `disabled` under a scheduler plugin, so the lock ignores it.
+  const off = value.disabled && !modeLocked;
+  const routingLocked = disabled || modeLocked || off;
+  const toggleLocked = disabled || modeLocked || !providerToggleSupported;
+  const codexFallbackSkipped =
+    provider === 'claude' &&
+    codexDisabled &&
+    !value.disabled &&
+    !modeLocked &&
+    effectiveFallbackTarget(value) === 'codex';
   const errors = providerFieldErrors(provider, value, providersSupported);
 
   // Why an "API key" choice is unavailable; `undefined` when it can be chosen.
@@ -104,7 +122,7 @@ export function ProviderRoutingBlock({
 
   const speedShown = provider === 'codex' && speedSupported;
   // The lock itself never disables the row: CPA ignores the stored mode while it is locked.
-  const speedDisabled = disabled || speedUse === 'unused';
+  const speedDisabled = disabled || off || speedUse === 'unused';
   const speedItems: SegmentedTabItem<CodexSpeed>[] = CODEX_SPEEDS.map((speed) => ({
     id: speed,
     label: t(`quota_management.codex_speed.speed_${speed}`),
@@ -171,7 +189,7 @@ export function ProviderRoutingBlock({
         value={preferred}
         options={preferredOptions}
         ariaLabel={t('quota_management.routing.preferred_account', { provider: label })}
-        disabled={disabled}
+        disabled={disabled || off}
         onChange={onPreferredChange}
       />
     </div>
@@ -183,9 +201,24 @@ export function ProviderRoutingBlock({
       aria-labelledby={`${id}-title`}
       data-provider-routing={provider}
     >
-      <h4 id={`${id}-title`} className={styles.title}>
-        {label}
-      </h4>
+      <div className={styles.header}>
+        <h4 id={`${id}-title`} className={styles.title}>
+          {label}
+        </h4>
+        <ToggleSwitch
+          checked={!value.disabled}
+          disabled={toggleLocked}
+          onChange={(checked) => onChange({ ...value, disabled: !checked })}
+          label={t('quota_management.provider_routing.enabled')}
+          ariaLabel={t('quota_management.provider_routing.enabled_label', { provider: label })}
+          labelPosition="left"
+        />
+      </div>
+      {off && (
+        <p className={styles.hint} data-provider-off>
+          {t('quota_management.provider_routing.off_hint', { provider: label })}
+        </p>
+      )}
 
       <div className={styles.field}>
         <SegmentedTabs
@@ -205,6 +238,12 @@ export function ProviderRoutingBlock({
         )}
         {!providersSupported && (
           <p className={styles.hint} data-provider-routing-old-backend>
+            {t('quota_management.provider_routing.requires_backend')}
+          </p>
+        )}
+        {/* The mode lock and the hint above already explain a locked Enabled switch. */}
+        {providersSupported && !providerToggleSupported && !modeLocked && (
+          <p className={styles.hint} data-provider-toggle-old-backend>
             {t('quota_management.provider_routing.requires_backend')}
           </p>
         )}
@@ -243,6 +282,11 @@ export function ProviderRoutingBlock({
               onChange={(target) => onChange({ ...value, fallback: { ...value.fallback, target } })}
             />
           </div>
+          {codexFallbackSkipped && (
+            <p className={styles.warning} data-provider-codex-fallback-off>
+              {t('quota_management.provider_routing.codex_off_fallback')}
+            </p>
+          )}
 
           {mappingsShown && (
             <div className={toolbarStyles.fallbackEditor} data-provider-codex-fallback>
@@ -283,12 +327,12 @@ export function ProviderRoutingBlock({
           />
           <p className={styles.hint}>{t('quota_management.codex_speed.ignore_client_tier_hint')}</p>
           <p className={styles.hint}>{t('quota_management.codex_speed.ultrafast_hint')}</p>
-          {speedUse === 'unused' && (
+          {!off && speedUse === 'unused' && (
             <p className={styles.hint} data-provider-speed-api-mode>
               {t('quota_management.codex_speed.api_mode_hint')}
             </p>
           )}
-          {speedUse === 'claude_fallback' && (
+          {!off && speedUse === 'claude_fallback' && (
             <p className={styles.hint} data-provider-speed-claude-fallback>
               {t('quota_management.codex_speed.claude_fallback_hint')}
             </p>

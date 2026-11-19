@@ -5806,6 +5806,10 @@
       "key_unknown_warning": "此 API 金鑰已不在設定中。請選擇其他金鑰，或在 AI 供應商中重新新增。",
       "requires_backend": "需要更新 CPA 後端。",
       "locked": "路由由 Home 模式或排程外掛管理，因此無法在此變更模式與備援。",
+      "enabled": "啟用",
+      "enabled_label": "啟用 {{provider}}",
+      "off_hint": "此設定檔中 {{provider}} 已關閉：CPA 會拒絕其請求。下方設定會保留，重新啟用後恢復。",
+      "codex_off_fallback": "此設定檔中 Codex 已關閉，因此備援到 Codex 不會執行。",
       "errors": {
         "key_required": "請選擇一個 API 金鑰。",
         "hidden_mappings": "隱藏的 Codex 對應表中有無效的列，即使未使用，CPA 也會拒絕儲存。請選擇訂閱模式與 Codex 備援，修正或刪除該列。"
