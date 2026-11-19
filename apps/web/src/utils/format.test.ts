@@ -53,6 +53,53 @@ describe('maskSensitiveText', () => {
     ['after a JSON \\u escape', JSON.stringify(`bad:\u001b${key}`), `"bad:\\u001b${masked}"`],
     ['after %20', `q=a%20${key}`, `q=a%20${masked}`],
     ['after %3D', `next=%2Fv1%3Fkey%3D${key}`, `next=%2Fv1%3Fkey%3D${masked}`],
+    [
+      'after a terminal color code',
+      `bad: \u001b[31m${key}\u001b[0m`,
+      `bad: \u001b[31m${masked}\u001b[0m`,
+    ],
+    [
+      'after a JSON-escaped terminal color code',
+      JSON.stringify(`bad: \u001b[1;31m${key}\u001b[0m`),
+      `"bad: \\u001b[1;31m${masked}\\u001b[0m"`,
+    ],
+    [
+      'after a grep match color and erase-line code',
+      `env:\u001b[01;31m\u001b[K${key}\u001b[m\u001b[K`,
+      `env:\u001b[01;31m\u001b[K${masked}\u001b[m\u001b[K`,
+    ],
+    ['after a color code whose ESC was stripped', `bad: [31m${key}[0m`, `bad: [31m${masked}[0m`],
+    [
+      'after a grep color and erase-line code whose ESCs were stripped',
+      `env:[01;31m[K${key}[m[K`,
+      `env:[01;31m[K${masked}[m[K`,
+    ],
+    [
+      'after a JSON-escaped erase-line code',
+      JSON.stringify(`env:\u001b[01;31m\u001b[K${key}`),
+      `"env:\\u001b[01;31m\\u001b[K${masked}"`,
+    ],
+    ['after a reset code with its ESC', `bad: \u001b[m${key}`, `bad: \u001b[m${masked}`],
+    [
+      'after a stripped color code with a trailing separator',
+      `bad: [31;m${key}`,
+      `bad: [31;m${masked}`,
+    ],
+    [
+      'after a stripped color code with a trailing separator and an erase-line code',
+      `env:[1;m[K${key}`,
+      `env:[1;m[K${masked}`,
+    ],
+    [
+      'after a stripped color code with a leading separator',
+      `bad: [;1m${key}`,
+      `bad: [;1m${masked}`,
+    ],
+    [
+      'after a stripped reset code that follows a numbered one',
+      `bad: [0m[31m[m${key}`,
+      `bad: [0m[31m[m${masked}`,
+    ],
   ])('still masks a key %s', (_case, input, expected) => {
     expect(maskSensitiveText(input)).toBe(expected);
   });
@@ -75,5 +122,43 @@ describe('maskSensitiveText', () => {
     expect(maskSensitiveText('sk-proj-abcdef123456')).toBe('sk******56');
     expect(maskSensitiveText('use sk-ant-abcdef123456')).toBe('use sk******56');
     expect(maskSensitiveText('cookie_sess-abcdef123456')).toBe('cookie_se******56');
+  });
+
+  it('masks a Cerebras csk- key, whose sk- follows a letter', () => {
+    const cerebras = 'csk-abcdef123456';
+    expect(maskSensitiveText(cerebras)).toBe('cs******56');
+    expect(maskSensitiveText(`upstream rejected ${cerebras}`)).toBe('upstream rejected cs******56');
+    expect(maskSensitiveText(JSON.stringify({ key: cerebras }))).toBe('{"key":"cs******56"}');
+    expect(maskSensitiveText(`api_key_${cerebras}`)).toBe('api_key_cs******56');
+  });
+
+  it('does not mask csk- inside a word', () => {
+    expect(maskSensitiveText('xcsk-abcdef123456')).toBe('xcsk-abcdef123456');
+  });
+
+  it('does not take a bracketed word before sk- as a color code', () => {
+    expect(maskSensitiveText('[ask-questions]')).toBe('[ask-questions]');
+    expect(maskSensitiveText('[task-runner]')).toBe('[task-runner]');
+  });
+
+  it.each(['[msk-cluster]', '[Ksk-cluster]', 'retry [msk-cluster] failed'])(
+    'does not take a bare [m or [K without an ESC as a color code: %s',
+    (label) => {
+      expect(maskSensitiveText(label)).toBe(label);
+    }
+  );
+
+  // A rescan from every code of a run took seconds at this size (40000 codes
+  // took about 8 s); a single pass takes milliseconds, so the bound is loose.
+  it.each([
+    ['numbered codes', '[1m'.repeat(40000)],
+    ['one numbered code and reset codes', `[1m${'[m'.repeat(40000)}`],
+    ['groups of numbered and reset codes', '[1m[m[K[m'.repeat(10000)],
+  ])('reads a long run of stripped %s in linear time', (_case, run) => {
+    const key = 'sk-abcdef123456';
+    const startedAt = performance.now();
+    expect(maskSensitiveText(`${run} tail`)).toBe(`${run} tail`);
+    expect(maskSensitiveText(`${run}${key}`)).toBe(`${run}sk******56`);
+    expect(performance.now() - startedAt).toBeLessThan(1000);
   });
 });

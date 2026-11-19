@@ -88,12 +88,29 @@ describe('guide app wiring', () => {
 
   it('describes a switched-off provider in the key routing intro of every locale', () => {
     expect(en.guide.intro_key_routing).toContain('403 before any selection');
-    // Each locale must keep all three parts: the switch, the 403 and the skipped Codex fallback.
+    // Each locale must keep all four parts: the switch, the 403, the skipped Codex fallback
+    // and that Home mode or a scheduler plugin ignores the switch.
     const phrases = {
-      en: ['switch a provider off', "Claude's fallback to a switched-off Codex does not run"],
-      ru: ['отключить провайдера', 'фолбэк Claude на отключённый Codex не выполняется'],
-      zhCN: ['关闭某个提供商', 'Claude 回退到已关闭的 Codex 也不会执行'],
-      zhTW: ['關閉某個供應商', 'Claude 退回到已關閉的 Codex 也不會執行'],
+      en: [
+        'switch a provider off',
+        "Claude's fallback to a switched-off Codex does not run",
+        'In Home mode or under a scheduler plugin the switch is ignored',
+      ],
+      ru: [
+        'отключить провайдера',
+        'фолбэк Claude на отключённый Codex не выполняется',
+        'В режиме Home или с плагином-планировщиком этот переключатель не действует',
+      ],
+      zhCN: [
+        '关闭某个提供商',
+        'Claude 回退到已关闭的 Codex 也不会执行',
+        '在 Home 模式下或使用调度插件时，这个开关会被忽略',
+      ],
+      zhTW: [
+        '關閉某個供應商',
+        'Claude 退回到已關閉的 Codex 也不會執行',
+        '在 Home 模式下或使用排程外掛時，這個開關會被忽略',
+      ],
     };
     for (const [localeName, locale] of Object.entries({ en, ru, zhCN, zhTW })) {
       const intro = locale.guide.intro_key_routing;
@@ -121,6 +138,13 @@ describe('guide app wiring', () => {
       (card) => card.title === 'Fallback per provider'
     );
     expect(fallbackCard?.items).toContain('A fallback to a switched-off Codex is skipped');
+    // The 403 is enforced only by CPA's native routing, so the card must say when it is not.
+    const profileCard = keyRoutingSource.cards.find(
+      (card) => card.title === 'Profile per client key'
+    );
+    expect(profileCard?.items).toContain(
+      'The switch is ignored in Home mode or under a scheduler plugin'
+    );
 
     // The committed page must be regenerated from this source, not left behind it.
     expect(keyRoutingHtml).toContain('Provider off');
@@ -130,6 +154,9 @@ describe('guide app wiring', () => {
       'Provider off, or fallback to a Codex subscription or API key'
     );
     expect(keyRoutingHtml).toContain('A fallback to a switched-off Codex is skipped');
+    expect(keyRoutingHtml).toContain(
+      'The switch is ignored in Home mode or under a scheduler plugin'
+    );
   });
 
   it('uses the agreed sidebar labels', () => {

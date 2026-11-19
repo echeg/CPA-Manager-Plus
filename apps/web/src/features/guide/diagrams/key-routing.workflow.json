@@ -214,7 +214,8 @@
       "items": [
         "A key without its own profile uses the shared routing fields",
         "A key profile replaces the shared profile entirely: nothing is inherited",
-        "A profile can switch a provider off: its requests get 403 before any selection"
+        "A profile can switch a provider off: its requests get 403 before any selection",
+        "The switch is ignored in Home mode or under a scheduler plugin"
       ]
     },
     {

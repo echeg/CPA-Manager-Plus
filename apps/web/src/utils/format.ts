@@ -32,16 +32,26 @@ export function maskApiKey(key: string): string {
   return `${start}${masked}${end}`;
 }
 
-// A `sk-` or `sess-` key (group 2) counts only after a boundary (group 1): the
-// start of the text, a character other than a letter or digit, or a JSON escape
-// (`\n`, `\u001b`) or percent-encoding (`%3D`), which end in a letter or digit.
-// So words such as `task-runner` or `assess-candidates` are left alone, while
-// `api_key_sk-...`, `\nsk-...` and `key%3Dsk-...` are still masked. `\b` would
-// let `api_key_sk-...` through, since `_` is a word character. The boundary is
-// captured and put back, not a lookbehind, which Safari before 16.4 cannot parse.
-// The other key prefixes (group 3) match anywhere.
+// A `sk-`, `csk-` (Cerebras) or `sess-` key (group 2) counts only after a
+// boundary (group 1): the start of the text, a character other than a letter or
+// digit, or one of these, which end in a letter or digit: a JSON escape (`\n`,
+// `\u001b`), a percent-encoding (`%3D`), or a terminal color or erase-line code
+// (`ESC[31m`, `ESC[K`). The code counts with its ESC, raw or JSON-escaped, or
+// with the ESC stripped; a stripped run must start with a code that has a digit
+// anywhere in it (`[31m`, `[1;m`, grep's `[01;31m[K`), so a bracketed label
+// such as `[msk-cluster]` is not taken for `[m` + key. The stripped run is
+// written as one code with a digit followed only by codes without one, which
+// masks the same keys, but a scan from a numbered code stops at the next
+// numbered code, so a long run of codes with no key after it is read once
+// rather than again from every code. So words such as `task-runner` or
+// `assess-candidates` are left alone, while `api_key_sk-...`, `\nsk-...`,
+// `key%3Dsk-...` and `ESC[31msk-...` are still masked. `\b` would let
+// `api_key_sk-...` through, since `_` is a word character. The boundary is
+// captured and put back, not a lookbehind, which Safari before 16.4 cannot
+// parse. The other key prefixes (group 3) match anywhere.
 const API_KEY_MASK_REGEX =
-  /(^|\\u[0-9A-Fa-f]{4}|\\[bfnrt]|%[0-9A-Fa-f]{2}|[^A-Za-z0-9])(sk-proj-[A-Za-z0-9-_]{6,}|sk-ant-[A-Za-z0-9-_]{6,}|sk-[A-Za-z0-9-_]{6,}|sess-[A-Za-z0-9-_]{6,})|(ghp_[A-Za-z0-9]{6,}|github_pat_[A-Za-z0-9_]{20,}|AIza[0-9A-Za-z-_]{8,}|hf_[A-Za-z0-9]{6,}|pk_[A-Za-z0-9]{6,}|rk_[A-Za-z0-9]{6,})/g;
+  // eslint-disable-next-line no-control-regex -- matches the raw ESC of a terminal color code
+  /(^|(?:\x1b|\\u001[bB])\[[0-9;:]*[mK]|\[[;:]*[0-9][0-9;:]*[mK](?:\[[;:]*[mK])*|\\u[0-9A-Fa-f]{4}|\\[bfnrt]|%[0-9A-Fa-f]{2}|[^A-Za-z0-9])(sk-proj-[A-Za-z0-9-_]{6,}|sk-ant-[A-Za-z0-9-_]{6,}|csk-[A-Za-z0-9-_]{6,}|sk-[A-Za-z0-9-_]{6,}|sess-[A-Za-z0-9-_]{6,})|(ghp_[A-Za-z0-9]{6,}|github_pat_[A-Za-z0-9_]{20,}|AIza[0-9A-Za-z-_]{8,}|hf_[A-Za-z0-9]{6,}|pk_[A-Za-z0-9]{6,}|rk_[A-Za-z0-9]{6,})/g;
 const AUTHORIZATION_MASK_REGEX = /\b(authorization\s*[:=]\s*)(?:bearer\s+)?[^\s,"'{}]+/gi;
 const BEARER_MASK_REGEX = /\bbearer\s+[A-Za-z0-9._~+/=-]{8,}/gi;
 const TOKEN_FIELD_MASK_REGEX =

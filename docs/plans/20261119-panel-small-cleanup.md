@@ -71,6 +71,11 @@
 - [x] in `apps/web/src/utils/format.ts:35-36`, require that the `sk-proj-`, `sk-ant-`, `sk-` and `sess-` alternatives of `API_KEY_MASK_REGEX` are not preceded by a letter or digit
 - [x] write tests in `format.test.ts` that `task-runner`, `kiosk-berlin`, `risk-engine` and `assess-candidates` stay unchanged
 - [x] write tests that keys are still masked at the start of the text and after a space, `=`, `:`, a quote, `/` and `_` (`api_key_sk-...`), and inside a JSON string
+- [x] ➕ external review: add `csk-` (Cerebras) as a bounded alternative, since its `sk-` follows a letter and the boundary stopped masking it, with tests
+- [x] ➕ external review: accept the bracket part of a terminal color or erase-line code (`[31m`, `[K`) as a boundary, so a key right after `ESC[31m` (raw, JSON-escaped or with the ESC stripped) is still masked, with tests
+- [x] ➕ external review: with the ESC stripped, accept only a run of codes that starts with one that has a digit (`[31m`, grep's `[01;31m[K`), so a bracketed label such as `[msk-cluster]` is not masked as `[m` + key, with tests
+- [x] ➕ external review: accept a stripped code whose digit is anywhere in its parameters (`[31;m`, `[1;m[K`), not only right before `m` or `K`, with tests
+- [x] ➕ external review: write the stripped run as one code with a digit followed only by codes without one, so a long run of codes with no key after it is scanned once instead of again from every code (40000 codes took about 8 s), with a timing test
 - [x] check the labels that go through `sanitizeApiKeyDisplayText` (`apps/web/src/features/monitoring/model/apiKeys.ts:13`) with a test for a CP instance name such as `task-runner`
 - [x] run `npm run test:web` - must pass before task 4
 
@@ -79,6 +84,7 @@
 - [x] add the same to `apps/docs/en/manual/guide.md` and `apps/docs/manual/guide.md`, with the note that the switch is ignored under a scheduler plugin
 - [x] ➕ internal review: name only Claude and Codex as switchable in the manual, and say the switch is also ignored in Home mode (`supported: false`)
 - [x] ➕ internal review: rename the `fallback` lane of `key-routing.workflow.json` to "Provider off, or fallback to a Codex subscription or API key", since the `disabled` node sits in it and is not a fallback step; regenerate the page
+- [x] ➕ external review: say in the Guide intro of all four locales and in the "Profile per client key" card of the diagram that the switch is ignored in Home mode or under a scheduler plugin, as the manual does; regenerate the page
 - [x] in `apps/web/src/features/guide/diagrams/key-routing.workflow.json`, add a "provider off -> 403" branch after profile resolution and note in the "Fallback per provider" card that a fallback to a switched-off Codex is skipped; keep `meta.title`
 - [x] regenerate the page: `node ~/.agents/skills/archify/bin/archify.mjs deliver workflow <abs path>/key-routing.workflow.json <abs path>/key-routing.html --quality showcase --json`; accept it only when the command exits 0 and reports all checks passed. If archify is not available, leave the JSON change, mark this item with ⚠️ and do not edit the HTML
 - [x] run `npx vitest run src/features/guide src/i18n` in `apps/web` (diagram titles, theme contract, locale parity), updating `GuidePage.test.tsx` only if a check names text that changed (no check named changed text; new checks for the intro, the diagram source and the generated page were added to `guideWiring.test.ts`)
@@ -96,7 +102,7 @@
 - [x] delete the four backlog entries this plan closes: `docs/backlog/unused-subscription-routing-components.md`, `web-lint-warnings.md`, `sensitive-text-mask-matches-inside-words.md`, `guide-disabled-provider.md`; keep an entry, rewritten, for any item that was only partly done
 
 ## Technical Details
-- Mask boundary: before each of `sk-proj-`, `sk-ant-`, `sk-` and `sess-`, a captured group: the start of the text, a character other than a letter or digit, a JSON escape (`\[bfnrt]`, `\uXXXX`) or a percent-encoding (`%XX`). `_`, `-`, `/`, `=`, `:`, quotes and whitespace still allow a match, so `api_key_sk-...` stays masked.
+- Mask boundary: before each of `sk-proj-`, `sk-ant-`, `csk-`, `sk-` and `sess-`, a captured group: the start of the text, a character other than a letter or digit, a JSON escape (`\[bfnrt]`, `\uXXXX`), a percent-encoding (`%XX`) or a terminal color or erase-line code: with its ESC (raw or `\u001b`) any `[...m` or `[...K`; with the ESC stripped, a run of such codes that starts with one that has a digit (`[31m`, `[01;31m[K`), so `[msk-cluster]` is left alone. `_`, `-`, `/`, `=`, `:`, quotes and whitespace still allow a match, so `api_key_sk-...` stays masked.
 - The other alternatives of the regex (`ghp_`, `github_pat_`, `AIza`, `hf_`, `pk_`, `rk_`) are not changed; that they still match inside words is filed as `docs/backlog/key-mask-underscore-prefixes-inside-words.md`.
 - Behaviour for the Guide text: `providers.<provider>.disabled: true` in a routing profile; requests to that provider get `403` with `provider_disabled`; ignored when CPA reports `supported: false` (Home mode or a scheduler plugin).
 
