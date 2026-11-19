@@ -321,6 +321,121 @@ func TestContextTierRuleRatioUsesBilledCacheWriteForUnsetBaseRate(t *testing.T) 
 	}
 }
 
+func TestContextTierRuleRatioUsesTenthOfPromptForUnsetBaseCacheRead(t *testing.T) {
+	prices := map[string]model.ModelPrice{
+		"gpt-6.2-sol": {
+			Prompt: 2, Completion: 10, PromptConfigured: true, CompletionConfigured: true,
+			ContextTiers: []model.ModelPriceContextTier{{
+				ThresholdTokens: 272_000, Prompt: 4, Completion: 15, CacheRead: 1,
+				PromptConfigured: true, CompletionConfigured: true, CacheReadConfigured: true,
+			}},
+			ServiceTiers: []model.ModelPriceServiceTier{{
+				Mode: "fast", ServiceTier: "priority", CacheRead: 0.4, CacheReadConfigured: true,
+			}},
+		},
+	}
+	tokens := ModelTokens{
+		ContextThresholdTokens: 272_000,
+		InputTokens:            1_000_000,
+		CacheReadTokens:        1_000_000,
+	}
+	// The base has neither a cache-read nor a legacy cache rate, so it is billed
+	// at a tenth of the prompt rate, 0.2; the Fast rule 0.4 doubles the
+	// context-tier rate: 1M reads at 1 x 2 = 2.
+	if got := CostForModelWithServiceTier("gpt-6.2-sol", "fast", tokens, prices); math.Abs(got-2) > 0.000001 {
+		t.Fatalf("fast long-context cache-read cost = %v, want 2", got)
+	}
+	if got := CostForModelWithServiceTier("gpt-6.2-sol", "default", tokens, prices); math.Abs(got-1) > 0.000001 {
+		t.Fatalf("standard long-context cache-read cost = %v, want 1", got)
+	}
+}
+
+func TestContextTierRuleRatioUsesPromptRateForUnsetCacheWriteOnNonOfficialGPT56Model(t *testing.T) {
+	prices := map[string]model.ModelPrice{
+		"gpt-5.6": {
+			Prompt: 4, Completion: 20, PromptConfigured: true, CompletionConfigured: true,
+			ContextTiers: []model.ModelPriceContextTier{{
+				ThresholdTokens: 272_000, CacheCreation: 10, CacheCreationConfigured: true,
+			}},
+			ServiceTiers: []model.ModelPriceServiceTier{{
+				Mode: "fast", ServiceTier: "priority", CacheCreation: 8, CacheCreationConfigured: true,
+			}},
+		},
+	}
+	tokens := ModelTokens{
+		ContextThresholdTokens: 272_000,
+		InputTokens:            1_000_000,
+		CacheCreationTokens:    1_000_000,
+	}
+	// Only the official GPT-5.6 models fill a blank cache-write rate with 1.25
+	// times the prompt rate. Here the base is billed at the prompt rate 4, so
+	// the Fast rule 8 doubles the context-tier rate: 1M writes at 10 x 2 = 20.
+	if got := CostForModelWithServiceTier("gpt-5.6", "fast", tokens, prices); math.Abs(got-20) > 0.000001 {
+		t.Fatalf("fast long-context cache-write cost = %v, want 20", got)
+	}
+	if got := CostForModelWithServiceTier("gpt-5.6", "default", tokens, prices); math.Abs(got-10) > 0.000001 {
+		t.Fatalf("standard long-context cache-write cost = %v, want 10", got)
+	}
+}
+
+func TestContextTierBillsGPT56CacheReadFromContextPromptForExplicitZeroBasePrompt(t *testing.T) {
+	prices := map[string]model.ModelPrice{
+		"gpt-5.6-sol": {
+			Prompt: 0, Completion: 30, PromptConfigured: true, CompletionConfigured: true,
+			ContextTiers: []model.ModelPriceContextTier{{
+				ThresholdTokens: 272_000, Prompt: 4, PromptConfigured: true,
+			}},
+		},
+	}
+	tokens := ModelTokens{
+		ContextThresholdTokens: 272_000,
+		InputTokens:            1_000_000,
+		CacheReadTokens:        1_000_000,
+	}
+	// The filled-in base cache read is 0 but stays blank, so the context tier
+	// bills it at a tenth of its own prompt rate: 1M reads at 0.4.
+	if got := CostForModelWithServiceTier("gpt-5.6-sol", "default", tokens, prices); math.Abs(got-0.4) > 0.000001 {
+		t.Fatalf("standard long-context cache-read cost = %v, want 0.4", got)
+	}
+}
+
+func TestPromptOnlyRuleBillsUnsetCacheWriteAtTheTierPromptRateInEveryBand(t *testing.T) {
+	prices := map[string]model.ModelPrice{
+		"gpt-6.2-sol": {
+			Prompt: 2, Completion: 10, PromptConfigured: true, CompletionConfigured: true,
+			ContextTiers: []model.ModelPriceContextTier{{
+				ThresholdTokens: 272_000, Prompt: 4, PromptConfigured: true,
+			}},
+			ServiceTiers: []model.ModelPriceServiceTier{{
+				Mode: "fast", ServiceTier: "priority", Prompt: 6, PromptConfigured: true,
+			}},
+		},
+	}
+	// No price sets a cache-write rate, so every band bills cache writes at its
+	// own prompt rate. The rule triples the prompt rate in both bands, and the
+	// cache-write rate follows it: Fast is never cheaper above the threshold than
+	// below it.
+	for _, tt := range []struct {
+		threshold int64
+		tier      string
+		want      float64
+	}{
+		{model.ModelPriceBaseContextThreshold, "default", 2},
+		{model.ModelPriceBaseContextThreshold, "fast", 6},
+		{272_000, "default", 4},
+		{272_000, "fast", 12},
+	} {
+		tokens := ModelTokens{
+			ContextThresholdTokens: tt.threshold,
+			InputTokens:            1_000_000,
+			CacheCreationTokens:    1_000_000,
+		}
+		if got := CostForModelWithServiceTier("gpt-6.2-sol", tt.tier, tokens, prices); math.Abs(got-tt.want) > 0.000001 {
+			t.Fatalf("band %d %s cache-write cost = %v, want %v", tt.threshold, tt.tier, got, tt.want)
+		}
+	}
+}
+
 func TestContextTierDoesNotStackBuiltInPriorityMultiplier(t *testing.T) {
 	prices := map[string]model.ModelPrice{
 		"gpt-5.5": {

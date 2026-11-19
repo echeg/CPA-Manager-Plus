@@ -1827,6 +1827,193 @@ describe('calculateCost model price preference', () => {
     ).toBeCloseTo(5);
   });
 
+  it('takes the rule ratio against a tenth of the prompt rate when the base sets no cache read', () => {
+    const modelPrices = {
+      'gpt-6.2-sol': {
+        prompt: 2,
+        completion: 10,
+        cache: 0,
+        promptConfigured: true,
+        completionConfigured: true,
+        contextTiers: [
+          {
+            thresholdTokens: 272_000,
+            prompt: 4,
+            completion: 15,
+            cache: 0,
+            cacheRead: 1,
+            promptConfigured: true,
+            completionConfigured: true,
+            cacheReadConfigured: true,
+          },
+        ],
+        serviceTiers: [
+          {
+            mode: 'fast',
+            serviceTier: 'priority',
+            prompt: 0,
+            completion: 0,
+            cache: 0,
+            cacheRead: 0.4,
+            cacheReadConfigured: true,
+          },
+        ],
+      },
+    };
+    const tokens = { input_tokens: 1_000_000, cache_read_tokens: 1_000_000 };
+
+    // The base has neither a cache-read nor a legacy cache rate, so it is billed
+    // at a tenth of the prompt rate, 0.2; the Fast rule 0.4 doubles the
+    // context-tier rate: 1M reads at 1 x 2 = 2.
+    expect(
+      calculateCost({ tokens, __modelName: 'gpt-6.2-sol', service_tier: 'fast' }, modelPrices)
+    ).toBeCloseTo(2);
+    expect(
+      calculateCost({ tokens, __modelName: 'gpt-6.2-sol', service_tier: 'default' }, modelPrices)
+    ).toBeCloseTo(1);
+  });
+
+  it('takes the rule ratio against the prompt rate for an unset cache write on a non-official GPT-5.6 model', () => {
+    const modelPrices = {
+      'gpt-5.6': {
+        prompt: 4,
+        completion: 20,
+        cache: 0,
+        promptConfigured: true,
+        completionConfigured: true,
+        contextTiers: [
+          {
+            thresholdTokens: 272_000,
+            prompt: 0,
+            completion: 0,
+            cache: 0,
+            cacheCreation: 10,
+            cacheCreationConfigured: true,
+          },
+        ],
+        serviceTiers: [
+          {
+            mode: 'fast',
+            serviceTier: 'priority',
+            prompt: 0,
+            completion: 0,
+            cache: 0,
+            cacheCreation: 8,
+            cacheCreationConfigured: true,
+          },
+        ],
+      },
+    };
+    const tokens = { input_tokens: 1_000_000, cache_creation_tokens: 1_000_000 };
+
+    // Only the official GPT-5.6 models fill a blank cache-write rate with 1.25
+    // times the prompt rate. Here the base is billed at the prompt rate 4, so
+    // the Fast rule 8 doubles the context-tier rate: 1M writes at 10 x 2 = 20.
+    expect(
+      calculateCost({ tokens, __modelName: 'gpt-5.6', service_tier: 'fast' }, modelPrices)
+    ).toBeCloseTo(20);
+    expect(
+      calculateCost({ tokens, __modelName: 'gpt-5.6', service_tier: 'default' }, modelPrices)
+    ).toBeCloseTo(10);
+  });
+
+  it('bills a blank GPT-5.6 context cache read from the context prompt when the base prompt is an explicit zero', () => {
+    const cost = calculateCost(
+      {
+        tokens: { input_tokens: 1_000_000, cache_read_tokens: 1_000_000 },
+        __modelName: 'gpt-5.6-sol',
+      },
+      {
+        'gpt-5.6-sol': {
+          prompt: 0,
+          completion: 30,
+          cache: 0,
+          promptConfigured: true,
+          completionConfigured: true,
+          contextTiers: [
+            {
+              thresholdTokens: 272_000,
+              prompt: 4,
+              completion: 0,
+              cache: 0,
+              promptConfigured: true,
+            },
+          ],
+        },
+      }
+    );
+
+    // The filled-in base cache read is 0 but stays blank, so the context tier
+    // bills it at a tenth of its own prompt rate: 1M reads at 0.4.
+    expect(cost).toBeCloseTo(0.4);
+  });
+
+  it('bills an unset cache write at the tier prompt rate of a prompt-only rule in every band', () => {
+    const modelPrices = {
+      'gpt-6.2-sol': {
+        prompt: 2,
+        completion: 10,
+        cache: 0,
+        promptConfigured: true,
+        completionConfigured: true,
+        contextTiers: [
+          {
+            thresholdTokens: 272_000,
+            prompt: 4,
+            completion: 0,
+            cache: 0,
+            promptConfigured: true,
+          },
+        ],
+        serviceTiers: [
+          {
+            mode: 'fast',
+            serviceTier: 'priority',
+            prompt: 6,
+            completion: 0,
+            cache: 0,
+            promptConfigured: true,
+          },
+        ],
+      },
+    };
+    // No price sets a cache-write rate, so every band bills cache writes at its
+    // own prompt rate. The rule triples the prompt rate in both bands, and the
+    // cache-write rate follows it: Fast is never cheaper above the threshold
+    // than below it. Same numbers as the Go test.
+    const cases: Array<[number, string, number]> = [
+      [200_000, 'default', 0.4],
+      [200_000, 'fast', 1.2],
+      [1_000_000, 'default', 4],
+      [1_000_000, 'fast', 12],
+    ];
+    for (const [inputTokens, serviceTier, want] of cases) {
+      expect(
+        calculateCost(
+          {
+            tokens: { input_tokens: inputTokens, cache_creation_tokens: inputTokens },
+            __modelName: 'gpt-6.2-sol',
+            service_tier: serviceTier,
+          },
+          modelPrices
+        )
+      ).toBeCloseTo(want);
+    }
+  });
+
+  it('bills an unset cache read at a tenth of the prompt rate outside GPT-5.6', () => {
+    const cost = calculateCost(
+      {
+        tokens: { input_tokens: 1_000_000, cache_read_tokens: 1_000_000 },
+        __modelName: 'plain-model',
+      },
+      { 'plain-model': { prompt: 2, completion: 10, cache: 0 } }
+    );
+
+    // Like the server: no cache-read and no legacy cache rate, so 1M reads at 0.2.
+    expect(cost).toBeCloseTo(0.2);
+  });
+
   it('does not stack the built-in priority multiplier inside a context tier', () => {
     const cost = calculateCost(
       { tokens: { input_tokens: 1_000_000 }, __modelName: 'gpt-5.5', service_tier: 'priority' },
