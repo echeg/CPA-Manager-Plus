@@ -217,6 +217,11 @@ func TestDecodeModelsDevServiceTiersSkipsModesWithoutRates(t *testing.T) {
 			"conflicting":{"cost":{"input":2,"output":10},"experimental":{"modes":{
 				"fast":{"cost":{"input":4}},
 				"priority":{"cost":{"input":5}}
+			}}},
+			"capitalized-fast":{"cost":{"input":2,"output":10},"experimental":{"modes":{" Fast ":{"cost":{"input":4}}}}},
+			"duplicate-after-normalizing":{"cost":{"input":2,"output":10},"experimental":{"modes":{
+				"fast":{"cost":{"input":4}},
+				"FAST":{"cost":{"input":5}}
 			}}}
 		}}
 	}`))
@@ -227,7 +232,7 @@ func TestDecodeModelsDevServiceTiersSkipsModesWithoutRates(t *testing.T) {
 		t.Fatalf("skipped = %d", skipped)
 	}
 
-	for _, modelID := range []string{"openai/ultrafast-no-cost", "openai/empty-cost"} {
+	for _, modelID := range []string{"openai/ultrafast-no-cost", "openai/empty-cost", "openai/capitalized-fast"} {
 		tiers := prices[modelID].ServiceTiers
 		if len(tiers) != 1 || tiers[0].Mode != "fast" || tiers[0].ServiceTier != "priority" || tiers[0].Prompt != 4 {
 			t.Fatalf("%s service tiers = %#v", modelID, tiers)
@@ -240,6 +245,7 @@ func TestDecodeModelsDevServiceTiersSkipsModesWithoutRates(t *testing.T) {
 		"openai/empty-modes",
 		"openai/no-experimental",
 		"openai/conflicting",
+		"openai/duplicate-after-normalizing",
 	} {
 		price, ok := prices[modelID]
 		if !ok {

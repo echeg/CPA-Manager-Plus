@@ -957,7 +957,7 @@ func readModelsDevServiceTiers(entry map[string]any) []store.ModelPriceServiceTi
 		return nil
 	}
 	modes, ok := experimental["modes"].(map[string]any)
-	if !ok || len(modes) == 0 {
+	if !ok {
 		return nil
 	}
 	names := make([]string, 0, len(modes))
@@ -1002,9 +1002,8 @@ func readModelsDevServiceTiers(entry map[string]any) []store.ModelPriceServiceTi
 			CacheCreationConfigured: hasCacheCreation,
 		})
 	}
-	if len(tiers) == 0 {
-		return nil
-	}
+	// Normalization returns nil for an empty set, so a model without a priced
+	// mode gets no rules.
 	normalized, err := model.NormalizeModelPriceServiceTiers(tiers)
 	if err != nil {
 		return nil

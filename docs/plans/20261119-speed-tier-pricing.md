@@ -8,7 +8,7 @@
 - The local deployment depends on the last point: since 2026-11-18 it holds hand-made Ultrafast rules for `gpt-6.2-sol`, `gpt-6.2-astra`, `gpt-6.1-sol` and `gpt-6-astra`, and Fast rules plus a 272k context tier for the two GPT-6.2 models, all on models with source `models.dev` or `litellm`.
 
 ## Decisions
-- **Context**: `docs/backlog/ultrafast-service-tier-priced-as-standard.md` lists four defects. The user chose the scope and the three rules below on 2026-11-19.
+- **Context**: `docs/backlog/ultrafast-service-tier-priced-as-standard.md` (renamed to `docs/backlog/service-tier-pricing-gaps.md` in Task 7) lists four defects. The user chose the scope and the three rules below on 2026-11-19.
 - **Chosen approach, long context**: the scaling applies to every model that has both a context tier and a price rule for the request's tier, for every tier name. It changes the reported cost of Fast requests above the threshold for GPT-5.5, GPT-5.6 and GPT-6.x, including past periods, because cost is computed when it is read.
 - **Chosen approach, sync**: keep stored rules the import does not provide; an imported rule replaces a stored rule with the same key. No schema change.
   - Known cost: a rule the source stops providing stays until it is deleted by hand in the price editor.
@@ -40,7 +40,7 @@
   - `apps/web/src/utils/usage.ts` and `usage.test.ts`
   - `apps/manager-server/internal/service/modelprice/service.go` and `service_test.go`
   - `apps/manager-server/internal/repository/modelprice/repository.go` and `repository_test.go`
-  - docs: `apps/docs/manual/model-prices.md`, `apps/docs/en/manual/model-prices.md`, `docs/backlog/ultrafast-service-tier-priced-as-standard.md`
+  - docs: `apps/docs/manual/model-prices.md`, `apps/docs/en/manual/model-prices.md`, `docs/backlog/ultrafast-service-tier-priced-as-standard.md` (now `docs/backlog/service-tier-pricing-gaps.md`)
 - Related patterns found: the Go and TS cost logic mirror each other rule for rule; `'matches backend priority tier rules'` (`usage.test.ts:1654`) pins the TS values to the server's by hardcoded numbers.
 - Dependencies identified: none new.
 

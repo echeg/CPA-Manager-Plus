@@ -2990,7 +2990,7 @@
     "context_rules": "長上下文規則",
     "context_rules_hint": "輸入 Token 超過閾值後覆寫指定價格；留空的價格沿用基礎價格。",
     "service_tier_rules": "服務層級規則",
-    "service_tier_rules_hint": "將請求模式對應到供應商回傳的服務層級；留空的價格沿用基礎價格。",
+    "service_tier_rules_hint": "將請求模式對應到供應商回傳的服務層級；留空的價格沿用基礎價格，超過上下文閾值時沿用長上下文價格。",
     "add_context_rule": "新增上下文規則",
     "add_service_rule": "新增服務層級規則",
     "no_pricing_rules": "暫無特殊計費規則。",

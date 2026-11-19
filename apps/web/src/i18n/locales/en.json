@@ -2995,7 +2995,7 @@
     "context_rules": "Long-context rules",
     "context_rules_hint": "Override selected rates after the input token threshold is exceeded. Blank rates inherit the base price.",
     "service_tier_rules": "Service-tier rules",
-    "service_tier_rules_hint": "Map a request mode to the provider's emitted service tier. Blank rates inherit the base price.",
+    "service_tier_rules_hint": "Map a request mode to the provider's emitted service tier. Blank rates inherit the base price, or the long-context price above a context threshold.",
     "add_context_rule": "Add context rule",
     "add_service_rule": "Add service-tier rule",
     "no_pricing_rules": "No special pricing rules.",

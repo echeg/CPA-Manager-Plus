@@ -166,8 +166,14 @@ func TestContextTierScalesExplicitServiceTierRule(t *testing.T) {
 	}
 }
 
-func TestContextTierScalesGPT62SolUltrafastRule(t *testing.T) {
-	prices := map[string]model.ModelPrice{
+// gpt62SolUltrafastPrices is the shared gpt-6.2-sol example (base 2 / 10,
+// context tier above 272k 4 / 15, Ultrafast rule 6 / 30). The caller sets the
+// rule's cache rates; mode, tier, input and output rates are filled in here.
+func gpt62SolUltrafastPrices(rule model.ModelPriceServiceTier) map[string]model.ModelPrice {
+	rule.Mode, rule.ServiceTier = "ultrafast", "ultrafast"
+	rule.Prompt, rule.Completion = 6, 30
+	rule.PromptConfigured, rule.CompletionConfigured = true, true
+	return map[string]model.ModelPrice{
 		"gpt-6.2-sol": {
 			Prompt: 2, Completion: 10, Cache: 0.2, CacheRead: 0.2, CacheCreation: 2.5,
 			PromptConfigured: true, CompletionConfigured: true, CacheReadConfigured: true, CacheCreationConfigured: true,
@@ -175,13 +181,15 @@ func TestContextTierScalesGPT62SolUltrafastRule(t *testing.T) {
 				ThresholdTokens: 272_000, Prompt: 4, Completion: 15, Cache: 0.4, CacheRead: 0.4,
 				PromptConfigured: true, CompletionConfigured: true, CacheConfigured: true, CacheReadConfigured: true,
 			}},
-			ServiceTiers: []model.ModelPriceServiceTier{{
-				Mode: "ultrafast", ServiceTier: "ultrafast",
-				Prompt: 6, Completion: 30, Cache: 0.6, CacheRead: 0.6,
-				PromptConfigured: true, CompletionConfigured: true, CacheConfigured: true, CacheReadConfigured: true,
-			}},
+			ServiceTiers: []model.ModelPriceServiceTier{rule},
 		},
 	}
+}
+
+func TestContextTierScalesGPT62SolUltrafastRule(t *testing.T) {
+	prices := gpt62SolUltrafastPrices(model.ModelPriceServiceTier{
+		Cache: 0.6, CacheRead: 0.6, CacheConfigured: true, CacheReadConfigured: true,
+	})
 	tokens := ModelTokens{
 		ContextThresholdTokens: 272_000,
 		InputTokens:            1_000_000,
@@ -197,6 +205,83 @@ func TestContextTierScalesGPT62SolUltrafastRule(t *testing.T) {
 	standard := CostForModelWithServiceTier("gpt-6.2-sol", "default", tokens, prices)
 	if math.Abs(standard-17.2) > 0.000001 {
 		t.Fatalf("standard long-context cost = %v, want 17.2", standard)
+	}
+}
+
+func TestContextTierScalesCacheReadAndWriteRatesByRuleRatio(t *testing.T) {
+	prices := gpt62SolUltrafastPrices(model.ModelPriceServiceTier{
+		CacheRead: 0.6, CacheCreation: 7.5, CacheReadConfigured: true, CacheCreationConfigured: true,
+	})
+	tokens := ModelTokens{
+		ContextThresholdTokens: 272_000,
+		InputTokens:            1_000_000,
+		CacheReadTokens:        400_000,
+		CacheCreationTokens:    100_000,
+	}
+	// 500k prompt at 12 = 6, 400k cache reads at 0.4 x 3 = 0.48, 100k cache
+	// writes at the inherited base 2.5 x 3 = 0.75.
+	if got := CostForModelWithServiceTier("gpt-6.2-sol", "ultrafast", tokens, prices); math.Abs(got-7.23) > 0.000001 {
+		t.Fatalf("ultrafast long-context cache cost = %v, want 7.23", got)
+	}
+	// Standard tier: 500k at 4 = 2, 400k at 0.4 = 0.16, 100k at 2.5 = 0.25.
+	if got := CostForModelWithServiceTier("gpt-6.2-sol", "default", tokens, prices); math.Abs(got-2.41) > 0.000001 {
+		t.Fatalf("standard long-context cache cost = %v, want 2.41", got)
+	}
+}
+
+func TestContextTierKeepsExplicitZeroRuleRate(t *testing.T) {
+	prices := gpt62SolUltrafastPrices(model.ModelPriceServiceTier{CacheRead: 0, CacheReadConfigured: true})
+	tokens := ModelTokens{
+		ContextThresholdTokens: 272_000,
+		InputTokens:            1_000_000,
+		CacheReadTokens:        400_000,
+	}
+	// 600k prompt at 12 = 7.2; the explicit zero rule rate makes cache reads free.
+	if got := CostForModelWithServiceTier("gpt-6.2-sol", "ultrafast", tokens, prices); math.Abs(got-7.2) > 0.000001 {
+		t.Fatalf("explicit zero cache-read cost = %v, want 7.2", got)
+	}
+}
+
+func TestContextTierRuleRatioUsesEnrichedGPT56BaseCacheRates(t *testing.T) {
+	prices := gpt56SolFastContextPrices()
+	tokens := ModelTokens{
+		ContextThresholdTokens: 272_000,
+		InputTokens:            1_000_000,
+		CacheReadTokens:        500_000,
+		CacheCreationTokens:    100_000,
+	}
+	// The base has no cache rates, so GPT-5.6 fills them from the prompt rate
+	// (0.5 and 6.25). The Fast rule sets none, so the context tier keeps them:
+	// 400k prompt at 25 = 10, 500k reads at 0.5 = 0.25, 100k writes at 6.25 = 0.625.
+	if got := CostForModelWithServiceTier("gpt-5.6-sol", "fast", tokens, prices); math.Abs(got-10.875) > 0.000001 {
+		t.Fatalf("fast long-context cache cost = %v, want 10.875", got)
+	}
+}
+
+func TestContextTierRuleUsesRuleRateOverZeroBaseOnNonOfficialGPT56Model(t *testing.T) {
+	prices := map[string]model.ModelPrice{
+		"gpt-5.6": {
+			Prompt: 5, Completion: 30,
+			ContextTiers: []model.ModelPriceContextTier{{
+				ThresholdTokens: 272_000, Prompt: 10, Completion: 40, CacheRead: 1,
+				PromptConfigured: true, CompletionConfigured: true, CacheReadConfigured: true,
+			}},
+			ServiceTiers: []model.ModelPriceServiceTier{{
+				Mode: "fast", ServiceTier: "priority", Prompt: 12.5, Completion: 75, CacheRead: 1.25,
+				PromptConfigured: true, CompletionConfigured: true, CacheReadConfigured: true,
+			}},
+		},
+	}
+	tokens := ModelTokens{
+		ContextThresholdTokens: 272_000,
+		InputTokens:            1_000_000,
+		CacheReadTokens:        500_000,
+	}
+	// Only the official GPT-5.6 models get filled-in cache rates, so the stored
+	// base cache read stays 0 and the rule rate 1.25 applies as is:
+	// 500k prompt at 25 = 12.5, 500k reads at 1.25 = 0.625.
+	if got := CostForModelWithServiceTier("gpt-5.6", "fast", tokens, prices); math.Abs(got-13.125) > 0.000001 {
+		t.Fatalf("fast long-context cost = %v, want 13.125", got)
 	}
 }
 

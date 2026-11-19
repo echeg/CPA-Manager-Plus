@@ -20,8 +20,8 @@ Suggested direction: flag aggregates whose service tier has neither a rule nor a
 
 ## 2. A multiplier-only tier is ignored inside a context tier
 
-- `apps/manager-server/internal/service/pricing/cost.go:306-308`: `costForContextTierWithServiceTier` returns the plain context-tier cost when the price has no rule for the tier.
-- `apps/web/src/utils/usage.ts:1343-1345`: the multiplier is set to 1 whenever a context tier applies.
+- `apps/manager-server/internal/service/pricing/cost.go:307-324`: `costForContextTierWithServiceTier` prices the aggregate with `ModelPriceForContextThresholdAndServiceTier`, which returns the plain context-tier price when the price has no rule for the tier (`apps/manager-server/internal/model/model_price_rules.go:303`).
+- `apps/web/src/utils/usage.ts:1340-1343`: the multiplier is set to 1 whenever a context tier applies.
 
 A tier priced by `ServiceTierMultiplier` (`flex` and `batch` at 0.5, Fast/Priority for some GPT-5.x families) gets no discount or surcharge above a context threshold. Suggested direction: apply the multiplier to the context-tier price when no rule matches, in both copies, and pin it with the same numbers in `cost_test.go` and `usage.test.ts`.
 

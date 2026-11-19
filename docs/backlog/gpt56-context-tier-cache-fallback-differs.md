@@ -6,8 +6,8 @@
 
 For a GPT-5.6 model with an active context tier that sets no cache-read or cache-write rate, and no stored base cache rates, the two cost copies fill the gap differently:
 
-- Server: `costForPriceWithLegacyLongContext` enriches the base price first (`enrichGPT56BasePrice`, `apps/manager-server/internal/service/pricing/cost.go:379`), so cache read = base prompt x 0.1 and cache write = base prompt x 1.25, and the context tier inherits those.
-- Web: `calculateCost` derives the fallback after the context tier is applied (`apps/web/src/utils/usage.ts:1318-1329`), so cache read = context-tier prompt x 0.1 and cache write = context-tier prompt x 1.25.
+- Server: `costForPriceWithLegacyLongContext` enriches the base price first (`enrichGPT56BasePrice`, `apps/manager-server/internal/service/pricing/cost.go:368`), so cache read = base prompt x 0.1 and cache write = base prompt x 1.25, and the context tier inherits those.
+- Web: `calculateCost` derives the fallback after the context tier is applied (`apps/web/src/utils/usage.ts:1316-1327`), so cache read = context-tier prompt x 0.1 and cache write = context-tier prompt x 1.25.
 
 Example `gpt-5.6-sol` with base 5 and context tier prompt 10: server prices cache reads at 0.5, the web at 1.0.
 

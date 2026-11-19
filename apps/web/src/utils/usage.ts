@@ -1294,19 +1294,17 @@ export function calculateCost(
     .toLowerCase();
   const longContextOverridesServiceTier =
     longContext && (normalizedServiceTier === 'priority' || normalizedServiceTier === 'fast');
-  const serviceTierPrice =
-    !contextTier && !longContextOverridesServiceTier
-      ? selectServiceTierPrice(basePrice, serviceTier)
-      : undefined;
-  const contextServiceTierPrice = contextTier
-    ? selectServiceTierPrice(basePrice, serviceTier)
-    : undefined;
+  // A context tier implies context pricing, so it never meets the legacy
+  // long-context override and both can share one rule lookup.
+  const serviceTierPrice = longContextOverridesServiceTier
+    ? undefined
+    : selectServiceTierPrice(basePrice, serviceTier);
   const price = contextTier
-    ? contextServiceTierPrice
+    ? serviceTierPrice
       ? scaleContextTierPriceForServiceTier(
           ratioBasePrice(behaviorModel, basePrice),
           contextTier,
-          contextServiceTierPrice
+          serviceTierPrice
         )
       : applyContextTierPrice(basePrice, contextTier)
     : serviceTierPrice
@@ -1404,10 +1402,11 @@ function applyServiceTierPrice(price: ModelPrice, tier: ModelPriceServiceTier): 
   };
 }
 
-// Mirrors the server's GPT-5.6 base enrichment so the ratio of a service-tier
+// Mirrors the server's GPT-5.6 base enrichment (enrichGPT56BasePrice), which
+// applies only to the official GPT-5.6 models, so the ratio of a service-tier
 // rule is taken against the same cache rates the server divides by.
 function ratioBasePrice(modelName: string, price: ModelPrice): ModelPrice {
-  if (!isGpt56Model(modelName)) return price;
+  if (!getOfficialGpt56Price(modelName)) return price;
   const prompt = Number(price.prompt) || 0;
   const cacheReadConfigured = isConfiguredPriceValue(price.cacheRead, price.cacheReadConfigured);
   const cacheCreationConfigured = isConfiguredPriceValue(

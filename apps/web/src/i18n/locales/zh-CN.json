@@ -2990,7 +2990,7 @@
     "context_rules": "长上下文规则",
     "context_rules_hint": "输入 Token 超过阈值后覆盖指定价格；留空的价格沿用基础价格。",
     "service_tier_rules": "服务层级规则",
-    "service_tier_rules_hint": "将请求模式映射到提供商返回的服务层级；留空的价格沿用基础价格。",
+    "service_tier_rules_hint": "将请求模式映射到提供商返回的服务层级；留空的价格沿用基础价格，超过上下文阈值时沿用长上下文价格。",
     "add_context_rule": "添加上下文规则",
     "add_service_rule": "添加服务层级规则",
     "no_pricing_rules": "暂无特殊计费规则。",

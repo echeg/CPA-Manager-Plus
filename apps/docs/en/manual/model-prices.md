@@ -19,7 +19,7 @@ Synchronization only occurs when the user triggers it and may use the current Ma
 
 Automatic matching runs strictly in models.dev, LiteLLM, then OpenRouter order. CPAMP uses the canonical model metadata in the models.dev catalog to prefer the first-party official entry. A source is saved automatically only when it has one clear, strong identity match; fuzzy similarities are never auto-confirmed. An ambiguous source falls through to the next source. If none of the three sources yields a unique match, the confirmation list keeps candidates from each source separately, even when they share the same original model ID.
 
-The current sync maps models.dev `cost.input`, `cost.output`, `cost.cache_read`, and `cost.cache_write`, converts valid `cost.tiers` context tiers into CPAMP billing rules, and imports every `experimental.modes.<mode>.cost` as a service-tier rule named after the mode: `fast` matches the `fast` and `priority` tiers, any other mode, for example `ultrafast`, matches the tier of the same name. A mode without a `cost` block or without any rate is skipped. The complete model object remains available in raw metadata; reasoning prices, unknown tier types, and rules that cannot be validated safely do not activate automatic billing.
+The current sync maps models.dev `cost.input`, `cost.output`, `cost.cache_read`, and `cost.cache_write`, converts valid `cost.tiers` context tiers into CPAMP billing rules, and imports every `experimental.modes.<mode>.cost` as a service-tier rule named after the mode: `fast` matches the `fast` and `priority` tiers, any other mode, for example `ultrafast`, matches the tier of the same name. A mode without a `cost` block or without any rate is skipped. If the modes of one model conflict, for example `fast` next to `priority`, none of that model's modes is imported and its stored rules stay. The complete model object remains available in raw metadata; reasoning prices, unknown tier types, and rules that cannot be validated safely do not activate automatic billing.
 
 ### Sync failures and last-known-good prices
 
@@ -29,7 +29,7 @@ The current sync maps models.dev `cost.input`, `cost.output`, `cost.cache_read`,
 - If every source fails, synchronization stops before any database write and existing prices remain unchanged.
 - A manually saved price remains authoritative during synchronization, even when a source returns an exact match for the same model. Delete the manual entry and sync again to use synchronized pricing.
 - A synchronized price remains the last-known-good value until a later successful sync or a manual edit; `syncedAtMs` indicates its freshness.
-- For a synchronized model, a sync replaces the context tiers and service-tier rules the source provides and keeps the stored ones it does not provide. A context tier is matched by its threshold; a service-tier rule is replaced when an imported rule uses the same mode or service tier. A rule the source stops providing stays until it is deleted in the editor.
+- For a synchronized model, a sync replaces the context tiers and service-tier rules the source provides and keeps the stored ones it does not provide. A context tier is matched by its threshold; a service-tier rule is replaced when an imported rule uses the same mode or service tier. A rule the source stops providing stays. Deleting it in the editor saves the model as manual, so later syncs leave that model unchanged; to drop the rule and keep syncing, delete the model's entry and sync again.
 
 ## Supported Billing Semantics
 
@@ -61,7 +61,7 @@ Models such as GPT-5.6 may vary by context length, service tier, and cache type.
 - When a context tier matches and the model has a rule for the request's service tier, each rate the rule configures scales the context-tier rate by `rule rate / base rate`. A rate the rule does not configure keeps the context-tier rate; a rule rate over a zero base rate is used as is. Example for `gpt-6.2-sol`: base 2 / 10 per 1M tokens (input / output), above 272k 4 / 15, Ultrafast rule 6 / 30, so an Ultrafast request above 272k costs 12 / 45.
 - A tier without a rule uses the plain context-tier price inside a context tier: the compatibility multiplier (`flex` and `batch` at 0.5, Fast/Priority for some GPT-5.x families) is not stacked on it. The legacy GPT long-context rule also uses its standard long-context price without Fast/Priority pricing.
 - Outside a context tier, non-models.dev entries, older data, and models without an explicit mode price retain the existing multiplier as a compatibility fallback.
-- A tier with neither a rule nor a multiplier, for example `ultrafast` on a model without an Ultrafast rule, is costed at the base rate with no warning.
+- A tier with neither a rule nor a multiplier, for example `ultrafast` on a model without an Ultrafast rule, is costed at the standard rate (the base price, or the context-tier price above a threshold) with no warning.
 - Cost is computed when it is read, so a rule change also changes the cost shown for past periods.
 
 Model Prices shows the context tiers and service-tier rules of each model. The editor manages base prices and these rules; saving a price in the editor marks the model as manual, and a later sync leaves it unchanged.
