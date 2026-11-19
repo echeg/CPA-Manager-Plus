@@ -147,6 +147,16 @@ const slotSelects = () => selects().filter((select) => select.props.ariaLabelled
 const summaryText = () =>
   textOf(root().find((node) => node.props['data-key-profile-summary'] === true));
 const sticky = () => root().findAllByType(ToggleSwitch)[0];
+const enabledToggle = (provider: ApiProvider) =>
+  block(provider)
+    .findAllByType(ToggleSwitch)
+    .find(
+      (node) => node.props.ariaLabel === `${provider === 'claude' ? 'Claude' : 'Codex'} enabled`
+    )!;
+const setEnabled = (provider: ApiProvider, checked: boolean) =>
+  act(() => enabledToggle(provider).props.onChange(checked));
+const noProviderWarnings = () =>
+  root().findAll((node) => node.props['data-key-profile-no-provider'] === true);
 const ttlInputs = () =>
   root().findAll((node) => node.type === 'input' && node.props['data-key-profile-ttl']);
 const typeTTL = (value: string) => act(() => ttlInputs()[0].props.onChange({ target: { value } }));
@@ -775,6 +785,123 @@ describe('KeyProfileEditor', () => {
         .findAllByType(SegmentedTabs)
         .some((node) => String(node.props.ariaLabel).endsWith('speed'))
     ).toBe(false);
+  });
+
+  test('the Enabled switches follow providerToggleSupported and the Codex flag reaches the Claude block', async () => {
+    await mount();
+    for (const provider of ['claude', 'codex'] as const) {
+      expect(block(provider).props.providerToggleSupported).toBe(false);
+      expect(enabledToggle(provider).props.disabled).toBe(true);
+    }
+    expect(textOf(root())).toContain('Requires an updated CPA backend.');
+    await act(async () => renderer?.unmount());
+
+    await mount({ providerToggleSupported: true });
+    for (const provider of ['claude', 'codex'] as const) {
+      expect(block(provider).props.providerToggleSupported).toBe(true);
+      expect(enabledToggle(provider).props.disabled).toBe(false);
+      expect(block(provider).props.codexDisabled).toBe(false);
+    }
+    setEnabled('codex', false);
+    expect(block('claude').props.codexDisabled).toBe(true);
+    expect(block('codex').props.codexDisabled).toBe(true);
+  });
+
+  test('switching Claude off saves disabled: true and keeps the other Claude fields', async () => {
+    const { onSave } = await mount({ providerToggleSupported: true });
+    expect(saveButton().props.disabled).toBe(true);
+    setEnabled('claude', false);
+    expect(block('claude').props.value).toEqual({ ...shared.providers.claude, disabled: true });
+    expect(saveButton().props.disabled).toBe(false);
+    click(saveButton());
+    expect(onSave).toHaveBeenCalledTimes(1);
+    const saved: RoutingProfile = onSave.mock.calls[0][0];
+    expect(saved.providers.claude).toEqual({ ...shared.providers.claude, disabled: true });
+    expect(saved.providers.codex).toEqual(shared.providers.codex);
+
+    // Back on: the stored settings come back unchanged and the draft is clean again.
+    setEnabled('claude', true);
+    expect(block('claude').props.value).toEqual(shared.providers.claude);
+    expect(saveButton().props.disabled).toBe(true);
+  });
+
+  test('both providers off shows a warning and still saves', async () => {
+    const { onSave } = await mount({ providerToggleSupported: true });
+    expect(noProviderWarnings()).toHaveLength(0);
+    setEnabled('claude', false);
+    expect(noProviderWarnings()).toHaveLength(0);
+    setEnabled('codex', false);
+    expect(noProviderWarnings()).toHaveLength(1);
+    expect(textOf(noProviderWarnings()[0])).toContain('this profile allows no provider');
+    expect(saveButton().props.disabled).toBe(false);
+    click(saveButton());
+    const saved: RoutingProfile = onSave.mock.calls[0][0];
+    expect(saved.providers.claude.disabled).toBe(true);
+    expect(saved.providers.codex.disabled).toBe(true);
+
+    setEnabled('codex', true);
+    expect(noProviderWarnings()).toHaveLength(0);
+  });
+
+  test('under fallbackReadOnly a stored both-off profile locks the switches, shows no warning and saves disabled back unchanged', async () => {
+    const stored: RoutingProfile = {
+      ...copyOfShared(shared),
+      providers: {
+        claude: { ...shared.providers.claude, disabled: true },
+        codex: { ...shared.providers.codex, disabled: true },
+      },
+    };
+    const { onSave } = await mount({
+      initial: stored,
+      variant: 'default',
+      fallbackReadOnly: true,
+      speedSupported: true,
+      providerToggleSupported: true,
+    });
+    for (const provider of ['claude', 'codex'] as const) {
+      expect(enabledToggle(provider).props.disabled).toBe(true);
+    }
+    expect(noProviderWarnings()).toHaveLength(0);
+    expect(speedTabs().props.disabled).toBe(false);
+
+    act(() => speedTabs().props.onChange('fast'));
+    // A draft change to the locked flag must not reach the save.
+    editProvider('claude', (value) => ({ ...value, disabled: false }));
+    click(saveButton());
+    expect(onSave).toHaveBeenCalledTimes(1);
+    const saved: RoutingProfile = onSave.mock.calls[0][0];
+    expect(saved.providers).toEqual({
+      claude: stored.providers.claude,
+      codex: { ...stored.providers.codex, speed: 'fast' },
+    });
+  });
+
+  test('a disabled provider with an invalid field still blocks the save and can be switched back on', async () => {
+    const { onSave } = await mount({ providerToggleSupported: true });
+    // API key mode without a key is invalid.
+    setMode('claude', 'api');
+    expect(saveButton().props.disabled).toBe(true);
+
+    setEnabled('claude', false);
+    expect(block('claude').props.value.disabled).toBe(true);
+    // CPA validates a disabled provider's fields too, so the save stays blocked.
+    expect(saveButton().props.disabled).toBe(true);
+    click(saveButton());
+    expect(onSave).not.toHaveBeenCalled();
+    // Validation errors never lock the switch.
+    expect(enabledToggle('claude').props.disabled).toBe(false);
+
+    setEnabled('claude', true);
+    expect(block('claude').props.value.disabled).toBe(false);
+    setKey('claude', 'claude-key-1');
+    expect(saveButton().props.disabled).toBe(false);
+    click(saveButton());
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave.mock.calls[0][0].providers.claude).toMatchObject({
+      mode: 'api',
+      apiCredential: 'claude-key-1',
+      disabled: false,
+    });
   });
 
   test('while saving the controls are locked and Save shows progress', async () => {

@@ -15,6 +15,16 @@
   font-size: 12.5px;
 }
 
+.warning {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--warning-border);
+  border-radius: 8px;
+  background: var(--warning-bg);
+  color: var(--warning-text);
+  font-size: 12.5px;
+}
+
 .stage {
   display: flex;
   flex-direction: column;

@@ -60,6 +60,8 @@ export interface KeyProfileEditorProps {
   providersSupported?: boolean;
   /** `false` on a backend without the Codex speed: no Speed row is shown. */
   speedSupported?: boolean;
+  /** `false` on a backend without the provider `disabled` flag: the Enabled switches are locked. */
+  providerToggleSupported?: boolean;
   /** The API keys CPA can route to, per provider, and the masked key configs that name them. */
   apiKeys: ApiKeyLabelSource;
   /** Saves the complete profile; the TTL is passed only when the default variant changed it. */
@@ -119,6 +121,7 @@ export function KeyProfileEditor({
   fallbackReadOnly = false,
   providersSupported = true,
   speedSupported = false,
+  providerToggleSupported = false,
   apiKeys,
   onSave,
   onCancel,
@@ -150,6 +153,9 @@ export function KeyProfileEditor({
   const invalid = !draft.selection.primary.trim() || routingInvalid || ttlInvalid;
   // Creating a profile is a change even when the copy still equals the shared settings:
   // from then on the key no longer follows the default profile.
+  // CPA ignores `disabled` under the lock, so a stored "both off" refuses nothing there.
+  const noProvider =
+    !fallbackReadOnly && draft.providers.claude.disabled && draft.providers.codex.disabled;
   const dirty = !baseline || profileDirty(draft, baseline, selectionOptions) || ttlChanged;
 
   const update = (patch: Partial<RoutingProfile>) =>
@@ -284,6 +290,8 @@ export function KeyProfileEditor({
               modeLocked={fallbackReadOnly}
               providersSupported={providersSupported}
               speedSupported={speedSupported}
+              providerToggleSupported={providerToggleSupported}
+              codexDisabled={draft.providers.codex.disabled}
               speedUse={codexSpeedUse(draft.providers, fallbackReadOnly)}
               onChange={(value) =>
                 setDraft((current) => ({
@@ -303,6 +311,12 @@ export function KeyProfileEditor({
           );
         })}
       </div>
+
+      {noProvider && (
+        <p className={styles.warning} role="note" data-key-profile-no-provider>
+          {t('quota_management.key_profiles.editor.no_provider')}
+        </p>
+      )}
 
       <div className={styles.footer}>
         <p className={styles.summary} data-key-profile-summary>

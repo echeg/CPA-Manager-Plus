@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import {
   providersFromClaudeFallback,
+  readRoutingProfiles,
   type RoutingProfile,
   type RoutingProfilesState,
 } from '@/features/personal-quota-support/services/api/routingProfiles';
@@ -264,6 +265,61 @@ describe('routing profiles modal rows', () => {
     await click(buttonIn(defaultRow(), 'data-profile-edit'));
     expect(editors()[0].props.variant).toBe('default');
     expect(editors()[0].props.speedSupported).toBe(false);
+  });
+
+  test('provider blocks without disabled in the GET lock the Enabled switches with the backend hint', async () => {
+    const rawProviders = {
+      claude: {
+        mode: 'subscription',
+        'api-credential': null,
+        fallback: { target: 'codex', mode: 'auto', mappings: [] },
+      },
+      codex: {
+        mode: 'subscription',
+        'api-credential': null,
+        fallback: { target: 'off', mode: null, mappings: null },
+        speed: 'standard',
+        'ignore-client-tier': false,
+      },
+    };
+    const rawProfile = {
+      'session-affinity': true,
+      'preferred-accounts': {},
+      selection: { primary: 'reserves', tiebreak: 'round-robin' },
+      providers: rawProviders,
+    };
+    const state = readRoutingProfiles({
+      supported: true,
+      shared: rawProfile,
+      keys: [{ key: RAW_BETA, profile: rawProfile }],
+      selection_options: profilesState().selectionOptions,
+    });
+    expect(state.providersSupported).toBe(true);
+    expect(state.providerToggleSupported).toBe(false);
+    keyProfiles = makeKeyProfiles(state);
+    await mount();
+
+    const hint = i18n.t('quota_management.provider_routing.requires_backend');
+    const enabledLabels = ['Claude', 'Codex'].map((provider) =>
+      i18n.t('quota_management.provider_routing.enabled_label', { provider })
+    );
+    for (const row of [defaultRow, () => keyRows()[0]]) {
+      await click(buttonIn(row(), 'data-profile-edit'));
+      expect(editors()[0].props.providerToggleSupported).toBe(false);
+      const toggles = editors()[0]
+        .findAllByType(ToggleSwitch)
+        .filter((node) => enabledLabels.includes(node.props.ariaLabel));
+      expect(toggles).toHaveLength(2);
+      for (const toggle of toggles) expect(toggle.props.disabled).toBe(true);
+      expect(
+        editors()[0].findAll((node) => node.props['data-provider-toggle-old-backend'] === true)
+      ).toHaveLength(2);
+      expect(text(editors()[0])).toContain(hint);
+    }
+
+    keyProfiles = makeKeyProfiles(profilesState({ providerToggleSupported: true }));
+    await rerender();
+    expect(editors()[0].props.providerToggleSupported).toBe(true);
   });
 
   test('the default row edits the shared profile and the TTL through saveShared', async () => {

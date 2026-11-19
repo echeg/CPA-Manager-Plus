@@ -128,13 +128,13 @@
 - [x] run `npm test` - must pass before task 4
 
 ### Task 4: Wire the toggle in the profile editor
-- [ ] add `providerToggleSupported?: boolean` (default `false`) to `KeyProfileEditorProps`; pass it and `codexDisabled={draft.providers.codex.disabled}` to both blocks; under `fallbackReadOnly` the saved providers keep the stored `disabled` (as `initial.providers` / `withDraftCodexSpeed` do today)
-- [ ] in `RoutingProfilesModal.tsx`, pass `providerToggleSupported={state.providerToggleSupported}` at both `KeyProfileEditor` call sites, next to `speedSupported={state.speedSupported}`
-- [ ] show an editor-level warning when both providers are off ("this profile allows no provider"), not blocking the save, and not under `fallbackReadOnly`; add its string in en, ru, zh-CN and zh-TW
-- [ ] keep `providerRoutingErrors` validating a disabled provider's fields so CPA's 422 never surprises the save; the save stays blocked by those errors while the Enabled toggle stays usable
-- [ ] write tests in `KeyProfileEditor.test.tsx`: toggling Claude off and saving submits `disabled: true` with the other Claude fields unchanged; both off shows the warning and still saves; under `fallbackReadOnly` with both stored off the toggle is locked, no warning shows, a speed change saves and `disabled` is saved back unchanged; a disabled provider with an invalid field still blocks the save and the toggle can switch it back on
-- [ ] write a test in `routingProfilesModal.lifecycle.test.tsx`: when the GET provider blocks carry no `disabled`, the toggle is locked with the backend hint
-- [ ] run `npm test` and `npm run type-check` - must pass before task 5
+- [x] add `providerToggleSupported?: boolean` (default `false`) to `KeyProfileEditorProps`; pass it and `codexDisabled={draft.providers.codex.disabled}` to both blocks; under `fallbackReadOnly` the saved providers keep the stored `disabled` (as `initial.providers` / `withDraftCodexSpeed` do today)
+- [x] in `RoutingProfilesModal.tsx`, pass `providerToggleSupported={state.providerToggleSupported}` at both `KeyProfileEditor` call sites, next to `speedSupported={state.speedSupported}`
+- [x] show an editor-level warning when both providers are off ("this profile allows no provider"), not blocking the save, and not under `fallbackReadOnly`; add its string in en, ru, zh-CN and zh-TW
+- [x] keep `providerRoutingErrors` validating a disabled provider's fields so CPA's 422 never surprises the save; the save stays blocked by those errors while the Enabled toggle stays usable
+- [x] write tests in `KeyProfileEditor.test.tsx`: toggling Claude off and saving submits `disabled: true` with the other Claude fields unchanged; both off shows the warning and still saves; under `fallbackReadOnly` with both stored off the toggle is locked, no warning shows, a speed change saves and `disabled` is saved back unchanged; a disabled provider with an invalid field still blocks the save and the toggle can switch it back on
+- [x] write a test in `routingProfilesModal.lifecycle.test.tsx`: when the GET provider blocks carry no `disabled`, the toggle is locked with the backend hint
+- [x] run `npm test` and `npm run type-check` - must pass before task 5
 
 ### Task 5: Summary and speed table
 - [ ] in `keyProfilesModel.ts` `providerSummary`, return `t(\`${SUMMARY}.provider_off\`, { provider })` when the provider is disabled (before the mode check), showing the stored value as the summary already does for the stored mode; when Claude is enabled, its effective target is `codex` and Codex is disabled, render Claude's leg as without fallback (the `account` text), since CPA skips that fallback

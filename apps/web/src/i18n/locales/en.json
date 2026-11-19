@@ -5765,7 +5765,8 @@
         "accounts": "Preferred subscription",
         "selection": "Pool selection",
         "summary": "Chain:",
-        "read_only": "Per-key profiles need native CPA routing. Home mode and scheduler plugins manage their own routing, so this profile is read-only."
+        "read_only": "Per-key profiles need native CPA routing. Home mode and scheduler plugins manage their own routing, so this profile is read-only.",
+        "no_provider": "Both providers are off: this profile allows no provider, so CPA refuses every request made with it."
       },
       "edit": "Edit",
       "collapse": "Collapse",
