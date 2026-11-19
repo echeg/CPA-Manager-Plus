@@ -58,12 +58,12 @@
 - [x] run `npm run test:web` - must pass before task 2
 
 ### Task 2: Fix the seven lint warnings
-- [ ] type the three `any` casts in `apps/web/src/features/accounts/AccountsPage.test.tsx` (`:13326`, `:13496`, `:17794`)
-- [ ] move the non-component export of `apps/web/src/features/accounts/components/AccountHealthBadge.tsx:73` to a sibling `.ts` module and update its importers
-- [ ] move the two non-component exports of `apps/web/src/features/usage-maintenance/UsageMaintenanceCapabilityViews.tsx` (`:15`, `:23`) to a sibling `.ts` module and update their importers
-- [ ] in `apps/web/src/features/dashboard/DashboardPage.tsx:394`, find out whether `apiBase` is in the dependency list to reload when the connection changes; if it is, keep the reload by an explicit means, otherwise drop the dependency
-- [ ] write or update a test for the `DashboardPage` reload behaviour if the dependency carried one; run the existing tests of the moved exports
-- [ ] run `npm run lint` (0 warnings), `npm run type-check` and `npm run test:web` - must pass before task 3
+- [x] type the three `any` casts in `apps/web/src/features/accounts/AccountsPage.test.tsx` (`:13326`, `:13496`, `:17794`)
+- [x] move the non-component export of `apps/web/src/features/accounts/components/AccountHealthBadge.tsx:73` to a sibling `.ts` module and update its importers
+- [x] move the two non-component exports of `apps/web/src/features/usage-maintenance/UsageMaintenanceCapabilityViews.tsx` (`:15`, `:23`) to a sibling `.ts` module and update their importers
+- [x] in `apps/web/src/features/dashboard/DashboardPage.tsx:394`, find out whether `apiBase` is in the dependency list to reload when the connection changes; if it is, keep the reload by an explicit means, otherwise drop the dependency (it was for the reload, but `DashboardPage` already remounts `DashboardPageContent` keyed on `[apiBase, managementKey]`, so the dependency was dropped and the remount is the explicit means)
+- [x] write or update a test for the `DashboardPage` reload behaviour if the dependency carried one; run the existing tests of the moved exports
+- [x] run `npm run lint` (0 warnings), `npm run type-check` and `npm run test:web` - must pass before task 3
 
 ### Task 3: Do not mask `sk-` and `sess-` inside words
 - [ ] in `apps/web/src/utils/format.ts:35-36`, require that the `sk-proj-`, `sk-ant-`, `sk-` and `sess-` alternatives of `API_KEY_MASK_REGEX` are not preceded by a letter or digit
