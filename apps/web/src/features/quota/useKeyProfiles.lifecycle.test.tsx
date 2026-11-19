@@ -291,7 +291,8 @@ describe('useKeyProfiles', () => {
       ownProfile(),
       profilesState().selectionOptions,
       true,
-      true
+      true,
+      false
     );
     expect(hook.state).toBe(saved);
     expect(ownProfiles()).toBe(2);
@@ -313,7 +314,8 @@ describe('useKeyProfiles', () => {
       null,
       profilesState().selectionOptions,
       true,
-      true
+      true,
+      false
     );
     expect(ownProfiles()).toBe(0);
     expect(hook.rows[1].profile).toBeNull();
@@ -589,7 +591,8 @@ describe('useKeyProfiles shared profile', () => {
       '24h',
       profilesState().selectionOptions,
       true,
-      true
+      true,
+      false
     );
     expect(routingProfilesApi.get).toHaveBeenCalledTimes(2);
     expect(fetchConfig).toHaveBeenLastCalledWith(true);
@@ -614,7 +617,8 @@ describe('useKeyProfiles shared profile', () => {
       undefined,
       profilesState().selectionOptions,
       true,
-      true
+      true,
+      false
     );
   });
 
@@ -635,12 +639,14 @@ describe('useKeyProfiles shared profile', () => {
       ownProfile(),
       legacy.selectionOptions,
       false,
+      false,
       false
     );
     expect(saveShared).toHaveBeenCalledExactlyOnceWith(
       sharedProfile(),
       undefined,
       legacy.selectionOptions,
+      false,
       false,
       false
     );
@@ -663,6 +669,7 @@ describe('useKeyProfiles shared profile', () => {
       ownProfile(),
       noSpeed.selectionOptions,
       true,
+      false,
       false
     );
     expect(saveShared).toHaveBeenCalledExactlyOnceWith(
@@ -670,9 +677,45 @@ describe('useKeyProfiles shared profile', () => {
       undefined,
       noSpeed.selectionOptions,
       true,
+      false,
       false
     );
   });
+
+  test.each([true, false])(
+    'saves forward providerToggleSupported %s to both save calls',
+    async (toggleSupported) => {
+      const loaded = { ...profilesState(), providerToggleSupported: toggleSupported };
+      vi.mocked(routingProfilesApi.get).mockResolvedValue(loaded);
+      const saveKey = vi.spyOn(routingProfilesApi, 'saveKeyProfile').mockResolvedValue(loaded);
+      const saveShared = vi
+        .spyOn(routingProfilesApi, 'saveSharedProfile')
+        .mockResolvedValue(loaded);
+      await mount();
+      await act(async () => {
+        await hook.saveKeyProfile(KEY_A, ownProfile());
+      });
+      await act(async () => {
+        await hook.saveShared(sharedProfile());
+      });
+      expect(saveKey).toHaveBeenCalledExactlyOnceWith(
+        KEY_A,
+        ownProfile(),
+        loaded.selectionOptions,
+        true,
+        true,
+        toggleSupported
+      );
+      expect(saveShared).toHaveBeenCalledExactlyOnceWith(
+        sharedProfile(),
+        undefined,
+        loaded.selectionOptions,
+        true,
+        true,
+        toggleSupported
+      );
+    }
+  );
 
   test('a shared save is refused on a backend without /routing/profiles', async () => {
     vi.mocked(routingProfilesApi.get).mockResolvedValue(unsupportedRoutingProfiles());

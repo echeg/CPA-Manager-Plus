@@ -758,7 +758,8 @@ export const routingProfilesApi = {
     profile: RoutingProfile | null,
     selectionOptions: RoutingSelectionOptions = noSelectionOptions,
     providersSupported = true,
-    speedSupported = false
+    speedSupported = false,
+    providerToggleSupported = false
   ): Promise<RoutingProfilesState> {
     const assertCurrent = guardConfigConnection();
     if (profile && !validClaudeMappings(profile.providers.claude, providersSupported))
@@ -766,7 +767,14 @@ export const routingProfilesApi = {
     try {
       await apiClient.patch(
         '/config',
-        keyProfilePatch(key, profile, selectionOptions, providersSupported, speedSupported)
+        keyProfilePatch(
+          key,
+          profile,
+          selectionOptions,
+          providersSupported,
+          speedSupported,
+          providerToggleSupported
+        )
       );
     } catch (error) {
       assertCurrent();
@@ -892,7 +900,8 @@ export const routingProfilesApi = {
     ttl: string | undefined,
     selectionOptions: RoutingSelectionOptions = noSelectionOptions,
     providersSupported = true,
-    speedSupported = false
+    speedSupported = false,
+    providerToggleSupported = false
   ): Promise<RoutingProfilesState> {
     const assertCurrent = guardConfigConnection();
     if (!validClaudeMappings(profile.providers.claude, providersSupported))
@@ -901,7 +910,14 @@ export const routingProfilesApi = {
     try {
       await apiClient.patch(
         '/config',
-        sharedProfilePatch(profile, ttl, selectionOptions, providersSupported, speedSupported)
+        sharedProfilePatch(
+          profile,
+          ttl,
+          selectionOptions,
+          providersSupported,
+          speedSupported,
+          providerToggleSupported
+        )
       );
     } catch (error) {
       assertCurrent();

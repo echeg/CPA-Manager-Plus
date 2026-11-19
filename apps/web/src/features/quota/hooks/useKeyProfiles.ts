@@ -248,7 +248,8 @@ export function useKeyProfiles(disabled: boolean) {
         profile,
         state.selectionOptions,
         state.providersSupported,
-        state.speedSupported
+        state.speedSupported,
+        state.providerToggleSupported
       );
       if (!isCurrent()) return false;
       useConfigStore.getState().clearCache();
@@ -275,7 +276,8 @@ export function useKeyProfiles(disabled: boolean) {
         nextTTL,
         state.selectionOptions,
         state.providersSupported,
-        state.speedSupported
+        state.speedSupported,
+        state.providerToggleSupported
       );
       if (!isCurrent()) return false;
       useConfigStore.getState().clearCache();

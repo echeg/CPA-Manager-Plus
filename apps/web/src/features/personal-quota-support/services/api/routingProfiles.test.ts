@@ -2009,6 +2009,140 @@ describe('provider toggle', () => {
     expect(JSON.stringify(body)).not.toContain('disabled');
   });
 
+  describe('save methods', () => {
+    /** The exact provider blocks of `providersProfile()` with Claude off, as sent. */
+    const sentProviders = (toggle: boolean) => ({
+      claude: {
+        mode: 'subscription',
+        'api-credential': 'claude-idx',
+        fallback: {
+          target: 'api',
+          mode: 'auto',
+          mappings: [{ from: 'claude-opus-*', to: 'gpt-6-astra' }],
+        },
+        ...(toggle ? { disabled: true } : {}),
+      },
+      codex: {
+        mode: 'api',
+        'api-credential': 'codex-idx',
+        fallback: { target: 'off', mode: null, mappings: null },
+        ...(toggle ? { disabled: false } : {}),
+      },
+    });
+    const sentProfile = (toggle: boolean) => ({
+      'session-affinity': true,
+      'preferred-accounts': { claude: 'claude-1', codex: null },
+      selection: { primary: 'reserves', tiebreak: 'earliest-reset' },
+      providers: sentProviders(toggle),
+    });
+    /** A read-back that stores Claude off in the shared profile and the key profile. */
+    const claudeOffResponse = (toggle: boolean) => {
+      const providers = toggle ? toggleProviders(true, false) : rawProviders();
+      return providersResponse({ providers }, [
+        { key: RAW_KEY, profile: { ...rawShared(), providers } },
+      ]);
+    };
+    const claudeOff = () => {
+      const profile = providersProfile();
+      profile.providers.claude.disabled = true;
+      return profile;
+    };
+    const routeGets = (profiles: unknown) =>
+      mocks.get.mockImplementation(async (url: string) => {
+        if (url === '/routing/profiles') return profiles;
+        throw new Error(`unexpected GET ${url}`);
+      });
+
+    it('saveKeyProfile sends disabled in the exact body on a toggle-capable backend', async () => {
+      mocks.patch.mockResolvedValue({});
+      routeGets(claudeOffResponse(true));
+      await routingProfilesApi.saveKeyProfile(RAW_KEY, claudeOff(), options, true, false, true);
+      expect(mocks.patch).toHaveBeenCalledTimes(1);
+      expect(mocks.patch).toHaveBeenCalledWith('/config', {
+        routing: { 'key-profiles': { [RAW_KEY]: sentProfile(true) } },
+      });
+      assertNoKeyInRequests();
+    });
+
+    it('saveSharedProfile sends disabled in the exact body on a toggle-capable backend', async () => {
+      mocks.patch.mockResolvedValue({});
+      routeGets(claudeOffResponse(true));
+      await routingProfilesApi.saveSharedProfile(
+        claudeOff(),
+        undefined,
+        options,
+        true,
+        false,
+        true
+      );
+      expect(mocks.patch).toHaveBeenCalledTimes(1);
+      expect(mocks.patch).toHaveBeenCalledWith('/config', { routing: sentProfile(true) });
+    });
+
+    it('re-enabling sends an explicit disabled: false for both providers', async () => {
+      mocks.patch.mockResolvedValue({});
+      routeGets(
+        providersResponse({ providers: toggleProviders(false, false) }, [
+          { key: RAW_KEY, profile: { ...rawShared(), providers: toggleProviders(false, false) } },
+        ])
+      );
+      const on = providersProfile();
+      await routingProfilesApi.saveKeyProfile(RAW_KEY, on, options, true, false, true);
+      await routingProfilesApi.saveSharedProfile(on, undefined, options, true, false, true);
+      const keyBody = mocks.patch.mock.calls[0][1].routing['key-profiles'][RAW_KEY];
+      const sharedBody = mocks.patch.mock.calls[1][1].routing;
+      for (const body of [keyBody, sharedBody]) {
+        expect(blocks(body).claude).toHaveProperty('disabled', false);
+        expect(blocks(body).codex).toHaveProperty('disabled', false);
+      }
+    });
+
+    it.each([
+      ['without the toggle flag', false],
+      ['by default', undefined],
+    ])('both save methods omit disabled %s', async (_name, toggleSupported) => {
+      mocks.patch.mockResolvedValue({});
+      // An older backend stores no `disabled`, so the read-back has Claude on.
+      routeGets(claudeOffResponse(false));
+      const profile = providersProfile();
+      await routingProfilesApi.saveKeyProfile(
+        RAW_KEY,
+        profile,
+        options,
+        true,
+        false,
+        toggleSupported
+      );
+      await routingProfilesApi.saveSharedProfile(
+        profile,
+        undefined,
+        options,
+        true,
+        false,
+        toggleSupported
+      );
+      expect(mocks.patch.mock.calls[0][1]).toEqual({
+        routing: { 'key-profiles': { [RAW_KEY]: sentProfile(false) } },
+      });
+      expect(mocks.patch.mock.calls[1][1]).toEqual({ routing: sentProfile(false) });
+    });
+
+    it('rejects a disabled provider the backend did not retain', async () => {
+      mocks.patch.mockResolvedValue({});
+      routeGets(
+        providersResponse({ providers: toggleProviders(false, false) }, [
+          { key: RAW_KEY, profile: { ...rawShared(), providers: toggleProviders(false, false) } },
+        ])
+      );
+      await expect(
+        routingProfilesApi.saveKeyProfile(RAW_KEY, claudeOff(), options, true, false, true)
+      ).rejects.toThrow('CPA did not retain the routing profile');
+      await expect(
+        routingProfilesApi.saveSharedProfile(claudeOff(), undefined, options, true, false, true)
+      ).rejects.toThrow('CPA did not retain the routing profile');
+    });
+  });
+
   it('a key copy of the Default carries its disabled on a toggle-capable backend', async () => {
     // The Default stores Claude off and serves `speed`, which the copy write requires.
     const providers = () => {

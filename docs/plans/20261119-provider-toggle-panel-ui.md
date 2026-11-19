@@ -113,10 +113,10 @@
 - [x] run `npm test` (affected files) and `npm run type-check` in `apps/web` - must pass before task 2
 
 ### Task 2: Thread support through the save paths
-- [ ] in `useKeyProfiles.ts`, pass `state.providerToggleSupported` to the two `routingProfilesApi` save calls (`saveSharedProfile`, `saveKeyProfile`) next to `state.speedSupported`, and add the matching last parameter to those API methods so they pass it to `sharedProfilePatch` / `keyProfilePatch`
-- [ ] write API-level tests that run the real `saveSharedProfile` / `saveKeyProfile` with `apiClient.patch` mocked: exact request bodies carry `disabled` (including an explicit `disabled: false` for re-enabling) on a supporting backend and omit it on an older one
-- [ ] extend `useKeyProfiles.lifecycle.test.tsx` to assert the hook forwards `providerToggleSupported` to both save calls (true and false)
-- [ ] run `npm test` and `npm run type-check` - must pass before task 3
+- [x] in `useKeyProfiles.ts`, pass `state.providerToggleSupported` to the two `routingProfilesApi` save calls (`saveSharedProfile`, `saveKeyProfile`) next to `state.speedSupported`, and add the matching last parameter to those API methods so they pass it to `sharedProfilePatch` / `keyProfilePatch`
+- [x] write API-level tests that run the real `saveSharedProfile` / `saveKeyProfile` with `apiClient.patch` mocked: exact request bodies carry `disabled` (including an explicit `disabled: false` for re-enabling) on a supporting backend and omit it on an older one
+- [x] extend `useKeyProfiles.lifecycle.test.tsx` to assert the hook forwards `providerToggleSupported` to both save calls (true and false)
+- [x] run `npm test` and `npm run type-check` - must pass before task 3
 
 ### Task 3: Enabled toggle in the provider block
 - [ ] add props `providerToggleSupported?: boolean` (default `false`) and `codexDisabled?: boolean` to `ProviderRoutingBlock`; render a `ToggleSwitch` labeled Enabled (aria label names the provider) in the block header next to the title, bound to `!value.disabled`, calling `onChange({ ...value, disabled: !checked })`
