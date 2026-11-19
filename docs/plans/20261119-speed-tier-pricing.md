@@ -109,11 +109,11 @@
 - [x] run `npm run manager-server:test` - must pass before task 6
 
 ### Task 6: Verify acceptance criteria
-- [ ] verify the three items of the Overview against the code and tests
-- [ ] verify the Go and TS tests use the same numbers for the shared examples
-- [ ] run `npm run manager-server:test`
-- [ ] run `cd apps/manager-server && go test -race ./internal/repository/modelprice/ ./internal/service/pricing/ ./internal/service/modelprice/`
-- [ ] run `npm run test:web`, `npm run type-check` and `npm run lint` (no new warnings)
+- [x] verify the three items of the Overview against the code and tests
+- [x] verify the Go and TS tests use the same numbers for the shared examples
+- [x] run `npm run manager-server:test`
+- [x] run `cd apps/manager-server && go test -race ./internal/repository/modelprice/ ./internal/service/pricing/ ./internal/service/modelprice/`
+- [x] run `npm run test:web`, `npm run type-check` and `npm run lint` (no new warnings; 0 errors, the 7 warnings are the pre-existing ones in docs/backlog/web-lint-warnings.md)
 
 ### Task 7: [Final] Update documentation
 - [ ] update `apps/docs/en/manual/model-prices.md` and `apps/docs/manual/model-prices.md`: a tier rule now also applies above a context threshold, by ratio; a sync keeps rules the source does not provide; models.dev modes are imported by name
