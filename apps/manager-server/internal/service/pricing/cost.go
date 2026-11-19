@@ -275,7 +275,7 @@ func supportsLongContextPremium(modelName string) bool {
 
 func costForPriceWithServiceTier(modelName, serviceTier string, tokens ModelTokens, price model.ModelPrice) float64 {
 	if activeContextTier(tokens, price) {
-		return costForPrice(modelName, tokens, price)
+		return costForContextTierWithServiceTier(modelName, serviceTier, tokens, price)
 	}
 	legacyLongContext := len(price.ContextTiers) == 0 && supportsLongContextPremium(modelName) && tokens.LongInputTokens > 0
 	if legacyLongContext {
@@ -297,6 +297,34 @@ func costForPriceWithServiceTier(modelName, serviceTier string, tokens ModelToke
 		return costForPriceWithLegacyLongContext(modelName, tokens, effectivePrice, len(price.ContextTiers) == 0)
 	}
 	return costForPrice(modelName, tokens, price) * ServiceTierMultiplier(modelName, serviceTier)
+}
+
+// costForContextTierWithServiceTier prices an aggregate in an active context
+// tier. An explicit rule for the service tier scales the context-tier rates by
+// rule rate / base rate; without a rule the plain context-tier price applies and
+// the compatibility multiplier is not stacked on top.
+func costForContextTierWithServiceTier(modelName, serviceTier string, tokens ModelTokens, price model.ModelPrice) float64 {
+	if _, ok := model.SelectModelPriceServiceTier(price, serviceTier); !ok {
+		return costForPrice(modelName, tokens, price)
+	}
+	base := price
+	if isGPT56Model(modelName) {
+		base = enrichGPT56BasePrice(modelName, price)
+	}
+	effective, ok := model.ModelPriceForContextThresholdAndServiceTier(base, tokens.ContextThresholdTokens, serviceTier)
+	if !ok {
+		return costForPrice(modelName, tokens, price)
+	}
+	return costForSegment(
+		maxInt64(tokens.InputTokens, 0),
+		maxInt64(tokens.OutputTokens, 0),
+		maxInt64(tokens.CachedTokens, 0),
+		maxInt64(tokens.CacheReadTokens, 0),
+		maxInt64(tokens.CacheCreationTokens, 0),
+		effective,
+		1,
+		1,
+	)
 }
 
 func splitLegacyLongContextTokens(tokens ModelTokens) (ModelTokens, ModelTokens) {

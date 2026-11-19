@@ -79,11 +79,11 @@
 - [x] run `npm run manager-server:test` - must pass before task 2
 
 ### Task 2: Apply the scaled price in the server cost path
-- [ ] in `costForPriceWithServiceTier` (`apps/manager-server/internal/service/pricing/cost.go:276`), when a context tier is active and the price has a rule for the service tier, cost the tokens with the scaled price from Task 1; every other branch stays as it is
-- [ ] replace `TestContextTierDoesNotStackPriorityMultiplier` with a test that expects the scaled cost for its `gpt-5.6-sol` fixture (base 5 / 30, context 10 / 40, Fast rule 12.5 / 75: 25 / 100 per 1M)
-- [ ] write a test for the `gpt-6.2-sol` Ultrafast example through `CostForModelWithServiceTier`, with input, output and cached tokens
-- [ ] write tests that stay unchanged in result: a tier priced only by the built-in multiplier inside a context tier, `flex` inside a context tier, the base band with a rule, and the legacy long-context path
-- [ ] run `npm run manager-server:test` - must pass before task 3
+- [x] in `costForPriceWithServiceTier` (`apps/manager-server/internal/service/pricing/cost.go:276`), when a context tier is active and the price has a rule for the service tier, cost the tokens with the scaled price from Task 1; every other branch stays as it is
+- [x] replace `TestContextTierDoesNotStackPriorityMultiplier` with a test that expects the scaled cost for its `gpt-5.6-sol` fixture (base 5 / 30, context 10 / 40, Fast rule 12.5 / 75: 25 / 100 per 1M)
+- [x] write a test for the `gpt-6.2-sol` Ultrafast example through `CostForModelWithServiceTier`, with input, output and cached tokens
+- [x] write tests that stay unchanged in result: a tier priced only by the built-in multiplier inside a context tier, `flex` inside a context tier, the base band with a rule, and the legacy long-context path (base band and legacy path covered by the existing TestExplicitFastPriceAppliesToBaseContextBandForFastAndPriority and TestLegacyLongContext* tests)
+- [x] run `npm run manager-server:test` - must pass before task 3
 
 ### Task 3: Mirror the rule in the web cost calculation
 - [ ] in `calculateCost` (`apps/web/src/utils/usage.ts:1202`), when a context tier applies and the price has a rule for the service tier, use the context-tier price scaled as in Task 1, with a multiplier of 1; keep the other branches

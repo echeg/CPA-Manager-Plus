@@ -132,8 +132,8 @@ func TestContextTierOverridesLegacyLongContextPricing(t *testing.T) {
 	}
 }
 
-func TestContextTierDoesNotStackPriorityMultiplier(t *testing.T) {
-	prices := map[string]model.ModelPrice{
+func gpt56SolFastContextPrices() map[string]model.ModelPrice {
+	return map[string]model.ModelPrice{
 		"gpt-5.6-sol": {
 			Prompt: 5, Completion: 30,
 			ContextTiers: []model.ModelPriceContextTier{
@@ -144,15 +144,90 @@ func TestContextTierDoesNotStackPriorityMultiplier(t *testing.T) {
 			},
 		},
 	}
+}
+
+func TestContextTierScalesExplicitServiceTierRule(t *testing.T) {
+	prices := gpt56SolFastContextPrices()
+	tokens := ModelTokens{
+		ContextThresholdTokens: 272_000,
+		InputTokens:            1_000_000,
+		OutputTokens:           1_000_000,
+		LongInputTokens:        1_000_000,
+		LongOutputTokens:       1_000_000,
+	}
+	// Fast ratio 2.5 on input and output: 10 x 2.5 = 25, 40 x 2.5 = 100.
+	for _, tier := range []string{"priority", "fast"} {
+		if got := CostForModelWithServiceTier("gpt-5.6-sol", tier, tokens, prices); math.Abs(got-125) > 0.000001 {
+			t.Fatalf("%s context-tier cost = %v, want 125", tier, got)
+		}
+	}
+	if got := CostForModelWithServiceTier("gpt-5.6-sol", "default", tokens, prices); math.Abs(got-50) > 0.000001 {
+		t.Fatalf("default context-tier cost = %v, want 50", got)
+	}
+}
+
+func TestContextTierScalesGPT62SolUltrafastRule(t *testing.T) {
+	prices := map[string]model.ModelPrice{
+		"gpt-6.2-sol": {
+			Prompt: 2, Completion: 10, Cache: 0.2, CacheRead: 0.2, CacheCreation: 2.5,
+			PromptConfigured: true, CompletionConfigured: true, CacheReadConfigured: true, CacheCreationConfigured: true,
+			ContextTiers: []model.ModelPriceContextTier{{
+				ThresholdTokens: 272_000, Prompt: 4, Completion: 15, Cache: 0.4, CacheRead: 0.4,
+				PromptConfigured: true, CompletionConfigured: true, CacheConfigured: true, CacheReadConfigured: true,
+			}},
+			ServiceTiers: []model.ModelPriceServiceTier{{
+				Mode: "ultrafast", ServiceTier: "ultrafast",
+				Prompt: 6, Completion: 30, Cache: 0.6, CacheRead: 0.6,
+				PromptConfigured: true, CompletionConfigured: true, CacheConfigured: true, CacheReadConfigured: true,
+			}},
+		},
+	}
+	tokens := ModelTokens{
+		ContextThresholdTokens: 272_000,
+		InputTokens:            1_000_000,
+		OutputTokens:           1_000_000,
+		CachedTokens:           500_000,
+	}
+	// 500k prompt at 12 = 6, 500k cached at 0.4 x 3 = 0.6, 1M output at 45 = 45.
+	got := CostForModelWithServiceTier("gpt-6.2-sol", "ultrafast", tokens, prices)
+	if math.Abs(got-51.6) > 0.000001 {
+		t.Fatalf("ultrafast long-context cost = %v, want 51.6", got)
+	}
+	// The same aggregate on the standard tier stays at the plain context rates.
+	standard := CostForModelWithServiceTier("gpt-6.2-sol", "default", tokens, prices)
+	if math.Abs(standard-17.2) > 0.000001 {
+		t.Fatalf("standard long-context cost = %v, want 17.2", standard)
+	}
+}
+
+func TestContextTierDoesNotStackBuiltInPriorityMultiplier(t *testing.T) {
+	prices := map[string]model.ModelPrice{
+		"gpt-5.5": {
+			Prompt: 5, Completion: 30,
+			ContextTiers: []model.ModelPriceContextTier{
+				{ThresholdTokens: 272_000, Prompt: 10, Completion: 45, PromptConfigured: true, CompletionConfigured: true},
+			},
+		},
+	}
 	tokens := ModelTokens{
 		ContextThresholdTokens: 272_000,
 		InputTokens:            1_000_000,
 		LongInputTokens:        1_000_000,
 	}
-	standard := CostForModelWithServiceTier("gpt-5.6-sol", "default", tokens, prices)
-	priority := CostForModelWithServiceTier("gpt-5.6-sol", "priority", tokens, prices)
-	if math.Abs(priority-standard) > 0.000001 {
-		t.Fatalf("priority context-tier cost = %v, want standard context-tier cost %v", priority, standard)
+	if got := CostForModelWithServiceTier("gpt-5.5", "priority", tokens, prices); math.Abs(got-10) > 0.000001 {
+		t.Fatalf("multiplier-only priority context-tier cost = %v, want 10", got)
+	}
+}
+
+func TestContextTierIgnoresFlexDiscountWithoutRule(t *testing.T) {
+	prices := gpt56SolFastContextPrices()
+	tokens := ModelTokens{
+		ContextThresholdTokens: 272_000,
+		InputTokens:            1_000_000,
+		LongInputTokens:        1_000_000,
+	}
+	if got := CostForModelWithServiceTier("gpt-5.6-sol", "flex", tokens, prices); math.Abs(got-10) > 0.000001 {
+		t.Fatalf("flex context-tier cost = %v, want 10", got)
 	}
 }
 
