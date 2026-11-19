@@ -23,7 +23,9 @@ import { preferredAccountOptions, withPickerRule } from './routingModel';
  * Canonical form of one provider block: the credential is trimmed, API key mode
  * carries `target: off` (the save body does too), and the Codex fallback keeps only
  * its target because CPA stores no Codex mode or mappings. Claude's mode and
- * mappings are kept under every target: they survive as hidden values.
+ * mappings are kept under every target: they survive as hidden values. The Codex
+ * speed and flag are carried for both providers; the reader keeps Claude's at the
+ * defaults.
  */
 function normalizeProviderRouting(
   provider: ApiProvider,
@@ -35,6 +37,8 @@ function normalizeProviderRouting(
       mode: routing.mode,
       apiCredential: routing.apiCredential.trim(),
       fallback: { target, mode: 'auto', mappings: [] },
+      speed: routing.speed,
+      ignoreClientTier: routing.ignoreClientTier,
     };
   const fallback = normalizeFallbackSettings({
     enabled: false,
@@ -45,6 +49,8 @@ function normalizeProviderRouting(
     mode: routing.mode,
     apiCredential: routing.apiCredential.trim(),
     fallback: { target, mode: fallback.mode, mappings: fallback.mappings },
+    speed: routing.speed,
+    ignoreClientTier: routing.ignoreClientTier,
   };
 }
 
@@ -97,6 +103,8 @@ const copyOfProviderRouting = (routing: ProviderRouting): ProviderRouting => ({
     mode: routing.fallback.mode,
     mappings: routing.fallback.mappings.map((mapping) => ({ ...mapping })),
   },
+  speed: routing.speed,
+  ignoreClientTier: routing.ignoreClientTier,
 });
 
 /** A new key profile starts as an independent copy of the shared profile, hidden values included. */
@@ -160,6 +168,7 @@ const noApiKeyLabels: ApiKeyLabelSource = {
 };
 
 const SUMMARY = 'quota_management.key_profiles.summary';
+const CODEX_SPEED = 'quota_management.codex_speed';
 
 /** One provider's leg of the chain: preferred account and fallback, or its API key. */
 function providerSummary(
@@ -182,15 +191,23 @@ function providerSummary(
       ? t(`${SUMMARY}.api_key`, { provider: name, key })
       : t(`${SUMMARY}.api_key_unset`, { provider: name });
   }
+  // Subscription mode: a Codex speed above Standard is named with the provider.
+  const label =
+    provider === 'codex' && routing.speed !== 'standard'
+      ? t(`${SUMMARY}.provider_speed`, {
+          provider: name,
+          speed: t(`${CODEX_SPEED}.speed_${routing.speed}`),
+        })
+      : name;
   switch (effectiveFallbackTarget(routing)) {
     case 'codex':
       return routing.fallback.mode === 'always'
-        ? t(`${SUMMARY}.codex_forced`, { provider: name })
-        : t(`${SUMMARY}.to_codex`, { provider: name, account });
+        ? t(`${SUMMARY}.codex_forced`, { provider: label })
+        : t(`${SUMMARY}.to_codex`, { provider: label, account });
     case 'api':
-      return t(`${SUMMARY}.to_api_key`, { provider: name, account });
+      return t(`${SUMMARY}.to_api_key`, { provider: label, account });
     default:
-      return t(`${SUMMARY}.account`, { provider: name, account });
+      return t(`${SUMMARY}.account`, { provider: label, account });
   }
 }
 

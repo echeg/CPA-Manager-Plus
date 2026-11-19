@@ -9,6 +9,7 @@ import type {
 } from '@/features/personal-quota-support/services/api/routingProfiles';
 import type { AuthFileItem } from '@/features/personal-quota-support/types';
 import { getQuotaDisplayName } from '@/features/quota/utils/quota/identity';
+import { codexSpeedUse } from '../codexSpeedModel';
 import {
   chainSummary,
   copyOfShared,
@@ -57,6 +58,8 @@ export interface KeyProfileEditorProps {
   fallbackReadOnly?: boolean;
   /** `false` on a backend without `providers`: API key choices are disabled. */
   providersSupported?: boolean;
+  /** `false` on a backend without the Codex speed: no Speed row is shown. */
+  speedSupported?: boolean;
   /** The API keys CPA can route to, per provider, and the masked key configs that name them. */
   apiKeys: ApiKeyLabelSource;
   /** Saves the complete profile; the TTL is passed only when the default variant changed it. */
@@ -82,6 +85,22 @@ const withFallbackSuggestions = (profile: RoutingProfile): RoutingProfile => {
 };
 
 /**
+ * The stored providers with the draft's Codex speed and flag: under the lock CPA ignores
+ * the mode and fallback, but the shared speed still applies and stays editable.
+ */
+const withDraftCodexSpeed = (
+  stored: RoutingProfile['providers'],
+  draft: RoutingProfile['providers']
+): RoutingProfile['providers'] => ({
+  ...stored,
+  codex: {
+    ...stored.codex,
+    speed: draft.codex.speed,
+    ignoreClientTier: draft.codex.ignoreClientTier,
+  },
+});
+
+/**
  * Editor for one routing profile: the shared stages (sticky session, pool selection,
  * plus the TTL for the default profile), then one block per provider with its mode,
  * preferred subscription, fallback target and API key.
@@ -99,6 +118,7 @@ export function KeyProfileEditor({
   readOnly,
   fallbackReadOnly = false,
   providersSupported = true,
+  speedSupported = false,
   apiKeys,
   onSave,
   onCancel,
@@ -140,7 +160,9 @@ export function KeyProfileEditor({
     const profile = {
       ...draft,
       selection: withPickerRule(draft.selection, selectionOptions),
-      providers: fallbackReadOnly ? initial.providers : withApiModeNormalization(draft.providers),
+      providers: fallbackReadOnly
+        ? withDraftCodexSpeed(initial.providers, draft.providers)
+        : withApiModeNormalization(draft.providers),
     };
     onSave(profile, ttlChanged ? ttlDraft.trim() : undefined);
   };
@@ -261,6 +283,8 @@ export function KeyProfileEditor({
               disabled={locked}
               modeLocked={fallbackReadOnly}
               providersSupported={providersSupported}
+              speedSupported={speedSupported}
+              speedUse={codexSpeedUse(draft.providers, fallbackReadOnly)}
               onChange={(value) =>
                 setDraft((current) => ({
                   ...current,

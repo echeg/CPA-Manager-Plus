@@ -55,6 +55,8 @@ const claudeRouting = (patch: Partial<ProviderRouting> = {}): ProviderRouting =>
     mode: 'auto',
     mappings: [{ from: 'claude-opus-*', to: 'gpt-6-astra' }],
   },
+  speed: 'standard',
+  ignoreClientTier: false,
   ...patch,
 });
 
@@ -122,6 +124,8 @@ describe('normalizeProfile and profileDirty', () => {
 describe('normalizeProfile with providers', () => {
   test('trims the API credential and builds keys in a fixed order', () => {
     const messy = withProvider('claude', {
+      ignoreClientTier: false,
+      speed: 'standard',
       fallback: { mappings: [], mode: 'always', target: 'api' },
       apiCredential: '  claude-key  ',
       mode: 'subscription',
@@ -129,7 +133,7 @@ describe('normalizeProfile with providers', () => {
     const normalized = normalizeProfile(messy, options);
     expect(normalized.providers.claude.apiCredential).toBe('claude-key');
     expect(JSON.stringify(normalized.providers.claude)).toBe(
-      '{"mode":"subscription","apiCredential":"claude-key","fallback":{"target":"api","mode":"always","mappings":[]}}'
+      '{"mode":"subscription","apiCredential":"claude-key","fallback":{"target":"api","mode":"always","mappings":[]},"speed":"standard","ignoreClientTier":false}'
     );
     expect(
       profileDirty(
@@ -156,6 +160,8 @@ describe('normalizeProfile with providers', () => {
         mode: 'auto',
         mappings: [{ from: 'claude-opus-*', to: 'gpt-6-astra' }],
       },
+      speed: 'standard',
+      ignoreClientTier: false,
     });
     // The backend stores target off for API key mode, so a read-back with off is equal.
     const stored = withProvider(
@@ -187,13 +193,21 @@ describe('normalizeProfile with providers', () => {
 
   test('ignores the Codex fallback mode and mappings, and a Codex target of codex', () => {
     const codex = (fallback: ProviderRouting['fallback']): RoutingProfile =>
-      withProvider('codex', { mode: 'subscription', apiCredential: ' codex-key ', fallback });
+      withProvider('codex', {
+        mode: 'subscription',
+        apiCredential: ' codex-key ',
+        fallback,
+        speed: 'standard',
+        ignoreClientTier: false,
+      });
     const a = codex({ target: 'api', mode: 'always', mappings: [{ from: 'x', to: 'y' }] });
     const b = codex({ target: 'api', mode: 'auto', mappings: [] });
     expect(normalizeProfile(a, options).providers.codex).toEqual({
       mode: 'subscription',
       apiCredential: 'codex-key',
       fallback: { target: 'api', mode: 'auto', mappings: [] },
+      speed: 'standard',
+      ignoreClientTier: false,
     });
     expect(profileDirty(a, b, options)).toBe(false);
   });
@@ -220,6 +234,8 @@ describe('normalizeProfile with providers', () => {
           mode: 'subscription',
           apiCredential: 'codex-key',
           fallback: { target: 'off', mode: 'auto', mappings: [] },
+          speed: 'standard',
+          ignoreClientTier: false,
         }),
         options
       )
@@ -227,7 +243,68 @@ describe('normalizeProfile with providers', () => {
   });
 });
 
+describe('normalizeProfile with the Codex speed', () => {
+  const withCodexSpeed = (
+    patch: Partial<ProviderRouting>,
+    base: RoutingProfile = profile()
+  ): RoutingProfile => withProvider('codex', { ...base.providers.codex, ...patch }, base);
+
+  test('carries the speed and the flag of both providers', () => {
+    const fast = withCodexSpeed({ speed: 'ultrafast', ignoreClientTier: true });
+    const normalized = normalizeProfile(fast, options);
+    expect(normalized.providers.codex.speed).toBe('ultrafast');
+    expect(normalized.providers.codex.ignoreClientTier).toBe(true);
+    expect(normalized.providers.claude.speed).toBe('standard');
+    expect(normalized.providers.claude.ignoreClientTier).toBe(false);
+    // API key mode keeps the stored values: they are hidden, not cleared.
+    const api = normalizeProfile(withCodexSpeed({ mode: 'api', speed: 'fast' }), options);
+    expect(api.providers.codex.speed).toBe('fast');
+  });
+
+  test('a changed speed is dirty', () => {
+    expect(profileDirty(profile(), withCodexSpeed({ speed: 'fast' }), options)).toBe(true);
+    expect(
+      profileDirty(
+        withCodexSpeed({ speed: 'fast' }),
+        withCodexSpeed({ speed: 'ultrafast' }),
+        options
+      )
+    ).toBe(true);
+  });
+
+  test('a changed flag is dirty', () => {
+    expect(profileDirty(profile(), withCodexSpeed({ ignoreClientTier: true }), options)).toBe(true);
+  });
+
+  test('equal speeds and flags are not dirty', () => {
+    expect(
+      profileDirty(
+        withCodexSpeed({ speed: 'fast', ignoreClientTier: true }),
+        withCodexSpeed({ speed: 'fast', ignoreClientTier: true }),
+        options
+      )
+    ).toBe(false);
+    expect(profileDirty(profile(), profile(), options)).toBe(false);
+  });
+});
+
 describe('copyOfShared', () => {
+  test('copies the Codex speed and flag into an independent copy', () => {
+    const shared = withProvider('codex', {
+      ...profile().providers.codex,
+      speed: 'fast',
+      ignoreClientTier: true,
+    });
+    const copy = copyOfShared(shared);
+    expect(copy.providers.codex.speed).toBe('fast');
+    expect(copy.providers.codex.ignoreClientTier).toBe(true);
+    expect(copy).toEqual(shared);
+    copy.providers.codex.speed = 'ultrafast';
+    copy.providers.codex.ignoreClientTier = false;
+    expect(shared.providers.codex.speed).toBe('fast');
+    expect(shared.providers.codex.ignoreClientTier).toBe(true);
+  });
+
   test('returns an equal, independent copy', () => {
     const shared = profile();
     const copy = copyOfShared(shared);
@@ -249,6 +326,8 @@ describe('copyOfShared', () => {
         mode: 'subscription',
         apiCredential: 'codex-key',
         fallback: { target: 'off', mode: 'auto', mappings: [] },
+        speed: 'standard',
+        ignoreClientTier: false,
       })
     );
     const copy = copyOfShared(shared);
@@ -361,6 +440,8 @@ describe('chainSummary', () => {
     mode: 'subscription',
     apiCredential: '',
     fallback: { target: 'off', mode: 'auto', mappings: [] },
+    speed: 'standard',
+    ignoreClientTier: false,
     ...patch,
   });
 
@@ -467,6 +548,52 @@ describe('chainSummary', () => {
     expect(chainSummary(value, files, true, t, apiKeys)).toBe(
       'Sticky session · Claude: API key claude-apikey · claude-k · Codex: API key codex-1 · sk******yz · reserves → round-robin'
     );
+  });
+
+  test('Codex in Subscription mode names a Fast or Ultrafast speed', () => {
+    const fast = withProvider('codex', codexRouting({ speed: 'fast' }));
+    expect(chainSummary(fast, files, true, t)).toBe(
+      'Sticky session · Claude: claude-bob@example.com.json → Codex · Codex (Fast): Automatic · reserves → round-robin'
+    );
+    const ultrafast = withProvider('codex', codexRouting({ speed: 'ultrafast' }));
+    expect(chainSummary(ultrafast, files, true, t)).toContain('· Codex (Ultrafast): Automatic ·');
+  });
+
+  test('Standard speed leaves the Codex name unchanged', () => {
+    const standard = withProvider('codex', codexRouting({ speed: 'standard' }));
+    expect(chainSummary(standard, files, true, t)).toContain('· Codex: Automatic ·');
+    expect(chainSummary(standard, files, true, t)).not.toContain('Standard');
+  });
+
+  test('Codex API key mode does not name the speed', () => {
+    const value = withProvider(
+      'codex',
+      codexRouting({ mode: 'api', apiCredential: 'codex-key-1', speed: 'fast' })
+    );
+    const summary = chainSummary(value, files, true, t, apiKeys);
+    expect(summary).toContain('· Codex: API key codex-1 · sk******yz ·');
+    expect(summary).not.toContain('Fast');
+  });
+
+  test('Subscription with an API-key fallback names the speed', () => {
+    const value = withProvider(
+      'codex',
+      codexRouting({
+        apiCredential: 'codex-key-1',
+        fallback: { target: 'api', mode: 'auto', mappings: [] },
+        speed: 'fast',
+      })
+    );
+    expect(chainSummary(value, files, true, t, apiKeys)).toContain(
+      '· Codex (Fast): Automatic → API key ·'
+    );
+  });
+
+  test('the Claude leg never names a speed', () => {
+    const value = withProvider('codex', codexRouting({ speed: 'ultrafast' }));
+    const summary = chainSummary(value, files, true, t);
+    expect(summary).toContain('Sticky session · Claude: claude-bob@example.com.json → Codex ·');
+    expect(summary).not.toContain('Claude (');
   });
 
   test('API key mode without label sources, with an unknown key, and with no key', () => {

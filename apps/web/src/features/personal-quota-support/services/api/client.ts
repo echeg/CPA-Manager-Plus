@@ -91,6 +91,8 @@ export const apiClient = {
   requestRaw,
   getRaw: (url: string, config?: AxiosRequestConfig) =>
     requestRaw({ ...config, url, method: 'GET' }),
+  patchRaw: (url: string, data?: unknown, config?: AxiosRequestConfig) =>
+    requestRaw({ ...config, url, method: 'PATCH', data }),
   async get<T = unknown>(url: string, config?: AxiosRequestConfig): Promise<T> {
     return (await requestRaw({ ...config, url, method: 'GET' })).data as T;
   },

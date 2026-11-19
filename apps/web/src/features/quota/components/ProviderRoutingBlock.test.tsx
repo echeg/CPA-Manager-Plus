@@ -3,6 +3,7 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { afterEach, beforeAll, describe, expect, test, vi } from 'vitest';
 import i18n from '@/i18n';
 import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
+import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import type {
   ApiProvider,
   ProviderRouting,
@@ -31,6 +32,8 @@ const routing = (patch: Partial<ProviderRouting> = {}): ProviderRouting => ({
   mode: 'subscription',
   apiCredential: 'key-idx-1',
   fallback: { target: 'off', mode: 'auto', mappings },
+  speed: 'standard',
+  ignoreClientTier: false,
   ...patch,
 });
 const keyOptions: ApiKeyOption[] = [
@@ -343,5 +346,104 @@ describe('ProviderRoutingBlock', () => {
   test('without keys and nothing chosen the key select is disabled', async () => {
     await mount({ apiKeyOptions: [], value: routing({ mode: 'api', apiCredential: '' }) });
     expect(apiKeySelect()!.props.disabled).toBe(true);
+  });
+});
+
+describe('ProviderRoutingBlock Codex speed', () => {
+  const speedTabs = () => tabs('speed');
+  const flagSwitch = () => root().findAllByType(ToggleSwitch)[0];
+  const speedRow = () => byData('data-provider-codex-speed');
+
+  test.each(['standard', 'fast', 'ultrafast'] as const)(
+    'choosing %s calls onChange with the new speed',
+    async (speed) => {
+      const start = speed === 'fast' ? 'ultrafast' : 'fast';
+      const { onChange } = await mount({
+        provider: 'codex',
+        speedSupported: true,
+        value: routing({ speed: start }),
+      });
+      expect(speedTabs()!.props.activeTab).toBe(start);
+      expect(speedTabs()!.props.idBase).toMatch(/-speed$/);
+      act(() => speedTabs()!.props.onChange(speed));
+      expect(onChange).toHaveBeenCalledExactlyOnceWith(routing({ speed }));
+    }
+  );
+
+  test('the flag switch calls onChange with the new flag', async () => {
+    const { onChange } = await mount({ provider: 'codex', speedSupported: true });
+    expect(flagSwitch().props.checked).toBe(false);
+    act(() => flagSwitch().props.onChange(true));
+    expect(onChange).toHaveBeenCalledExactlyOnceWith(routing({ ignoreClientTier: true }));
+    expect(text()).toContain('Ultrafast applies to models that offer it.');
+  });
+
+  test('an unused speed keeps the row visible but disabled, with the explanation', async () => {
+    await mount({
+      provider: 'codex',
+      speedSupported: true,
+      speedUse: 'unused',
+      value: routing({ mode: 'api', speed: 'fast', ignoreClientTier: true }),
+    });
+    expect(speedTabs()!.props.activeTab).toBe('fast');
+    expect(speedTabs()!.props.disabled).toBe(true);
+    expect(flagSwitch().props.checked).toBe(true);
+    expect(flagSwitch().props.disabled).toBe(true);
+    expect(byData('data-provider-speed-api-mode')).toHaveLength(1);
+  });
+
+  test("Claude's fallback to Codex keeps the row enabled in API key mode, with its own hint", async () => {
+    const { onChange } = await mount({
+      provider: 'codex',
+      speedSupported: true,
+      speedUse: 'claude_fallback',
+      value: routing({ mode: 'api', speed: 'fast' }),
+    });
+    expect(speedTabs()!.props.disabled).toBe(false);
+    expect(flagSwitch().props.disabled).toBe(false);
+    expect(byData('data-provider-speed-api-mode')).toHaveLength(0);
+    expect(byData('data-provider-speed-claude-fallback')).toHaveLength(1);
+    act(() => speedTabs()!.props.onChange('ultrafast'));
+    expect(onChange).toHaveBeenCalledExactlyOnceWith(routing({ mode: 'api', speed: 'ultrafast' }));
+  });
+
+  test('a speed that applies keeps the row enabled, with neither note', async () => {
+    await mount({ provider: 'codex', speedSupported: true });
+    expect(speedTabs()!.props.disabled).toBe(false);
+    expect(flagSwitch().props.disabled).toBe(false);
+    expect(byData('data-provider-speed-api-mode')).toHaveLength(0);
+    expect(byData('data-provider-speed-claude-fallback')).toHaveLength(0);
+  });
+
+  test('the mode lock locks the mode but never the Speed row', async () => {
+    await mount({
+      provider: 'codex',
+      speedSupported: true,
+      modeLocked: true,
+      value: routing({ mode: 'api' }),
+    });
+    expect(modeTabs()!.props.disabled).toBe(true);
+    expect(speedTabs()!.props.disabled).toBe(false);
+    expect(flagSwitch().props.disabled).toBe(false);
+    expect(byData('data-provider-speed-api-mode')).toHaveLength(0);
+  });
+
+  test('disabled disables the row', async () => {
+    await mount({ provider: 'codex', speedSupported: true, disabled: true });
+    expect(speedTabs()!.props.disabled).toBe(true);
+    expect(flagSwitch().props.disabled).toBe(true);
+  });
+
+  test('Claude has no speed row', async () => {
+    await mount({ provider: 'claude', speedSupported: true });
+    expect(speedRow()).toHaveLength(0);
+    expect(speedTabs()).toBeUndefined();
+    expect(root().findAllByType(ToggleSwitch)).toHaveLength(0);
+  });
+
+  test('an older backend gets no speed row', async () => {
+    await mount({ provider: 'codex', speedSupported: false });
+    expect(speedRow()).toHaveLength(0);
+    expect(speedTabs()).toBeUndefined();
   });
 });

@@ -3,8 +3,10 @@ import en from '@/i18n/locales/en.json';
 import ru from '@/i18n/locales/ru.json';
 import zhCN from '@/i18n/locales/zh-CN.json';
 import zhTW from '@/i18n/locales/zh-TW.json';
+import codexSpeedModalSource from './components/CodexSpeedModal.tsx?raw';
 import keyProfileEditorSource from './components/KeyProfileEditor.tsx?raw';
 import providerRoutingBlockSource from './components/ProviderRoutingBlock.tsx?raw';
+import codexSpeedModelSource from './codexSpeedModel.ts?raw';
 import providerRoutingModelSource from './providerRoutingModel.ts?raw';
 
 type LocaleTree = { [key: string]: string | LocaleTree };
@@ -15,7 +17,7 @@ const locales = { en, ru, 'zh-CN': zhCN, 'zh-TW': zhTW } as unknown as Record<
   { quota_management: Record<string, LocaleTree> }
 >;
 
-const subtrees = ['key_profiles', 'client_keys', 'provider_routing'] as const;
+const subtrees = ['key_profiles', 'client_keys', 'provider_routing', 'codex_speed'] as const;
 
 // Keys of the old per-key profiles toolbar that the Profiles and Keys modals replaced.
 const removedKeyProfileKeys = [
@@ -50,8 +52,17 @@ const dynamicProviderRoutingKeys = [
     'to_api_key',
     'api_key',
     'api_key_unset',
+    'provider_speed',
   ].map((key) => `quota_management.key_profiles.summary.${key}`),
+  ...['speed_standard', 'speed_fast', 'speed_ultrafast'].map(
+    (key) => `quota_management.codex_speed.${key}`
+  ),
 ];
+
+// The toolbar's Codex speed button; the toolbar source is not part of the scan.
+const toolbarSpeedKeys = ['button', 'button_hint'].map(
+  (key) => `quota_management.codex_speed.${key}`
+);
 
 /** Complete `quota_management.*` keys written as string literals in a source file. */
 const literalKeys = (source: string): string[] =>
@@ -101,6 +112,30 @@ describe('key profiles and client keys locales', () => {
     }
   });
 
+  it('keeps the {{placeholders}} of every string in every locale', () => {
+    // A dropped `{{label}}` gives every row's controls the same accessible name, and a
+    // dropped `{{speed}}` empties the toolbar button.
+    const placeholders = (value: unknown): string[] =>
+      typeof value === 'string'
+        ? [...value.matchAll(/\{\{\s*([\w.]+)\s*\}\}/g)].map((match) => match[1]).sort()
+        : [];
+    let checked = 0;
+    for (const subtree of subtrees) {
+      const enTree = locales.en.quota_management[subtree];
+      for (const path of leafPaths(enTree)) {
+        const expected = placeholders(lookup(enTree, path));
+        if (expected.length > 0) checked += 1;
+        for (const [name, locale] of Object.entries(locales)) {
+          expect(
+            placeholders(lookup(locale.quota_management[subtree], path)),
+            `${name} ${subtree}.${path}`
+          ).toEqual(expected);
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(5);
+  });
+
   it('drops the keys of the old per-key profiles toolbar', () => {
     for (const [name, locale] of Object.entries(locales)) {
       const paths = new Set(leafPaths(locale.quota_management.key_profiles));
@@ -110,21 +145,34 @@ describe('key profiles and client keys locales', () => {
     }
   });
 
-  it('has every key the profile editor and provider blocks use in every locale', () => {
+  it('drops the strings of the removed Codex Fast mode toggle', () => {
+    for (const [name, locale] of Object.entries(locales)) {
+      expect(Object.keys(locale.quota_management), name).not.toContain('codex_fast');
+    }
+  });
+
+  it('has every key the profile editor, provider blocks, speed table and speed button use in every locale', () => {
     const prefixes = new Set([
       'quota_management.provider_routing.errors',
       'quota_management.key_profiles.summary',
+      'quota_management.codex_speed',
     ]);
-    // Prefix constants (`ERRORS`, `SUMMARY`) are listed with their leaves above.
+    // Prefix constants (`ERRORS`, `SUMMARY`, `CODEX_SPEED`) are listed with their leaves above.
     const used = new Set(
       [
         ...literalKeys(keyProfileEditorSource),
         ...literalKeys(providerRoutingBlockSource),
         ...literalKeys(providerRoutingModelSource),
+        ...literalKeys(codexSpeedModalSource),
+        ...literalKeys(codexSpeedModelSource),
         ...dynamicProviderRoutingKeys,
+        ...toolbarSpeedKeys,
       ].filter((key) => !prefixes.has(key))
     );
     expect([...used].filter((key) => key.includes('provider_routing')).length).toBeGreaterThan(15);
+    expect([...used].filter((key) => key.includes('codex_speed.table_')).length).toBeGreaterThan(
+      10
+    );
     for (const [name, locale] of Object.entries(locales)) {
       for (const key of used) {
         const value = lookup(locale, key);

@@ -135,6 +135,10 @@ const segmentedItems = (provider: ApiProvider, index: number) =>
     id: string;
     disabled?: boolean;
   }>;
+const speedTabs = () =>
+  block('codex')
+    .findAllByType(SegmentedTabs)
+    .find((node) => node.props.ariaLabel === 'Codex speed')!;
 const accountSelect = (provider: 'Claude' | 'Codex') =>
   selects().find(
     (select) => select.props.ariaLabel === `${provider}: subscription for new threads`
@@ -460,11 +464,15 @@ describe('KeyProfileEditor', () => {
         mode: 'auto',
         mappings: shared.providers.claude.fallback.mappings,
       },
+      speed: 'standard',
+      ignoreClientTier: false,
     });
     expect(saved.providers.codex).toEqual({
       mode: 'api',
       apiCredential: 'codex-key-1',
       fallback: { target: 'off', mode: 'auto', mappings: [] },
+      speed: 'standard',
+      ignoreClientTier: false,
     });
   });
 
@@ -483,6 +491,8 @@ describe('KeyProfileEditor', () => {
         mode: 'auto',
         mappings: shared.providers.claude.fallback.mappings,
       },
+      speed: 'standard',
+      ignoreClientTier: false,
     });
     expect(saved.preferredAccounts).toEqual({ claude: 'claude-a' });
   });
@@ -532,6 +542,8 @@ describe('KeyProfileEditor', () => {
           mode: 'api',
           apiCredential: 'removed-index-123',
           fallback: { target: 'off', mode: 'auto', mappings: [] },
+          speed: 'standard',
+          ignoreClientTier: false,
         },
       },
     };
@@ -619,7 +631,7 @@ describe('KeyProfileEditor', () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
-  test('fallbackReadOnly locks mode and fallback, keeps Preferred editable, saves the stored providers', async () => {
+  test('fallbackReadOnly locks mode and fallback, keeps Preferred and the speed editable, saves the stored providers with the edited speed', async () => {
     // An empty mapping list is filled with suggestions on screen; a save must not store them.
     // A stored API key mode without a key would be invalid, but the locked block cannot block the save.
     const stored: RoutingProfile = {
@@ -630,10 +642,17 @@ describe('KeyProfileEditor', () => {
           mode: 'subscription',
           apiCredential: '',
           fallback: { target: 'api', mode: 'auto', mappings: [] },
+          speed: 'standard',
+          ignoreClientTier: false,
         },
       },
     };
-    const { onSave } = await mount({ initial: stored, variant: 'default', fallbackReadOnly: true });
+    const { onSave } = await mount({
+      initial: stored,
+      variant: 'default',
+      fallbackReadOnly: true,
+      speedSupported: true,
+    });
     expect(textOf(root())).toContain('mode and fallback cannot be changed here');
     expect(textOf(root())).not.toContain('Per-key profiles need native CPA routing');
     for (const provider of ['claude', 'codex'] as const) {
@@ -645,17 +664,109 @@ describe('KeyProfileEditor', () => {
     expect(sticky().props.disabled).toBe(false);
     expect(ttlInputs()[0].props.disabled).toBe(false);
 
+    expect(speedTabs().props.disabled).toBe(false);
+
     act(() => accountSelect('Codex').props.onChange('codex-a'));
     act(() => sticky().props.onChange(false));
+    act(() => speedTabs().props.onChange('fast'));
+    // A draft change to the locked fields must not reach the save.
+    editProvider('codex', (value) => ({
+      ...value,
+      ignoreClientTier: true,
+      mode: 'api',
+      apiCredential: 'codex-key-1',
+      fallback: { ...value.fallback, target: 'off' },
+    }));
+    // CPA ignores the stored mode under the lock, so a draft API key mode keeps the speed.
+    expect(block('codex').props.speedUse).toBe('applies');
+    expect(speedTabs().props.disabled).toBe(false);
     expect(saveButton().props.disabled).toBe(false);
     click(saveButton());
     expect(onSave).toHaveBeenCalledTimes(1);
-    expect(onSave.mock.calls[0][0]).toEqual({
+    const saved: RoutingProfile = onSave.mock.calls[0][0];
+    expect(saved).toEqual({
       ...stored,
       sessionAffinity: false,
       preferredAccounts: { claude: 'claude-a', codex: 'codex-a' },
+      providers: {
+        claude: stored.providers.claude,
+        codex: { ...stored.providers.codex, speed: 'fast', ignoreClientTier: true },
+      },
     });
-    expect(onSave.mock.calls[0][0].providers).toBe(stored.providers);
+    expect(saved.providers.claude).toBe(stored.providers.claude);
+    expect(saved.providers.codex.mode).toBe(stored.providers.codex.mode);
+    expect(saved.providers.codex.fallback).toBe(stored.providers.codex.fallback);
+    expect(saved.providers.codex.apiCredential).toBe(stored.providers.codex.apiCredential);
+  });
+
+  test('a changed Codex speed enables Save and is in the saved profile', async () => {
+    const { onSave } = await mount({ speedSupported: true });
+    expect(block('codex').props.speedSupported).toBe(true);
+    expect(block('claude').props.speedSupported).toBe(true);
+    expect(saveButton().props.disabled).toBe(true);
+    act(() => speedTabs().props.onChange('ultrafast'));
+    expect(saveButton().props.disabled).toBe(false);
+    click(saveButton());
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave.mock.calls[0][0].providers.codex.speed).toBe('ultrafast');
+    expect(onSave.mock.calls[0][0].providers.codex.ignoreClientTier).toBe(false);
+  });
+
+  test("the Codex Speed row follows the draft's Codex mode and Claude fallback to Codex", async () => {
+    await mount({ speedSupported: true });
+    expect(block('codex').props.speedUse).toBe('applies');
+    // Codex in API key mode: Claude's fallback to Codex still runs with this speed.
+    setMode('codex', 'api');
+    expect(block('codex').props.speedUse).toBe('claude_fallback');
+    expect(speedTabs().props.disabled).toBe(false);
+    const claude = shared.providers.claude;
+    // Target Off: the Codex speed no longer reaches a Claude request.
+    act(() =>
+      block('claude').props.onChange({ ...claude, fallback: { ...claude.fallback, target: 'off' } })
+    );
+    expect(block('codex').props.speedUse).toBe('unused');
+    expect(speedTabs().props.disabled).toBe(true);
+    // Claude in API key mode skips its fallback.
+    act(() => block('claude').props.onChange({ ...claude, mode: 'api' }));
+    expect(block('codex').props.speedUse).toBe('unused');
+  });
+
+  test('a changed ignore-client-tier flag enables Save and is in the saved profile', async () => {
+    const { onSave } = await mount({ speedSupported: true });
+    act(() => block('codex').findByType(ToggleSwitch).props.onChange(true));
+    expect(saveButton().props.disabled).toBe(false);
+    click(saveButton());
+    expect(onSave.mock.calls[0][0].providers.codex.ignoreClientTier).toBe(true);
+  });
+
+  test('a new key profile opened from a Default profile with Fast saves Fast', async () => {
+    const fastShared: RoutingProfile = {
+      ...shared,
+      providers: {
+        ...shared.providers,
+        codex: { ...shared.providers.codex, speed: 'fast', ignoreClientTier: true },
+      },
+    };
+    const { onSave } = await mount({
+      initial: copyOfShared(fastShared),
+      isNew: true,
+      speedSupported: true,
+    });
+    expect(speedTabs().props.activeTab).toBe('fast');
+    click(saveButton());
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave.mock.calls[0][0].providers.codex.speed).toBe('fast');
+    expect(onSave.mock.calls[0][0].providers.codex.ignoreClientTier).toBe(true);
+  });
+
+  test('without speedSupported no speed control is rendered', async () => {
+    await mount();
+    expect(block('codex').props.speedSupported).toBe(false);
+    expect(
+      root()
+        .findAllByType(SegmentedTabs)
+        .some((node) => String(node.props.ariaLabel).endsWith('speed'))
+    ).toBe(false);
   });
 
   test('while saving the controls are locked and Save shows progress', async () => {

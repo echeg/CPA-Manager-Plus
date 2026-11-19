@@ -1,23 +1,42 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-const mocks = vi.hoisted(() => ({ get: vi.fn(), patch: vi.fn(), revision: 0 }));
+const mocks = vi.hoisted(() => ({
+  get: vi.fn(),
+  getRaw: vi.fn(),
+  patch: vi.fn(),
+  patchRaw: vi.fn(),
+  revision: 0,
+}));
 vi.mock('./client', () => ({
   apiClient: {
     get: mocks.get,
+    getRaw: mocks.getRaw,
     patch: mocks.patch,
+    patchRaw: mocks.patchRaw,
     getConnectionRevision: () => mocks.revision,
   },
 }));
 import { sha256Hex } from '@/utils/apiKeyHash';
 import {
   clientApiKeys,
+  ConfigChangedError,
+  ConfigVersionUnavailableError,
+  DefaultCopyUnconfirmedError,
+  defaultProviderRouting,
+  dropsLegacyClaudeFallback,
+  holdsCodexSpeed,
   InvalidRoutingConfigError,
+  keyCodexSpeedPatch,
   keyProfilePatch,
+  legacyClaudeFallbackOf,
   mergeKeyRows,
   profileBody,
+  profiledKeysOf,
   providersFromClaudeFallback,
   readRoutingProfiles,
   routingProfilesApi,
+  sharedCodexSpeedPatch,
   sharedProfilePatch,
+  strongETag,
   UnknownApiKeyError,
   type RoutingProfile,
 } from './routingProfiles';
@@ -95,11 +114,15 @@ const providersProfile = (): RoutingProfile => ({
         mode: 'auto',
         mappings: [{ from: 'claude-opus-*', to: 'gpt-6-astra' }],
       },
+      speed: 'standard',
+      ignoreClientTier: false,
     },
     codex: {
       mode: 'api',
       apiCredential: 'codex-idx',
       fallback: { target: 'off', mode: 'auto', mappings: [] },
+      speed: 'standard',
+      ignoreClientTier: false,
     },
   },
 });
@@ -128,7 +151,11 @@ const providersResponse = (
 
 const assertNoKeyInRequests = () => {
   const forbidden = [RAW_KEY, sha256Hex(RAW_KEY)];
-  for (const [url] of [...mocks.get.mock.calls, ...mocks.patch.mock.calls]) {
+  for (const [url] of [
+    ...mocks.get.mock.calls,
+    ...mocks.patch.mock.calls,
+    ...mocks.patchRaw.mock.calls,
+  ]) {
     for (const value of forbidden) expect(String(url)).not.toContain(value);
   }
 };
@@ -156,6 +183,7 @@ describe('reading routing profiles', () => {
       keys: [{ key: RAW_KEY, profile: keyProfile() }],
       selectionOptions: options,
       providersSupported: false,
+      speedSupported: false,
       apiCredentials: { claude: [], codex: [] },
     });
   });
@@ -172,11 +200,15 @@ describe('reading routing profiles', () => {
           mode: 'auto',
           mappings: [{ from: 'claude-opus-*', to: 'gpt-6-astra' }],
         },
+        speed: 'standard',
+        ignoreClientTier: false,
       },
       codex: {
         mode: 'subscription',
         apiCredential: '',
         fallback: { target: 'off', mode: 'auto', mappings: [] },
+        speed: 'standard',
+        ignoreClientTier: false,
       },
     });
     const disabled = readRoutingProfiles({
@@ -225,11 +257,15 @@ describe('reading routing profiles', () => {
         mode: 'api',
         apiCredential: '',
         fallback: { target: 'off', mode: 'auto', mappings: [] },
+        speed: 'standard',
+        ignoreClientTier: false,
       },
       codex: {
         mode: 'subscription',
         apiCredential: '',
         fallback: { target: 'off', mode: 'auto', mappings: [] },
+        speed: 'standard',
+        ignoreClientTier: false,
       },
     });
   });
@@ -304,6 +340,98 @@ describe('reading routing profiles', () => {
     ).toThrow('Invalid routing provider settings');
   });
 
+  it.each(['standard', 'fast', 'ultrafast'] as const)('reads the Codex speed %s', (speed) => {
+    const state = readRoutingProfiles(
+      providersResponse(
+        {
+          providers: {
+            ...rawProviders(),
+            codex: { ...rawProviders().codex, speed, 'ignore-client-tier': true },
+          },
+        },
+        [
+          {
+            key: RAW_KEY,
+            profile: {
+              ...rawShared(),
+              providers: { ...rawProviders(), codex: { ...rawProviders().codex, speed } },
+            },
+          },
+        ]
+      )
+    );
+    expect(state.shared.providers.codex.speed).toBe(speed);
+    expect(state.shared.providers.codex.ignoreClientTier).toBe(true);
+    expect(state.keys[0].profile.providers.codex.speed).toBe(speed);
+    expect(state.keys[0].profile.providers.codex.ignoreClientTier).toBe(false);
+  });
+
+  it.each([
+    ['absent', undefined],
+    ['null', null],
+    ['empty', ''],
+  ])('reads an %s Codex speed as standard', (_name, speed) => {
+    const codex: Record<string, unknown> = { ...rawProviders().codex };
+    if (speed !== undefined) codex.speed = speed;
+    const state = readRoutingProfiles(
+      providersResponse({ providers: { ...rawProviders(), codex } })
+    );
+    expect(state.shared.providers.codex.speed).toBe('standard');
+    expect(state.shared.providers.codex.ignoreClientTier).toBe(false);
+  });
+
+  it('reads only the boolean true as ignoring the client tier', () => {
+    for (const value of ['true', 1, null, false]) {
+      const state = readRoutingProfiles(
+        providersResponse({
+          providers: {
+            ...rawProviders(),
+            codex: { ...rawProviders().codex, 'ignore-client-tier': value },
+          },
+        })
+      );
+      expect(state.shared.providers.codex.ignoreClientTier).toBe(false);
+    }
+  });
+
+  it('fails the load on an unknown Codex speed', () => {
+    expect(() =>
+      readRoutingProfiles(
+        providersResponse({
+          providers: { ...rawProviders(), codex: { ...rawProviders().codex, speed: 'turbo' } },
+        })
+      )
+    ).toThrow('Invalid routing provider settings');
+  });
+
+  it('always reads Claude as standard without the flag, whatever the response holds', () => {
+    for (const speed of ['fast', 'ultrafast', 'turbo', 7]) {
+      const state = readRoutingProfiles(
+        providersResponse({
+          providers: {
+            ...rawProviders(),
+            claude: { ...rawProviders().claude, speed, 'ignore-client-tier': true },
+          },
+        })
+      );
+      expect(state.shared.providers.claude.speed).toBe('standard');
+      expect(state.shared.providers.claude.ignoreClientTier).toBe(false);
+    }
+  });
+
+  it('gives both providers the default speed on an older backend', () => {
+    const state = readRoutingProfiles(response());
+    for (const provider of ['claude', 'codex'] as const) {
+      expect(state.shared.providers[provider].speed).toBe('standard');
+      expect(state.shared.providers[provider].ignoreClientTier).toBe(false);
+    }
+    const legacy = providersFromClaudeFallback({ enabled: true, mode: 'auto', mappings: [] });
+    expect(legacy.claude.speed).toBe('standard');
+    expect(legacy.claude.ignoreClientTier).toBe(false);
+    expect(legacy.codex.speed).toBe('standard');
+    expect(legacy.codex.ignoreClientTier).toBe(false);
+  });
+
   it('accepts an omitted preferred-accounts block and an empty tiebreak', () => {
     const profile = { ...rawKeyProfile(), selection: { primary: 'fill-first', tiebreak: '' } };
     delete (profile as Record<string, unknown>)['preferred-accounts'];
@@ -372,6 +500,7 @@ describe('reading routing profiles', () => {
       supported: false,
       unsupportedBackend: true,
       providersSupported: false,
+      speedSupported: false,
       apiCredentials: { claude: [], codex: [] },
       keys: [],
     });
@@ -561,6 +690,102 @@ describe('writing a key profile', () => {
     const body = mocks.patch.mock.calls[0][1].routing['key-profiles'][RAW_KEY];
     expect(body).toHaveProperty('claude-fallback');
     expect(body).not.toHaveProperty('providers');
+  });
+
+  it('reads the config version from the ETag of the config, or none without one', async () => {
+    mocks.getRaw.mockResolvedValueOnce({ headers: { etag: '"abc123"' }, data: {} });
+    await expect(routingProfilesApi.configSnapshot()).resolves.toEqual({
+      version: '"abc123"',
+      clientKeys: new Set(),
+      profiledKeys: new Set(),
+      legacyClaudeFallback: { shared: false, keys: new Set() },
+    });
+    expect(mocks.getRaw).toHaveBeenCalledExactlyOnceWith('/config');
+    mocks.getRaw.mockResolvedValueOnce({ headers: {}, data: {} });
+    await expect(routingProfilesApi.configSnapshot()).resolves.toMatchObject({ version: '' });
+  });
+
+  it('reads a weak ETag as no version, since CPA never matches one in If-Match', async () => {
+    // A proxy that compresses the response weakens the ETag.
+    mocks.getRaw.mockResolvedValueOnce({ headers: { etag: 'W/"abc123"' }, data: {} });
+    await expect(routingProfilesApi.configSnapshot()).resolves.toMatchObject({ version: '' });
+  });
+
+  it('reads a wildcard or a list as no version, since CPA would match it to a newer config', async () => {
+    // CPA's If-Match takes `*` as any version and a list as any of its tags.
+    for (const etag of ['*', '"abc123", "def456"', '"abc123",*', 'abc123', '""', ' "abc123"']) {
+      mocks.getRaw.mockResolvedValueOnce({ headers: { etag }, data: {} });
+      await expect(routingProfilesApi.configSnapshot()).resolves.toMatchObject({ version: '' });
+    }
+    expect(strongETag('"abc123"')).toBe('"abc123"');
+    expect(strongETag(undefined)).toBe('');
+    expect(strongETag(['"abc123"'])).toBe('');
+  });
+
+  it('reads the client keys and the keys that own a profile from the same config document as the version', async () => {
+    mocks.getRaw.mockResolvedValueOnce({
+      headers: { etag: '"abc123"' },
+      data: {
+        access: { 'api-keys': [RAW_KEY, OTHER_KEY] },
+        routing: { 'key-profiles': { [RAW_KEY]: { 'session-affinity': true }, [OTHER_KEY]: null } },
+      },
+    });
+    const snapshot = await routingProfilesApi.configSnapshot();
+    expect(snapshot.version).toBe('"abc123"');
+    // The key list of that version, so a key deleted elsewhere is known before a write.
+    expect([...snapshot.clientKeys]).toEqual([RAW_KEY, OTHER_KEY]);
+    // A null entry owns no profile: CPA ignores it.
+    expect([...snapshot.profiledKeys]).toEqual([RAW_KEY]);
+    expect(profiledKeysOf({ routing: {} })).toEqual(new Set());
+    expect(profiledKeysOf({ routing: { 'key-profiles': [] } })).toEqual(new Set());
+    expect(profiledKeysOf(null)).toEqual(new Set());
+  });
+
+  it('finds the profiles whose legacy Claude fallback a routing write would drop', async () => {
+    // CPA reads the fallback from `claude-fallback` while `providers.claude.fallback` sets
+    // nothing, and deletes that block on any write naming the profile because the
+    // providers node exists.
+    const legacy = { enabled: true, mode: 'auto', mappings: [{ from: 'claude-*', to: 'gpt-6' }] };
+    const shape = (fallback: unknown, claudeFallback: unknown = legacy) => ({
+      providers: { claude: { fallback } },
+      'claude-fallback': claudeFallback,
+    });
+    for (const empty of [{}, null, { target: '', mode: null, mappings: [] }])
+      expect(dropsLegacyClaudeFallback(shape(empty)), JSON.stringify(empty)).toBe(true);
+    expect(dropsLegacyClaudeFallback(shape({}, { enabled: false, mappings: [{}] }))).toBe(true);
+    // Unaffected: the providers fallback sets something, so CPA already ignores the
+    // legacy block; no providers fallback node, so CPA keeps the block; or no legacy
+    // block that sets anything.
+    expect(dropsLegacyClaudeFallback(shape({ target: 'off' }))).toBe(false);
+    expect(dropsLegacyClaudeFallback(shape({ mappings: [{}] }))).toBe(false);
+    expect(
+      dropsLegacyClaudeFallback({ providers: { claude: {} }, 'claude-fallback': legacy })
+    ).toBe(false);
+    expect(dropsLegacyClaudeFallback({ 'claude-fallback': legacy })).toBe(false);
+    for (const none of [null, {}, { enabled: false, mode: '', mappings: [] }])
+      expect(dropsLegacyClaudeFallback(shape({}, none)), JSON.stringify(none)).toBe(false);
+    expect(dropsLegacyClaudeFallback({ providers: { claude: { fallback: {} } } })).toBe(false);
+    expect(dropsLegacyClaudeFallback(null)).toBe(false);
+
+    mocks.getRaw.mockResolvedValueOnce({
+      headers: { etag: '"abc123"' },
+      data: {
+        routing: {
+          ...shape({}),
+          'key-profiles': {
+            [RAW_KEY]: shape(null),
+            [OTHER_KEY]: shape({ target: 'codex', mode: 'auto' }),
+          },
+        },
+      },
+    });
+    const snapshot = await routingProfilesApi.configSnapshot();
+    expect(snapshot.legacyClaudeFallback.shared).toBe(true);
+    expect([...snapshot.legacyClaudeFallback.keys]).toEqual([RAW_KEY]);
+    expect(legacyClaudeFallbackOf({ routing: { 'key-profiles': [] } })).toEqual({
+      shared: false,
+      keys: new Set(),
+    });
   });
 
   it('verifies a providers profile by reading it back', async () => {
@@ -793,6 +1018,20 @@ describe('write errors', () => {
     const error = await routingProfilesApi.saveKeyProfile(RAW_KEY, keyProfile()).catch((e) => e);
     expect(error).toBeInstanceOf(InvalidRoutingConfigError);
     expect(error.message).toBe('Invalid routing configuration');
+  });
+
+  it('maps 412 precondition_failed to ConfigChangedError and reads nothing back', async () => {
+    mocks.patch.mockRejectedValue(
+      Object.assign(new Error('precondition_failed'), {
+        status: 412,
+        apiCode: 'precondition_failed',
+      })
+    );
+    const error = await routingProfilesApi
+      .saveKeyProfile(RAW_KEY, keyProfile(), options, false)
+      .catch((e) => e);
+    expect(error).toBeInstanceOf(ConfigChangedError);
+    expect(mocks.get).not.toHaveBeenCalled();
   });
 
   it('passes through a write error that is not an object', async () => {
@@ -1060,6 +1299,570 @@ describe('writing the shared profile', () => {
     await expect(
       routingProfilesApi.saveSharedProfile(sharedProfile(), '24h', options)
     ).rejects.toThrow('connection changed');
+    expect(mocks.get).not.toHaveBeenCalled();
+  });
+});
+
+describe('Codex speed', () => {
+  const speedProviders = (speed: string, ignore = false) => ({
+    ...rawProviders(),
+    codex: { ...rawProviders().codex, mode: 'subscription', speed, 'ignore-client-tier': ignore },
+  });
+  // A backend that serves `speed`: the shared profile and the key profile store `speed`.
+  const speedResponse = (sharedSpeed: string, keySpeed: string | null = sharedSpeed) =>
+    providersResponse(
+      { providers: speedProviders(sharedSpeed) },
+      keySpeed === null
+        ? []
+        : [{ key: RAW_KEY, profile: { ...rawShared(), providers: speedProviders(keySpeed) } }]
+    );
+  const fastProfile = (): RoutingProfile => {
+    const profile = providersProfile();
+    profile.providers.codex.mode = 'subscription';
+    profile.providers.codex.speed = 'fast';
+    return profile;
+  };
+  const codexBody = (body: Record<string, unknown>) =>
+    (body.providers as Record<string, Record<string, unknown>>).codex;
+  const claudeBody = (body: Record<string, unknown>) =>
+    (body.providers as Record<string, Record<string, unknown>>).claude;
+  const routeGets = (profiles: unknown) =>
+    mocks.get.mockImplementation(async (url: string) => {
+      if (url === '/routing/profiles') return profiles;
+      throw new Error(`unexpected GET ${url}`);
+    });
+
+  it('marks the backend as speed-capable when the shared Codex block holds speed', () => {
+    expect(readRoutingProfiles(speedResponse('standard')).speedSupported).toBe(true);
+    expect(readRoutingProfiles(speedResponse('', null)).speedSupported).toBe(true);
+  });
+
+  it('marks a backend without speed in the shared Codex block as not speed-capable', () => {
+    expect(readRoutingProfiles(providersResponse()).speedSupported).toBe(false);
+    expect(readRoutingProfiles(response()).speedSupported).toBe(false);
+    // A key profile with `speed` does not make up for a shared block without it.
+    const keyOnly = providersResponse({}, [
+      { key: RAW_KEY, profile: { ...rawShared(), providers: speedProviders('fast') } },
+    ]);
+    expect(readRoutingProfiles(keyOnly).speedSupported).toBe(false);
+  });
+
+  it('marks the unsupported backend as not speed-capable', async () => {
+    mocks.get.mockRejectedValueOnce(Object.assign(new Error('nf'), { status: 404 }));
+    await expect(routingProfilesApi.get()).resolves.toMatchObject({ speedSupported: false });
+  });
+
+  it('sends speed and ignore-client-tier in the Codex block of a key profile', () => {
+    const profile = fastProfile();
+    profile.providers.codex.ignoreClientTier = true;
+    const body = keyProfilePatch(RAW_KEY, profile, options, true, true).routing as Record<
+      string,
+      Record<string, Record<string, unknown>>
+    >;
+    const entry = body['key-profiles'][RAW_KEY];
+    expect(codexBody(entry)).toEqual({
+      mode: 'subscription',
+      'api-credential': 'codex-idx',
+      fallback: { target: 'off', mode: null, mappings: null },
+      speed: 'fast',
+      'ignore-client-tier': true,
+    });
+    expect(claudeBody(entry)).not.toHaveProperty('speed');
+    expect(claudeBody(entry)).not.toHaveProperty('ignore-client-tier');
+  });
+
+  it('sends the default speed and flag explicitly, so a merge leaves no old value', () => {
+    const body = profileBody(providersProfile(), options, true, true);
+    expect(codexBody(body)).toMatchObject({ speed: 'standard', 'ignore-client-tier': false });
+  });
+
+  it('sends speed and ignore-client-tier in the Codex block of the shared profile', () => {
+    const routing = sharedProfilePatch(fastProfile(), '5m', options, true, true).routing as Record<
+      string,
+      unknown
+    >;
+    expect(codexBody(routing)).toMatchObject({ speed: 'fast', 'ignore-client-tier': false });
+    expect(claudeBody(routing)).not.toHaveProperty('speed');
+    expect(claudeBody(routing)).not.toHaveProperty('ignore-client-tier');
+    expect(routing['session-affinity-ttl']).toBe('5m');
+  });
+
+  it('never sends the fields in the Claude block, even if the draft holds them', () => {
+    const profile = fastProfile();
+    profile.providers.claude.speed = 'ultrafast';
+    profile.providers.claude.ignoreClientTier = true;
+    const body = profileBody(profile, options, true, true);
+    expect(claudeBody(body)).not.toHaveProperty('speed');
+    expect(claudeBody(body)).not.toHaveProperty('ignore-client-tier');
+  });
+
+  it.each([
+    ['without the speed flag', true, false],
+    ['by default', true, undefined],
+  ])('sends neither field %s', (_name, providersSupported, speedSupported) => {
+    const key = keyProfilePatch(RAW_KEY, fastProfile(), options, providersSupported, speedSupported)
+      .routing as Record<string, Record<string, Record<string, unknown>>>;
+    const shared = sharedProfilePatch(
+      fastProfile(),
+      undefined,
+      options,
+      providersSupported,
+      speedSupported
+    ).routing as Record<string, unknown>;
+    for (const body of [key['key-profiles'][RAW_KEY], shared]) {
+      expect(codexBody(body)).not.toHaveProperty('speed');
+      expect(codexBody(body)).not.toHaveProperty('ignore-client-tier');
+    }
+  });
+
+  it('sends neither field to a backend without providers, whatever the speed flag says', () => {
+    const body = profileBody(fastProfile(), options, false, true);
+    expect(body).not.toHaveProperty('providers');
+    expect(JSON.stringify(body)).not.toContain('speed');
+    expect(JSON.stringify(body)).not.toContain('ignore-client-tier');
+  });
+
+  it('saves a key profile with speed fast and verifies it by reading it back', async () => {
+    mocks.patch.mockResolvedValue({});
+    routeGets(speedResponse('standard', 'fast'));
+    const state = await routingProfilesApi.saveKeyProfile(
+      RAW_KEY,
+      fastProfile(),
+      options,
+      true,
+      true
+    );
+    expect(state.keys[0].profile.providers.codex.speed).toBe('fast');
+    expect(codexBody(mocks.patch.mock.calls[0][1].routing['key-profiles'][RAW_KEY])).toMatchObject({
+      speed: 'fast',
+    });
+    assertNoKeyInRequests();
+  });
+
+  it('rejects a key profile whose speed the backend did not retain', async () => {
+    mocks.patch.mockResolvedValue({});
+    routeGets(speedResponse('fast', 'standard'));
+    await expect(
+      routingProfilesApi.saveKeyProfile(RAW_KEY, fastProfile(), options, true, true)
+    ).rejects.toThrow('CPA did not retain the routing profile');
+  });
+
+  it('rejects a key profile whose flag the backend did not retain', async () => {
+    mocks.patch.mockResolvedValue({});
+    routeGets(speedResponse('fast'));
+    const profile = fastProfile();
+    profile.providers.codex.ignoreClientTier = true;
+    await expect(
+      routingProfilesApi.saveKeyProfile(RAW_KEY, profile, options, true, true)
+    ).rejects.toThrow('CPA did not retain the routing profile');
+  });
+
+  it('saves the shared profile with speed fast and verifies it by reading it back', async () => {
+    mocks.patch.mockResolvedValue({});
+    routeGets(speedResponse('fast', null));
+    const state = await routingProfilesApi.saveSharedProfile(
+      fastProfile(),
+      undefined,
+      options,
+      true,
+      true
+    );
+    expect(state.shared.providers.codex.speed).toBe('fast');
+    expect(codexBody(mocks.patch.mock.calls[0][1].routing)).toMatchObject({ speed: 'fast' });
+  });
+
+  it('rejects a shared profile whose speed the backend did not retain', async () => {
+    mocks.patch.mockResolvedValue({});
+    routeGets(speedResponse('standard', null));
+    await expect(
+      routingProfilesApi.saveSharedProfile(fastProfile(), undefined, options, true, true)
+    ).rejects.toThrow('CPA did not retain the routing profile');
+  });
+
+  it('fails a new fast key profile saved without the speed flag, since the body drops speed', async () => {
+    // A caller that forgets the flag sends no `speed`; the backend creates the
+    // profile with only the written fields, so it stores standard and the
+    // read-back catches the lost value.
+    mocks.patch.mockResolvedValue({});
+    routeGets(speedResponse('fast', 'standard'));
+    await expect(
+      routingProfilesApi.saveKeyProfile(RAW_KEY, fastProfile(), options, true)
+    ).rejects.toThrow('CPA did not retain the routing profile');
+    const sent = mocks.patch.mock.calls[0][1].routing['key-profiles'][RAW_KEY];
+    expect(codexBody(sent)).not.toHaveProperty('speed');
+  });
+
+  it('tells whether a Codex block already holds every value of a patch', () => {
+    const codex = { ...defaultProviderRouting(), speed: 'fast' as const };
+    expect(holdsCodexSpeed(codex, { speed: 'fast' })).toBe(true);
+    expect(holdsCodexSpeed(codex, { ignoreClientTier: false })).toBe(true);
+    expect(holdsCodexSpeed(codex, { speed: 'fast', ignoreClientTier: true })).toBe(false);
+    expect(holdsCodexSpeed(codex, { speed: 'ultrafast' })).toBe(false);
+  });
+
+  it('a shared speed patch carries only the changed Codex fields', () => {
+    expect(sharedCodexSpeedPatch({ speed: 'ultrafast' })).toEqual({
+      routing: { providers: { codex: { speed: 'ultrafast' } } },
+    });
+    expect(sharedCodexSpeedPatch({ ignoreClientTier: true })).toEqual({
+      routing: { providers: { codex: { 'ignore-client-tier': true } } },
+    });
+  });
+
+  it('a key speed patch carries only the changed Codex fields of that key profile', () => {
+    expect(keyCodexSpeedPatch(RAW_KEY, { speed: 'fast', ignoreClientTier: true })).toEqual({
+      routing: {
+        'key-profiles': {
+          [RAW_KEY]: { providers: { codex: { speed: 'fast', 'ignore-client-tier': true } } },
+        },
+      },
+    });
+  });
+
+  it('saves only a key speed, conditional on the version, and verifies that field alone', async () => {
+    mocks.patch.mockResolvedValue({});
+    // The key profile's session affinity differs from the one the panel loaded; the
+    // write neither sends nor checks it.
+    const stored = speedResponse('standard', 'ultrafast');
+    const key = stored.keys[0] as { key: string; profile: Record<string, unknown> };
+    key.profile['session-affinity'] = true;
+    routeGets(stored);
+    const state = await routingProfilesApi.saveKeyCodexSpeed(
+      RAW_KEY,
+      { speed: 'ultrafast' },
+      '"v1"'
+    );
+    expect(state.keys[0].profile.providers.codex.speed).toBe('ultrafast');
+    expect(mocks.patch).toHaveBeenCalledExactlyOnceWith(
+      '/config',
+      keyCodexSpeedPatch(RAW_KEY, { speed: 'ultrafast' }),
+      { headers: { 'If-Match': '"v1"' } }
+    );
+    assertNoKeyInRequests();
+  });
+
+  it('rejects a key speed the backend did not retain, or a key without a profile after it', async () => {
+    mocks.patch.mockResolvedValue({});
+    routeGets(speedResponse('fast', 'standard'));
+    await expect(
+      routingProfilesApi.saveKeyCodexSpeed(RAW_KEY, { speed: 'fast' }, '"v1"')
+    ).rejects.toThrow('CPA did not retain the routing profile');
+    // The shared profile holds the speed, but the key no longer has its own profile.
+    routeGets(speedResponse('fast', null));
+    await expect(
+      routingProfilesApi.saveKeyCodexSpeed(RAW_KEY, { speed: 'fast' }, '"v1"')
+    ).rejects.toThrow('CPA did not retain the routing profile');
+  });
+
+  it('never sends a key speed without a config version', async () => {
+    await expect(
+      routingProfilesApi.saveKeyCodexSpeed(RAW_KEY, { speed: 'fast' }, '')
+    ).rejects.toThrow('A key speed write needs a config version');
+    expect(mocks.patch).not.toHaveBeenCalled();
+  });
+
+  it('maps a 412 on a key speed write to ConfigChangedError and reads nothing back', async () => {
+    mocks.patch.mockRejectedValue({ status: 412, apiCode: 'precondition_failed' });
+    await expect(
+      routingProfilesApi.saveKeyCodexSpeed(RAW_KEY, { speed: 'fast' }, '"v1"')
+    ).rejects.toBeInstanceOf(ConfigChangedError);
+    expect(mocks.get).not.toHaveBeenCalled();
+  });
+
+  it('scrubs the key from a 422 on a key speed write', async () => {
+    mocks.patch.mockRejectedValue({
+      status: 422,
+      apiCode: 'invalid_config',
+      message: `routing.key-profiles.${RAW_KEY}: bad`,
+    });
+    const error = await routingProfilesApi
+      .saveKeyCodexSpeed(RAW_KEY, { speed: 'fast' }, '"v1"')
+      .catch((e) => e);
+    expect(error).toBeInstanceOf(InvalidRoutingConfigError);
+    expect(error.message).not.toContain(RAW_KEY);
+  });
+
+  describe('a copy of the Default profile for a key', () => {
+    /** The profiles the copy is built from: the Default is Fast, the key owns no profile. */
+    const loadedRaw = () => speedResponse('fast', null);
+    const from = () => readRoutingProfiles(loadedRaw());
+    /** The Default with Ultrafast, as the speed table builds it for the key. */
+    const copy = (): RoutingProfile => {
+      const profile = from().shared;
+      profile.providers.codex.speed = 'ultrafast';
+      return profile;
+    };
+    /** The version written: the key holds the copy, and the Default is the one copied. */
+    const written = () => speedResponse('fast', 'ultrafast');
+    /** The version the empty write loaded holds another Default than the one copied. */
+    const newerDefault = () => {
+      const profiles = loadedRaw();
+      return { ...profiles, shared: { ...profiles.shared, 'session-affinity': false } };
+    };
+    const writeResponse = (etag?: string) => ({ headers: etag ? { etag } : {}, data: {} });
+    /** The empty write answers with `"v2"`; the copy is accepted. */
+    const writes = () => {
+      mocks.patchRaw.mockResolvedValueOnce(writeResponse('"v2"'));
+      mocks.patch.mockResolvedValue({});
+    };
+    const copyWrite = () => [
+      '/config',
+      keyProfilePatch(RAW_KEY, copy(), options, true, true),
+      { headers: { 'If-Match': '"v2"' } },
+    ];
+    /**
+     * `/routing/profiles` answers each read with the next value, the last one repeating;
+     * an `Error` or a `{status}` object is thrown instead.
+     */
+    const readsInTurn = (...answers: unknown[]) => {
+      let index = 0;
+      mocks.get.mockImplementation(async (url: string) => {
+        if (url !== '/routing/profiles') throw new Error(`unexpected GET ${url}`);
+        const answer = answers[Math.min(index++, answers.length - 1)];
+        if (answer instanceof Error || (typeof answer === 'object' && answer && 'status' in answer))
+          throw answer;
+        return answer;
+      });
+    };
+    it('checks the Default of the version named, then writes the complete copy into it and verifies it', async () => {
+      writes();
+      readsInTurn(loadedRaw(), written());
+      const state = await routingProfilesApi.saveKeyDefaultCopy(RAW_KEY, copy(), from(), '"v1"');
+      expect(state.keys[0].profile.providers.codex.speed).toBe('ultrafast');
+      // First a write that changes nothing makes CPA load the version the copy was
+      // decided on; the copy then names the version that write produced.
+      expect(mocks.patchRaw).toHaveBeenCalledExactlyOnceWith(
+        '/config',
+        {},
+        { headers: { 'If-Match': '"v1"' } }
+      );
+      expect(mocks.patch).toHaveBeenCalledExactlyOnceWith(...copyWrite());
+      expect(mocks.get).toHaveBeenCalledTimes(2);
+      assertNoKeyInRequests();
+    });
+
+    it('writes no copy of a Default CPA had not loaded yet', async () => {
+      // One edit of the file added the key and changed the Default; CPA had not reloaded
+      // it, so the copy was built from the old Default. The empty write loads the version
+      // named, whose Default is not the one copied: the key never gets the copy.
+      writes();
+      readsInTurn(newerDefault());
+      await expect(
+        routingProfilesApi.saveKeyDefaultCopy(RAW_KEY, copy(), from(), '"v1"')
+      ).rejects.toBeInstanceOf(ConfigChangedError);
+      expect(mocks.patchRaw).toHaveBeenCalledExactlyOnceWith(
+        '/config',
+        {},
+        {
+          headers: { 'If-Match': '"v1"' },
+        }
+      );
+      expect(mocks.patch).not.toHaveBeenCalled();
+      // Nor when the version loaded already gives the key a profile.
+      mocks.patchRaw.mockReset();
+      writes();
+      readsInTurn(written());
+      await expect(
+        routingProfilesApi.saveKeyDefaultCopy(RAW_KEY, copy(), from(), '"v1"')
+      ).rejects.toBeInstanceOf(ConfigChangedError);
+      expect(mocks.patchRaw).toHaveBeenCalledTimes(1);
+      assertNoKeyInRequests();
+    });
+
+    it('writes no copy once the version loaded no longer uses key profiles or the speed', async () => {
+      // A scheduler plugin took over routing, or the backend lost the speed, between the
+      // reread and the empty write: a copy would wait unseen and apply once it is gone.
+      // A Standard Default reads the same without `speed`, so only the capability differs.
+      const standardRaw = () => speedResponse('standard', null);
+      const standardCopy = readRoutingProfiles(standardRaw()).shared;
+      standardCopy.providers.codex.speed = 'ultrafast';
+      const withoutSpeed = structuredClone(standardRaw()) as {
+        shared: { providers: { codex: Record<string, unknown> } };
+      };
+      delete withoutSpeed.shared.providers.codex.speed;
+      expect(readRoutingProfiles(withoutSpeed).shared).toEqual(
+        readRoutingProfiles(standardRaw()).shared
+      );
+      for (const [version, before, sent] of [
+        [{ ...loadedRaw(), supported: false }, from(), copy()],
+        [withoutSpeed, readRoutingProfiles(standardRaw()), standardCopy],
+      ] as const) {
+        mocks.patchRaw.mockReset();
+        writes();
+        readsInTurn(version);
+        await expect(
+          routingProfilesApi.saveKeyDefaultCopy(RAW_KEY, sent, before, '"v1"')
+        ).rejects.toBeInstanceOf(ConfigChangedError);
+        expect(mocks.patchRaw).toHaveBeenCalledExactlyOnceWith(
+          '/config',
+          {},
+          { headers: { 'If-Match': '"v1"' } }
+        );
+      }
+      expect(mocks.patch).not.toHaveBeenCalled();
+      assertNoKeyInRequests();
+    });
+
+    it('never writes without a version, and maps a 412 to ConfigChangedError', async () => {
+      await expect(
+        routingProfilesApi.saveKeyDefaultCopy(RAW_KEY, copy(), from(), '')
+      ).rejects.toThrow('A key speed write needs a config version');
+      expect(mocks.patchRaw).not.toHaveBeenCalled();
+      mocks.patchRaw.mockRejectedValue({ status: 412, apiCode: 'precondition_failed' });
+      await expect(
+        routingProfilesApi.saveKeyDefaultCopy(RAW_KEY, copy(), from(), '"v1"')
+      ).rejects.toBeInstanceOf(ConfigChangedError);
+      expect(mocks.patchRaw).toHaveBeenCalledTimes(1);
+      expect(mocks.get).not.toHaveBeenCalled();
+      expect(mocks.patch).not.toHaveBeenCalled();
+    });
+
+    it('writes no copy when the empty write names no version', async () => {
+      for (const etag of [undefined, 'W/"v2"', '*']) {
+        mocks.patchRaw.mockReset();
+        mocks.patchRaw.mockResolvedValueOnce(writeResponse(etag));
+        await expect(
+          routingProfilesApi.saveKeyDefaultCopy(RAW_KEY, copy(), from(), '"v1"')
+        ).rejects.toBeInstanceOf(ConfigVersionUnavailableError);
+        expect(mocks.patchRaw).toHaveBeenCalledTimes(1);
+      }
+      expect(mocks.get).not.toHaveBeenCalled();
+    });
+
+    it('says the key may keep a copy whose write got no answer', async () => {
+      // CPA may have saved it, and without its answer nothing confirms it.
+      // CPA's `write_failed` also follows a write whose bytes reached the file when only
+      // the sync or close failed, so the hot reload can still load the copy.
+      const refusedCopy = (failure: unknown) => {
+        mocks.patchRaw.mockReset().mockResolvedValueOnce(writeResponse('"v2"'));
+        mocks.patch.mockReset().mockRejectedValueOnce(failure);
+        readsInTurn(loadedRaw());
+      };
+      for (const failure of [
+        new Error('timeout of 30000ms exceeded'),
+        { status: 504 },
+        { status: 500, apiCode: 'write_failed', message: 'sync: input/output error' },
+      ]) {
+        refusedCopy(failure);
+        await expect(
+          routingProfilesApi.saveKeyDefaultCopy(RAW_KEY, copy(), from(), '"v1"')
+        ).rejects.toBeInstanceOf(DefaultCopyUnconfirmedError);
+        expect(mocks.patch).toHaveBeenCalledExactlyOnceWith(...copyWrite());
+      }
+      // CPA's own refusals keep their meaning: nothing was written.
+      refusedCopy({ status: 412, apiCode: 'precondition_failed' });
+      await expect(
+        routingProfilesApi.saveKeyDefaultCopy(RAW_KEY, copy(), from(), '"v1"')
+      ).rejects.toBeInstanceOf(ConfigChangedError);
+      refusedCopy({
+        status: 422,
+        apiCode: 'invalid_config',
+        message: `routing.key-profiles.${RAW_KEY}: bad`,
+      });
+      const error = await routingProfilesApi
+        .saveKeyDefaultCopy(RAW_KEY, copy(), from(), '"v1"')
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(InvalidRoutingConfigError);
+      expect((error as Error).message).not.toContain(RAW_KEY);
+      // A 500 CPA sends before it writes, such as a failed read of the file, is a refusal.
+      const readFailed = { status: 500, apiCode: 'read_failed' };
+      refusedCopy(readFailed);
+      await expect(
+        routingProfilesApi.saveKeyDefaultCopy(RAW_KEY, copy(), from(), '"v1"')
+      ).rejects.toBe(readFailed);
+      expect(mocks.patch).toHaveBeenCalledTimes(1);
+    });
+
+    it('reports a copy CPA did not retain as unconfirmed and deletes nothing', async () => {
+      // CPA names the version of its answer by a new read of the file, so a delete
+      // conditional on it could remove a profile another writer gave the key meanwhile.
+      for (const readBack of [speedResponse('fast', 'fast'), { status: 404 }]) {
+        mocks.patch.mockReset();
+        writes();
+        readsInTurn(loadedRaw(), readBack);
+        await expect(
+          routingProfilesApi.saveKeyDefaultCopy(RAW_KEY, copy(), from(), '"v1"')
+        ).rejects.toBeInstanceOf(DefaultCopyUnconfirmedError);
+        // The copy is the only write after the empty one.
+        expect(mocks.patch).toHaveBeenCalledExactlyOnceWith(...copyWrite());
+      }
+      assertNoKeyInRequests();
+    });
+
+    it('reports a copy whose read-back fails as unconfirmed and deletes nothing', async () => {
+      writes();
+      readsInTurn(loadedRaw(), new Error('Network down'));
+      await expect(
+        routingProfilesApi.saveKeyDefaultCopy(RAW_KEY, copy(), from(), '"v1"')
+      ).rejects.toBeInstanceOf(DefaultCopyUnconfirmedError);
+      expect(mocks.patch).toHaveBeenCalledExactlyOnceWith(...copyWrite());
+      assertNoKeyInRequests();
+    });
+
+    it('reports a copy that landed beside another Default as unconfirmed', async () => {
+      // An edit of the file right after CPA wrote the empty write gave its answer the
+      // edited file's version, so the copy passed `If-Match` and landed beside a Default
+      // it did not copy, which the read-back shows.
+      writes();
+      const beside = written();
+      readsInTurn(loadedRaw(), {
+        ...beside,
+        shared: { ...beside.shared, 'session-affinity': false },
+      });
+      await expect(
+        routingProfilesApi.saveKeyDefaultCopy(RAW_KEY, copy(), from(), '"v1"')
+      ).rejects.toBeInstanceOf(DefaultCopyUnconfirmedError);
+      expect(mocks.patch).toHaveBeenCalledExactlyOnceWith(...copyWrite());
+    });
+
+    it('raises no unconfirmed copy on another connection when the read-back fails after a switch', async () => {
+      writes();
+      let reads = 0;
+      mocks.get.mockImplementation(async () => {
+        reads += 1;
+        if (reads === 1) return loadedRaw();
+        mocks.revision += 1;
+        throw new Error('Network down');
+      });
+      await expect(
+        routingProfilesApi.saveKeyDefaultCopy(RAW_KEY, copy(), from(), '"v1"')
+      ).rejects.toMatchObject({ name: 'AbortError' });
+      expect(mocks.patch).toHaveBeenCalledExactlyOnceWith(...copyWrite());
+    });
+  });
+
+  it('saves only the shared speed and verifies that field alone on read-back', async () => {
+    mocks.patch.mockResolvedValue({});
+    // Another field of the shared profile changed elsewhere; the check does not mind it.
+    routeGets({
+      ...speedResponse('ultrafast', null),
+      shared: { ...speedResponse('ultrafast', null).shared, 'session-affinity': false },
+    });
+    const state = await routingProfilesApi.saveSharedCodexSpeed({ speed: 'ultrafast' });
+    expect(state.shared.providers.codex.speed).toBe('ultrafast');
+    expect(state.shared.sessionAffinity).toBe(false);
+    expect(mocks.patch).toHaveBeenCalledExactlyOnceWith('/config', {
+      routing: { providers: { codex: { speed: 'ultrafast' } } },
+    });
+  });
+
+  it('rejects a shared speed the backend did not retain or no longer serves', async () => {
+    mocks.patch.mockResolvedValue({});
+    routeGets(speedResponse('standard', null));
+    await expect(routingProfilesApi.saveSharedCodexSpeed({ speed: 'fast' })).rejects.toThrow(
+      'CPA did not retain the routing profile'
+    );
+    routeGets(providersResponse({}, []));
+    await expect(routingProfilesApi.saveSharedCodexSpeed({ speed: 'standard' })).rejects.toThrow(
+      'CPA did not retain the routing profile'
+    );
+  });
+
+  it('turns a 422 on a shared speed write into an invalid config error', async () => {
+    mocks.patch.mockRejectedValue({ status: 422, apiCode: 'invalid_config', message: 'bad' });
+    await expect(routingProfilesApi.saveSharedCodexSpeed({ speed: 'fast' })).rejects.toBeInstanceOf(
+      InvalidRoutingConfigError
+    );
     expect(mocks.get).not.toHaveBeenCalled();
   });
 });

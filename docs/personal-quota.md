@@ -12,7 +12,8 @@ selection slots, and per provider a Subscription or API key mode, a preferred
 subscription and a fallback to a Codex subscription (Claude only) or to the profile's
 API key, or the legacy routing strategy on older backends); routing profiles per
 client API key;
-adding and deleting client API keys; Codex Fast Mode;
+adding and deleting client API keys; the Codex speed (Standard, Fast or Ultrafast)
+of every routing profile, with a speed table for the Default profile and every key;
 per-account soft/hard quota reserves; Codex reset credits and Claude reset grants
 with expiry dates; inline reset confirmation; CPA cooldown clearing after a
 confirmed reset; refresh on entry; and privacy masking.
@@ -149,11 +150,41 @@ key with a matching entry is shown as `<prefix or CPA label> · <masked key>`, p
 load, as `<CPA label> · <first 8 characters of auth_index>`. Raw upstream keys are
 reduced to masks as soon as the lists load and never reach the rendered page.
 
+**Codex speed.** On a backend that reports `speed` in the Codex block, the Codex
+block of every profile editor has a **Speed** row below the fallback:
+
+- **Standard**, **Fast** or **Ultrafast**, the service tier CPA requests for Codex
+  subscription traffic of that profile. Ultrafast applies to models that offer it;
+  models that offer only Fast use Fast, and other models get no speed tier.
+- **Ignore the tier the client sends.** On: the profile's speed applies even when the
+  client asks for its own tier. Off: the client's tier is used when one is left after
+  CPA translates the request, and the profile's speed applies otherwise. The
+  translation of a Responses request maps `fast` to `priority` and drops tiers it does
+  not know, such as `flex` and `auto`, so such a request gets the profile's speed.
+
+The row is disabled in API key mode, with an explanation: the profile neither sets
+nor overrides the tier of requests billed to an API key. The stored values stay in
+the profile and are shown, so switching back to Subscription restores them. The exception is a profile whose Claude
+falls back to Codex: CPA runs that fallback on Codex subscriptions with the profile's
+Codex speed, so the row stays enabled in Codex API key mode, with a note that the
+speed applies only to those Claude requests. In Home mode or with a scheduler plugin
+(`supported: false`) the Default profile's row stays enabled even with a stored API
+key mode, because CPA ignores the mode there and keeps applying the default speed. Subscription mode with an API-key
+fallback keeps the row enabled. The Claude block has no speed. Both fields are saved
+as `speed` and `ignore-client-tier` in the Codex block, together with the rest of the
+profile. A profile that does not set them runs Codex at Standard with the client's
+tier respected; since a key profile replaces the default profile completely, a new
+key profile starts with the default profile's speed and flag (see
+[Routing profiles per API key](#routing-profiles-per-api-key)). On a backend without
+`speed` the panel shows no speed controls and sends neither field.
+
 **Chain summary.** The profile list, the Keys modal and the editor footer show one
 entry per provider: `Claude: <preferred or Automatic> → Codex`, `Claude: Codex
 (forced)` (Force Codex now), `<Provider>: <preferred or Automatic> → API key`,
 `<Provider>: API key <label>` (API key mode), `<Provider>: API key not chosen`, and
-`<Provider>: <preferred or Automatic>` when the fallback is off.
+`<Provider>: <preferred or Automatic>` when the fallback is off. In Subscription
+mode a Codex speed of Fast or Ultrafast is added to the provider name, as in
+`Codex (Fast): Automatic → API key`.
 
 On a backend without per-provider routing the panel derives the blocks from
 `claude-fallback` (Subscription mode, target Codex or Off), disables the mode control
@@ -168,8 +199,7 @@ On a backend with routing profiles, the fallback is part of each routing profile
 the Claude block of the default profile and of every key profile has the Codex
 target (see [Per-provider mode and API-key fallback](#per-provider-mode-and-api-key-fallback)),
 saved together with the rest of that profile. On a backend without routing profiles,
-the legacy Quota toolbar includes **Claude → Codex fallback** beside Codex Fast mode;
-its switch applies immediately and preserves the mappings and selected mode when
+the legacy Quota toolbar includes **Claude → Codex fallback**; its switch applies immediately and preserves the mappings and selected mode when
 turned off, and its settings button opens the model mapping editor. Initial suggestions
 are `claude-opus-* → gpt-6-astra`, `claude-sonnet-* → gpt-6-sol`, and
 `claude-fable-* → gpt-6-astra`; they are editable and are saved only on user action.
@@ -223,7 +253,8 @@ routing:
 ## Routing profiles per API key
 
 CPA routes each client API key through a profile: sticky session and pool selection,
-then for Claude and Codex each the mode, the preferred subscription and the fallback
+then for Claude and Codex each the mode, the preferred subscription and the fallback,
+plus the Codex speed and the ignore-client-tier flag
 (see [Per-provider mode and API-key fallback](#per-provider-mode-and-api-key-fallback);
 an older backend has a preferred subscription per provider and the Claude → Codex
 fallback). A key without its own profile uses the default profile, which is the
@@ -231,23 +262,27 @@ global routing configuration. A key profile is a full copy: nothing is inherited
 from the default.
 
 **Toolbar.** On a backend that serves `GET /v8/management/routing/profiles`, the
-Quota toolbar holds only Codex Fast mode, the last-routed indicator for each
+Quota toolbar holds only the Codex speed button, the last-routed indicator for each
 provider (the provider, the time of the latest selection, and the account in its
 tooltip), and two buttons:
 
 ```text
-[Codex Fast mode] [Codex ● 10:52] [Claude ● 10:53] [Profiles] [Keys · 2]
+[Codex speed: Fast] [Codex ● 10:52] [Claude ● 10:53] [Profiles] [Keys · 2]
 ```
 
+**Codex speed: <speed>** names the default profile's Codex speed and opens the
+[speed table](#codex-speed-table); a backend without `speed` has no such button.
 **Profiles** opens the routing profiles modal. **Keys · N** opens the client keys
 modal, where N is the number of client keys in `access.api-keys`. The
 shared-profile controls (selection slots, session
 affinity, TTL, preferred subscriptions, fallback switch and Save) are no longer in
 the toolbar; the default profile is edited only in the Profiles modal, so it has a
-single writer. Both buttons are disabled until the first profiles load finishes. If
-that load fails, they are enabled anyway, so the modal can show the error and a
-retry button. Opening either modal reloads the profiles, and only one modal is open
-at a time.
+single writer. **Profiles** and **Keys** are disabled until the first profiles load
+finishes. If that load fails, they are enabled anyway, so the modal can show the
+error and a retry button. The **Codex speed** button appears only once a load has
+reported `speed`, so it is missing before the first load and after a failed one.
+Opening any of the three modals reloads the profiles, and only one modal is open at
+a time.
 
 **Profiles modal.** The modal lists:
 
@@ -274,8 +309,9 @@ at a time.
   for confirmation, then deletes the key's profile with a `null` PATCH.
 - **+ Profile for a key**, which picks a key that still uses the default and opens a
   new profile for it, started from a copy of the default profile. Sticky sessions,
-  the provider modes and the fallbacks stay as they were until changed; an empty
-  profile would silently turn them off.
+  the provider modes, the fallbacks and the Codex speed and flag stay as they were
+  until changed; an empty profile would silently turn them off and run Codex at
+  Standard.
 
 Only one editor is open at a time. In every editor, pool selection has two slots,
 **Primary** and **On a tie**. Each accepts a narrowing criterion (Priority,
@@ -303,8 +339,9 @@ select, the chain summary, **Configure…** for a key with its own profile, and
   alias. The last client key cannot be deleted. A key is not deleted while the
   panel host is still being checked or cannot be confirmed, or, on a panel served by
   the Manager Server, while the alias list is loading or did not load. Such a refused
-  delete, **Refresh**, and opening either modal load an alias list that did not load
-  again, so a retry passes once the Manager Server answers.
+  delete, **Refresh**, and opening any of the three modals (Profiles, Keys, Codex
+  speed) load an alias list that did not load again, so a retry passes once the
+  Manager Server answers.
 - The **Add a key** form at the bottom has a key field (hidden by default, with a
   show toggle), **Generate**, **Copy**, an optional **Alias**, and **Add**. A key may
   contain only visible ASCII characters without spaces, and a key already in the
@@ -350,12 +387,103 @@ paths to its log. Account names in the summaries follow the email privacy toggle
 Upstream API keys chosen in the provider blocks are named as described in
 [API key labels](#per-provider-mode-and-api-key-fallback).
 
+<a id="codex-speed-table"></a>**Codex speed table.** The table lists the
+**Default profile** first, then every client key in configuration order, labeled
+as in the Keys modal (alias, CP name or mask; never the raw key). Each row shows the
+effective Codex speed and **Ignore client tier** flag: the key's own values, or the
+default profile's when the key has no profile, and a **Default** / **Own profile**
+badge on key rows. Each row has three speed buttons (Standard, Fast, Ultrafast) and
+the flag switch; a click applies at once, without confirmation. A speed button is
+activated only by a click, Enter or Space; arrow keys do nothing, so no keyboard
+navigation writes.
+
+- A change on the Default row saves the changed field of the default profile.
+- A change on a key with its own profile saves the new value into that profile.
+- A change on a key marked **Default** gives the key its own profile: a full copy of
+  the default profile with the new value, because a key profile is a full copy and
+  nothing is inherited from the default. The badge then reads **Own profile**. A
+  key is returned to the default profile in the Keys modal.
+
+Every save first reads the stored profiles again and decides on them, not on the
+values the table was opened with. It writes nothing, and shows the stored values,
+when the row's speed is no longer used (Codex moved to API key mode without a Claude
+fallback to Codex) or the row already gets the clicked value, so a key marked
+**Default** keeps the default profile when that already has the speed. Otherwise
+the Default row sends only the changed field with one `PATCH /v8/management/config`;
+PATCH merges objects, so every other field of the default profile, also one changed
+in another tab, is kept, and the read-back checks that field. A key row write is
+conditional: the panel reads the config (`GET /v8/management/config`) before it
+reads the profiles again and sends its `ETag` as `If-Match`, so when the config
+changed in between (another tab moved the key's preferred account or deleted its
+profile), CPA answers 412, nothing is written, and the table shows the error and
+the reloaded values. A key that owns a profile in that config gets only the changed
+field, merged into its stored profile and checked on read-back: the `If-Match`
+guarantees the profile still exists, so the merge cannot create a profile holding
+only the speed, and no other field is sent. A key marked **Default** gets a complete
+copy of the stored default profile with the new value, read back as the editors do.
+The config read comes from the file and the profiles from the configuration CPA has
+loaded; after an edit of the file they differ until CPA reloads it. When they
+disagree on whether the key owns a profile, nothing is written and the table shows
+the same error. A copy could still come from a default profile that such an edit has
+changed, for example one edit that adds the key and moves the default profile to
+another account, and would then route the key's requests to the old account. So
+before a copy the panel sends an empty `PATCH`, conditional on the version it read:
+a write makes CPA load the version it writes, so the profiles read after it show the
+default profile of that version. When that is not the one copied, or that version no
+longer uses key profiles (a scheduler plugin took over routing) or no longer serves the
+speed, nothing else is written and the table shows the same error; otherwise the copy
+is written,
+conditional on the version the empty write produced. When the copy's read-back fails,
+or shows another profile for the key or another default profile beside the copy, or
+the copy's own write failed without proof that CPA refused it (a timeout, a proxy's
+502 or 504, or CPA's 500 `write_failed`, which CPA also sends when the bytes reached
+the file and only the sync failed), CPA may have kept the copy; the error then says
+that the key may have its own profile, a copy that could not be confirmed, and the
+reloaded table shows whether it has. The panel does not delete such a copy: CPA names
+the version in its answer to a write by reading the file again, so an edit of the file
+made right then could give a delete conditional on that version another writer's file,
+and the delete would remove the profile that writer gave the key. **Reset to default**
+in the Keys modal returns the key to the default profile. The same answer is why the
+read-back also compares the default profile: in that race the copy can land beside a
+default profile it did not copy. When the reload after a failed write fails too, the
+table keeps the rows of the earlier load and the error adds that the values shown may
+be out of date; the write's error stays shown until a reload succeeds, also when
+**Refresh** fails again. A click on a key that the config read no longer
+lists, because it was deleted elsewhere, writes nothing, shows that the key was
+removed and reloads the key list, also when the click would change nothing. When the config read
+carries no usable version (no `ETag`; a weak one, as a compressing proxy makes it,
+while CPA matches `If-Match` strongly; or `*` or a list of tags, which CPA would
+match against a newer config), a key row is not written at all and the table says
+why: unconditional, the write could undo a change saved elsewhere after the reread
+or bring back a deleted profile. Every CPA that serves the speed sends one strong
+`ETag`, so this only happens when something between the panel and CPA changes it;
+the key's profile editor still saves. A speed table save is refused, with the reason
+and nothing written, while the default profile, or for a key that owns a profile also
+that profile, keeps its Claude fallback in the old `claude-fallback` block beside an
+empty `providers.claude.fallback` (a hand edit of the file can leave this shape). CPA
+reads the fallback from the old block there, but drops that block on any write that
+names the profile, the default profile on every routing write, and the fallback turns
+off; a save of the whole profile in the editor sends the fallback and keeps it, so the
+error asks to save that profile once in Profiles first. While a save runs,
+every control is disabled. The rows always show the stored values: after a failed write the error is
+shown above the table and the row keeps its stored speed. A row whose Codex mode is
+API key is disabled with the reason, unless the profile's Claude falls back to Codex:
+then the row stays editable, with a note that the speed applies only to that fallback.
+In Home mode or with a scheduler plugin
+(`supported: false`) the key rows are read-only and show the default profile's
+speed and flag, which every request gets there, also for a key with its own profile;
+the Default row stays editable, also with a stored API key mode, because CPA ignores
+the mode there and keeps applying the default profile's speed. If a reload while the table is open
+reports a backend without `speed`, the table shows a note in place of its rows and
+offers no control, since a save there could not carry the speed.
+
 **Read-only mode and older backends.** In Home mode or with a scheduler plugin, CPA
 reports `supported: false`: per-key profiles are inactive. The toolbar is still the
 slim one. In the Profiles modal the key rows are read-only and **Reset to default**
 and **+ Profile for a key** are hidden. The Default row stays editable except the
 mode and fallback of both provider blocks, which CPA ignores in this mode; the
-preferred subscriptions stay editable, and a Save keeps the stored mode and fallback. In the
+preferred subscriptions and the Codex speed stay editable, and a Save keeps the
+stored mode and fallback. In the
 Keys modal the profile select is read-only, while adding and deleting keys stay
 available. A backend without `GET /v8/management/routing/profiles` (404) keeps
 the legacy toolbar: the legacy strategy select, sticky-session
@@ -368,7 +496,10 @@ Subscription mode and the Codex target, and Save writes `claude-fallback`.
 This requires the custom CPA backend with per-key routing profiles
 ([echeg/CLIProxyAPI](https://github.com/echeg/CLIProxyAPI) `main` at `ced98b16`
 or later); API key mode and the API-key fallback also need a build with
-`routing.providers` and `api_credentials`. The Manager Server forwards the new
+`routing.providers` and `api_credentials`, and the Codex speed needs a build with
+`speed` in the provider blocks, which replaced the global
+`oauth.providers.codex.fast-mode` flag (the panel no longer calls that path). The
+Manager Server forwards the new
 endpoint unchanged. Profiles are stored under `routing.key-profiles`, keyed by the
 exact client key. A provider block without `mode` means `subscription`, without a
 fallback `target` means `off`, and a fallback without `mode` means `auto`;
@@ -382,7 +513,12 @@ routing:
     claude:
       mode: subscription
       fallback: {target: codex, mode: auto, mappings: [{from: claude-opus-*, to: gpt-6-astra}]}
-    codex: {mode: api, api-credential: "codex-key-auth-index", fallback: {target: "off"}}
+    codex:
+      mode: api
+      api-credential: "codex-key-auth-index"
+      fallback: {target: "off"}
+      speed: fast # standard, fast or ultrafast; in API key mode it applies only to Claude's fallback to Codex
+      ignore-client-tier: false
   key-profiles:
     "client-key-a":
       session-affinity: false
@@ -390,6 +526,7 @@ routing:
       selection: {primary: priority, tiebreak: round-robin}
       providers:
         claude: {api-credential: "claude-key-auth-index", fallback: {target: api}}
+        codex: {mode: subscription, speed: ultrafast, ignore-client-tier: true}
 ```
 
 An older backend stores the Claude fallback of a profile as

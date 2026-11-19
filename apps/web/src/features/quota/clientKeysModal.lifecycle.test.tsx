@@ -63,6 +63,7 @@ const profilesState = (overrides: Partial<RoutingProfilesState> = {}): RoutingPr
   supported: true,
   unsupportedBackend: false,
   providersSupported: true,
+  speedSupported: true,
   apiCredentials: { claude: [], codex: [] },
   shared: shared(),
   keys: [{ key: RAW_BETA, profile: betaProfile() }],
@@ -206,6 +207,8 @@ describe('client keys modal rows', () => {
           mode: 'api',
           apiCredential: 'codex-key-idx',
           fallback: { target: 'off', mode: 'auto', mappings: [] },
+          speed: 'standard',
+          ignoreClientTier: false,
         },
       },
     };
@@ -213,7 +216,9 @@ describe('client keys modal rows', () => {
       keys: [{ key: RAW_BETA, profile: apiProfile }],
       apiCredentials: {
         claude: [],
-        codex: [{ authIndex: 'codex-key-idx', label: 'codex-apikey', baseUrl: '', disabled: false }],
+        codex: [
+          { authIndex: 'codex-key-idx', label: 'codex-apikey', baseUrl: '', disabled: false },
+        ],
       },
     });
     keyProfiles = makeKeyProfiles(state, {

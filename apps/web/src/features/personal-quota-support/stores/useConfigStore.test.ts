@@ -36,21 +36,21 @@ describe('personal quota config cache', () => {
     mocks.getConfig.mockReturnValue(result.promise);
     const first = useConfigStore.getState().fetchConfig();
     const second = useConfigStore.getState().fetchConfig();
-    result.resolve({ codexFastMode: false });
-    await expect(first).resolves.toEqual({ codexFastMode: false });
-    await expect(second).resolves.toEqual({ codexFastMode: false });
+    result.resolve({ routingSessionAffinity: false });
+    await expect(first).resolves.toEqual({ routingSessionAffinity: false });
+    await expect(second).resolves.toEqual({ routingSessionAffinity: false });
     expect(mocks.getConfig).toHaveBeenCalledTimes(1);
   });
 
   it('rejects old results after a connection switch and clears visible settings', async () => {
-    mocks.getConfig.mockResolvedValueOnce({ codexFastMode: true });
+    mocks.getConfig.mockResolvedValueOnce({ routingSessionAffinity: true });
     await useConfigStore.getState().fetchConfig();
     const result = deferred();
     mocks.getConfig.mockReturnValue(result.promise);
     const pending = useConfigStore.getState().fetchConfig(true);
     mocks.revision += 1;
     mocks.onConnectionChange?.();
-    result.resolve({ codexFastMode: false });
+    result.resolve({ routingSessionAffinity: false });
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
     expect(useConfigStore.getState().config).toBeNull();
     expect(useConfigStore.getState().isCacheValid()).toBe(false);
@@ -62,10 +62,10 @@ describe('personal quota config cache', () => {
     mocks.getConfig.mockReturnValueOnce(older.promise).mockReturnValueOnce(readback.promise);
     const pendingOld = useConfigStore.getState().fetchConfig();
     const pendingNew = useConfigStore.getState().fetchConfig(true);
-    readback.resolve({ codexFastMode: true });
+    readback.resolve({ routingSessionAffinity: true });
     await pendingNew;
-    older.resolve({ codexFastMode: false });
+    older.resolve({ routingSessionAffinity: false });
     await pendingOld;
-    expect(useConfigStore.getState().config?.codexFastMode).toBe(true);
+    expect(useConfigStore.getState().config?.routingSessionAffinity).toBe(true);
   });
 });

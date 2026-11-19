@@ -3,11 +3,11 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/features/quota/components/Select';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
+import type { CodexSpeed } from '@/features/personal-quota-support/services/api/routingProfiles';
 import type { SubscriptionActivity } from '@/features/personal-quota-support/services/api/subscriptionRouting';
 import type { AuthFileItem, ResolvedTheme } from '@/features/personal-quota-support/types';
 import { getQuotaDisplayName } from '@/features/quota/utils/quota/identity';
 import { useClaudeFallback } from '../hooks/useClaudeFallback';
-import { useCodexFastMode, type CodexFastModeState } from '../hooks/useCodexFastMode';
 import { useKeyProfiles } from '../hooks/useKeyProfiles';
 import { useSubscriptionActivity } from '../hooks/useSubscriptionActivity';
 import {
@@ -25,6 +25,7 @@ import {
 import { ProviderPill } from './ProviderPill';
 import { ClaudeFallbackControl } from './ClaudeFallbackControl';
 import { ClientKeysModal } from './ClientKeysModal';
+import { CodexSpeedModal } from './CodexSpeedModal';
 import { RoutingProfilesModal } from './RoutingProfilesModal';
 import styles from './QuotaSettingsToolbar.module.scss';
 
@@ -45,21 +46,26 @@ type RoutingProps = Pick<
   | 'reload'
 >;
 
-/** The Profiles and Keys buttons; set on a backend that serves `/routing/profiles`. */
+/**
+ * The Codex speed, Profiles and Keys buttons; set on a backend that serves
+ * `/routing/profiles`.
+ */
 export interface ProfileButtonsProps {
   /** All client keys. */
   total: number;
   disabled: boolean;
   onOpenProfiles: () => void;
   onOpenKeys: () => void;
+  /** The Default profile's Codex speed; unset on a backend without speed, so no button. */
+  codexSpeed?: CodexSpeed;
+  onOpenSpeed: () => void;
 }
 
 interface ToolbarProps {
   fallbackControl?: ReactNode;
-  /** Renders the slim toolbar: Fast mode, last-routed indicators, Profiles and Keys. */
+  /** Renders the slim toolbar: Codex speed, last-routed indicators, Profiles and Keys. */
   profileButtons?: ProfileButtonsProps;
   routing: RoutingProps;
-  fastMode: CodexFastModeState;
   activity: SubscriptionActivity[];
   activityState: ActivityState;
   files: AuthFileItem[];
@@ -122,13 +128,12 @@ function LastRouted({
 }
 
 /**
- * Subscription switching and Codex Fast mode as one compact row. With `profileButtons`
- * the shared routing controls live in the Profiles modal, so the row keeps only Fast
- * mode, the last-routed indicators and the Profiles and Keys buttons.
+ * Subscription switching as one compact row. With `profileButtons` the shared routing
+ * controls live in the Profiles modal, so the row keeps only the Codex speed button, the
+ * last-routed indicators and the Profiles and Keys buttons.
  */
 export function QuotaSettingsToolbar({
   routing,
-  fastMode,
   activity,
   activityState,
   files,
@@ -157,23 +162,6 @@ export function QuotaSettingsToolbar({
     />
   );
 
-  const fastModeSwitch = (
-    <div className={styles.group} title={t('quota_management.codex_fast.description')}>
-      <span
-        className={styles.switch}
-        data-switch="fast-mode"
-        data-state={fastMode.enabled ? 'on' : 'off'}
-      >
-        <ToggleSwitch
-          checked={fastMode.enabled ?? false}
-          disabled={disabled || fastMode.saving || fastMode.enabled === null}
-          onChange={(next) => void fastMode.toggle(next)}
-          label={t('quota_management.codex_fast.title')}
-        />
-      </span>
-    </div>
-  );
-
   if (profileButtons) {
     return (
       <section
@@ -182,9 +170,27 @@ export function QuotaSettingsToolbar({
         data-toolbar="slim"
         aria-label={t('quota_management.routing.title')}
       >
-        {fastModeSwitch}
+        {profileButtons.codexSpeed && (
+          <>
+            <div className={styles.group}>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                data-open-speed
+                disabled={profileButtons.disabled}
+                title={t('quota_management.codex_speed.button_hint')}
+                onClick={profileButtons.onOpenSpeed}
+              >
+                {t('quota_management.codex_speed.button', {
+                  speed: t(`quota_management.codex_speed.speed_${profileButtons.codexSpeed}`),
+                })}
+              </Button>
+            </div>
 
-        <span className={styles.separator} aria-hidden="true" />
+            <span className={styles.separator} aria-hidden="true" />
+          </>
+        )}
 
         {PROVIDERS.map((provider) => (
           <div className={styles.group} key={provider}>
@@ -217,12 +223,6 @@ export function QuotaSettingsToolbar({
             {t('quota_management.client_keys.button', { count: profileButtons.total })}
           </Button>
         </div>
-
-        {fastMode.error && (
-          <div className={styles.error} role="alert">
-            {showEmails ? fastMode.error : maskQuotaText(fastMode.error)}
-          </div>
-        )}
       </section>
     );
   }
@@ -310,10 +310,6 @@ export function QuotaSettingsToolbar({
         );
       })}
 
-      <span className={styles.separator} aria-hidden="true" />
-
-      {fastModeSwitch}
-
       {fallbackControl}
 
       <div className={styles.actions}>
@@ -334,13 +330,10 @@ export function QuotaSettingsToolbar({
         </Button>
       </div>
 
-      {(routing.error || fastMode.error) && (
+      {routing.error && (
         <div className={styles.error} role="alert">
-          {[routing.error, fastMode.error]
-            .filter(Boolean)
-            .map((message) => (showEmails ? message : maskQuotaText(message)))
-            .join(' · ')}{' '}
-          {routing.error && !values && (
+          {showEmails ? routing.error : maskQuotaText(routing.error)}{' '}
+          {!values && (
             <Button variant="secondary" size="sm" onClick={routing.reload}>
               {t('common.refresh')}
             </Button>
@@ -351,7 +344,7 @@ export function QuotaSettingsToolbar({
   );
 }
 
-type ModalName = 'keys' | 'profiles';
+type ModalName = 'keys' | 'profiles' | 'speed';
 
 /**
  * Which modal is open. `focus` is the raw key the Profiles modal opens on (memory only);
@@ -367,7 +360,7 @@ interface Navigation {
 
 const CLOSED: Navigation = { open: null, focusArmed: false, fromKeys: false };
 
-/** Wires the toolbar to live routing, fast mode, activity, fallback and key profile state. */
+/** Wires the toolbar to live routing, activity, fallback and key profile state. */
 export function QuotaSettingsBar({
   disabled,
   files,
@@ -386,7 +379,6 @@ export function QuotaSettingsBar({
   const routing = useSubscriptionRouting(disabled);
   // The fallback control of the legacy toolbar, and the model lists of the editors.
   const fallback = useClaudeFallback(disabled);
-  const fastMode = useCodexFastMode(disabled);
   const { activity, activityState } = useSubscriptionActivity(disabled);
   const [nav, setNav] = useState<Navigation>(CLOSED);
 
@@ -406,6 +398,7 @@ export function QuotaSettingsBar({
   };
   const openKeys = () => navigate({ open: 'keys', focusArmed: false, fromKeys: false });
   const openProfiles = () => navigate({ open: 'profiles', focusArmed: false, fromKeys: false });
+  const openSpeed = () => navigate({ open: 'speed', focusArmed: false, fromKeys: false });
   const openProfilesForKey = (key: string) =>
     navigate({ open: 'profiles', focus: key, focusArmed: false, fromKeys: true });
   const close = () => setNav(CLOSED);
@@ -414,12 +407,15 @@ export function QuotaSettingsBar({
   // target, so a backend with per-provider routing edits the fallback in the profiles only.
   // Like `slim`, it assumes such a backend until a load reports an older one.
   const showFallbackControl = Boolean(profilesState && !profilesState.providersSupported);
+  // No speed button until a load reports a backend that serves the Codex speed.
+  const codexSpeed = profilesState?.speedSupported
+    ? profilesState.shared.providers.codex.speed
+    : undefined;
 
   return (
     <>
       <QuotaSettingsToolbar
         routing={routing}
-        fastMode={fastMode}
         activity={activity}
         activityState={activityState}
         files={files}
@@ -442,6 +438,8 @@ export function QuotaSettingsBar({
                 disabled: buttonsDisabled,
                 onOpenProfiles: openProfiles,
                 onOpenKeys: openKeys,
+                codexSpeed,
+                onOpenSpeed: openSpeed,
               }
             : undefined
         }
@@ -465,6 +463,12 @@ export function QuotaSettingsBar({
             files={files}
             showEmails={showEmails}
             onOpenProfiles={openProfilesForKey}
+          />
+          <CodexSpeedModal
+            open={nav.open === 'speed'}
+            onClose={close}
+            keyProfiles={keyProfiles}
+            showEmails={showEmails}
           />
         </>
       )}
