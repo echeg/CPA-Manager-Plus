@@ -81,11 +81,11 @@
 - [x] run `npm run test:web` - must pass before task 5
 
 ### Task 5: Verify acceptance criteria
-- [ ] verify the four items of the Overview
-- [ ] run `npm run test:web`
-- [ ] run `npm run type-check`
-- [ ] run `npm run lint` - 0 errors and 0 warnings
-- [ ] run `npm run build` in `apps/web` and confirm the single-file panel builds
+- [x] verify the four items of the Overview
+- [x] run `npm run test:web`
+- [x] run `npm run type-check`
+- [x] run `npm run lint` - 0 errors and 0 warnings
+- [x] run `npm run build` in `apps/web` and confirm the single-file panel builds
 
 ### Task 6: [Final] Update documentation
 - [ ] update "How keys are shown" in `docs/personal-quota.md` for the new masking rule
