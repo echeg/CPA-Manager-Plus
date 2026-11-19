@@ -32,11 +32,16 @@ export function maskApiKey(key: string): string {
   return `${start}${masked}${end}`;
 }
 
-// The `sk-` and `sess-` prefixes must not follow a letter or digit, so words
-// such as `task-runner` or `assess-candidates` are left alone. `\b` is not used
-// because `_` is a word character and `api_key_sk-...` must still be masked.
+// A `sk-` or `sess-` key (group 2) counts only after a boundary (group 1): the
+// start of the text, a character other than a letter or digit, or a JSON escape
+// (`\n`, `\u001b`) or percent-encoding (`%3D`), which end in a letter or digit.
+// So words such as `task-runner` or `assess-candidates` are left alone, while
+// `api_key_sk-...`, `\nsk-...` and `key%3Dsk-...` are still masked. `\b` would
+// let `api_key_sk-...` through, since `_` is a word character. The boundary is
+// captured and put back, not a lookbehind, which Safari before 16.4 cannot parse.
+// The other key prefixes (group 3) match anywhere.
 const API_KEY_MASK_REGEX =
-  /((?<![A-Za-z0-9])sk-proj-[A-Za-z0-9-_]{6,}|(?<![A-Za-z0-9])sk-ant-[A-Za-z0-9-_]{6,}|(?<![A-Za-z0-9])sk-[A-Za-z0-9-_]{6,}|(?<![A-Za-z0-9])sess-[A-Za-z0-9-_]{6,}|ghp_[A-Za-z0-9]{6,}|github_pat_[A-Za-z0-9_]{20,}|AIza[0-9A-Za-z-_]{8,}|hf_[A-Za-z0-9]{6,}|pk_[A-Za-z0-9]{6,}|rk_[A-Za-z0-9]{6,})/g;
+  /(^|\\u[0-9A-Fa-f]{4}|\\[bfnrt]|%[0-9A-Fa-f]{2}|[^A-Za-z0-9])(sk-proj-[A-Za-z0-9-_]{6,}|sk-ant-[A-Za-z0-9-_]{6,}|sk-[A-Za-z0-9-_]{6,}|sess-[A-Za-z0-9-_]{6,})|(ghp_[A-Za-z0-9]{6,}|github_pat_[A-Za-z0-9_]{20,}|AIza[0-9A-Za-z-_]{8,}|hf_[A-Za-z0-9]{6,}|pk_[A-Za-z0-9]{6,}|rk_[A-Za-z0-9]{6,})/g;
 const AUTHORIZATION_MASK_REGEX = /\b(authorization\s*[:=]\s*)(?:bearer\s+)?[^\s,"'{}]+/gi;
 const BEARER_MASK_REGEX = /\bbearer\s+[A-Za-z0-9._~+/=-]{8,}/gi;
 const TOKEN_FIELD_MASK_REGEX =
@@ -60,7 +65,11 @@ export function maskSensitiveText(value: string): string {
     .replace(BEARER_MASK_REGEX, 'Bearer [redacted]')
     .replace(TOKEN_FIELD_MASK_REGEX, '$1$2[redacted]')
     .replace(API_KEY_FIELD_MASK_REGEX, '$1$2[redacted]')
-    .replace(API_KEY_MASK_REGEX, (match) => maskApiKey(match))
+    .replace(
+      API_KEY_MASK_REGEX,
+      (_match, boundary: string | undefined, boundedKey: string | undefined, key: string) =>
+        boundedKey !== undefined ? `${boundary}${maskApiKey(boundedKey)}` : maskApiKey(key)
+    )
     .replace(COOKIE_JSON_FIELD_MASK_REGEX, '$1[redacted]$2')
     .replace(COOKIE_MASK_REGEX, '$1: [redacted]');
 }

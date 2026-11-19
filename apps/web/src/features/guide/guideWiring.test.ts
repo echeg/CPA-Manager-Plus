@@ -87,11 +87,20 @@ describe('guide app wiring', () => {
   });
 
   it('describes a switched-off provider in the key routing intro of every locale', () => {
-    expect(en.guide.intro_key_routing).toContain('switch a provider off');
     expect(en.guide.intro_key_routing).toContain('403 before any selection');
-    expect(en.guide.intro_key_routing).toContain('switched-off Codex does not run');
+    // Each locale must keep all three parts: the switch, the 403 and the skipped Codex fallback.
+    const phrases = {
+      en: ['switch a provider off', "Claude's fallback to a switched-off Codex does not run"],
+      ru: ['отключить провайдера', 'фолбэк Claude на отключённый Codex не выполняется'],
+      zhCN: ['关闭某个提供商', 'Claude 回退到已关闭的 Codex 也不会执行'],
+      zhTW: ['關閉某個供應商', 'Claude 退回到已關閉的 Codex 也不會執行'],
+    };
     for (const [localeName, locale] of Object.entries({ en, ru, zhCN, zhTW })) {
-      expect(locale.guide.intro_key_routing, localeName).toContain('403');
+      const intro = locale.guide.intro_key_routing;
+      expect(intro, localeName).toContain('403');
+      for (const phrase of phrases[localeName as keyof typeof phrases]) {
+        expect(intro, localeName).toContain(phrase);
+      }
     }
   });
 
@@ -102,6 +111,11 @@ describe('guide app wiring', () => {
     expect(
       keyRoutingSource.edges.some((edge) => edge.from === 'profile' && edge.to === 'disabled')
     ).toBe(true);
+    // The refusal is not a fallback step, so its lane must name it.
+    const disabledLane = keyRoutingSource.lanes.find((lane) => lane.id === disabled?.lane);
+    expect(disabledLane?.label).toBe(
+      'Provider off, or fallback to a Codex subscription or API key'
+    );
 
     const fallbackCard = keyRoutingSource.cards.find(
       (card) => card.title === 'Fallback per provider'
@@ -111,6 +125,10 @@ describe('guide app wiring', () => {
     // The committed page must be regenerated from this source, not left behind it.
     expect(keyRoutingHtml).toContain('Provider off');
     expect(keyRoutingHtml).toContain('403 provider_disabled');
+    expect(keyRoutingHtml).toContain('data-edge-from="profile" data-edge-to="disabled"');
+    expect(keyRoutingHtml).toContain(
+      'Provider off, or fallback to a Codex subscription or API key'
+    );
     expect(keyRoutingHtml).toContain('A fallback to a switched-off Codex is skipped');
   });
 

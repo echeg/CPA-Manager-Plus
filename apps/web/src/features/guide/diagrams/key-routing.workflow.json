@@ -33,7 +33,7 @@
     },
     {
       "id": "fallback",
-      "label": "Fallback: Codex subscription or API key"
+      "label": "Provider off, or fallback to a Codex subscription or API key"
     }
   ],
   "phases": [

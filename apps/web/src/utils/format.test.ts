@@ -44,12 +44,31 @@ describe('maskSensitiveText', () => {
     ['after =', `value=${key}`, `value=${masked}`],
     ['after :', `secret:${key}`, `secret:${masked}`],
     ['after a double quote', `"${key}"`, `"${masked}"`],
-    ["after a single quote", `'${key}'`, `'${masked}'`],
+    ['after a single quote', `'${key}'`, `'${masked}'`],
     ['after /', `/v1/${key}`, `/v1/${masked}`],
     ['after _', `api_key_${key}`, `api_key_${masked}`],
     ['inside a JSON string', `{"secret":"${key}"}`, `{"secret":"${masked}"}`],
+    ['after a JSON-escaped newline', JSON.stringify(`bad:\n${key}`), `"bad:\\n${masked}"`],
+    ['after a JSON-escaped tab', JSON.stringify(`bad:\t${key}`), `"bad:\\t${masked}"`],
+    ['after a JSON \\u escape', JSON.stringify(`bad:\u001b${key}`), `"bad:\\u001b${masked}"`],
+    ['after %20', `q=a%20${key}`, `q=a%20${masked}`],
+    ['after %3D', `next=%2Fv1%3Fkey%3D${key}`, `next=%2Fv1%3Fkey%3D${masked}`],
   ])('still masks a key %s', (_case, input, expected) => {
     expect(maskSensitiveText(input)).toBe(expected);
+  });
+
+  it('masks a key after a newline inside pretty-printed JSON evidence', () => {
+    const evidence = JSON.stringify({ upstream: `rejected:\n${key}` }, null, 2);
+    expect(maskSensitiveText(evidence)).not.toContain(key);
+  });
+
+  it('masks every key when keys follow each other with one separator', () => {
+    expect(maskSensitiveText(`${key},${key} ${key}`)).toBe(`${masked},${masked} ${masked}`);
+  });
+
+  it('still masks the other key prefixes', () => {
+    expect(maskSensitiveText('hf_abcdef123456')).toBe('hf******56');
+    expect(maskSensitiveText(`ghp_abcdef123456 and ${key}`)).toBe(`gh******56 and ${masked}`);
   });
 
   it('still masks the sk-proj-, sk-ant- and sess- prefixes after a boundary', () => {

@@ -460,11 +460,12 @@ the mask, while usage analytics shows the name alone. Every key of one instance 
 the same name, so a name that another key's label also uses gets the key's mask, as
 in `ecwowk (sk******yz)`; the modals and monitoring then do not show the mask a
 second time. A name that contains `sk-` or `sess-` followed by 6 or more characters
-(`sk-abcdef`, `api_key_sk-abcdef`) is shown masked, as an alias is. The prefix counts
+(`sk-abcdef`, `team-sk-abcdef`) is shown masked, as an alias is. The prefix counts
 only when no letter or digit comes before it, so words such as `task-runner`,
-`risk-engine` or `assess-candidates` are shown as they are; the same rule applies to
-the masking of log and error text. Any other key
-is shown as a mask such as `sk******yz`. The CP format is
+`risk-engine` or `assess-candidates` are shown as they are. The panel uses the same
+rule wherever it masks text, such as failure summaries and account-action evidence;
+there a prefix right after a JSON escape (`\n`) or a percent-encoding (`%3D`) is
+still masked. Any other key is shown as a mask such as `sk******yz`. The CP format is
 produced by `bridex-cp`; if it changes, these labels fall back to the mask. Raw keys
 stay in memory and in request bodies; they are never
 rendered (except in the add form's key field before the key is added), logged,

@@ -1,11 +1,7 @@
 /**
  * 账号抽屉共享组件索引
- * 集中 re-export,避免在多个 Tab 间重复实现"健康度 / 配额窗口 / 时间"等横切关注点。
+ * 集中 re-export,避免在多个 Tab 间重复实现"配额窗口 / 时间"等横切关注点。
  */
-export { AccountHealthBadge } from './AccountHealthBadge';
-export { severityFromQuotaStatus } from './accountHealthSeverity';
-export type { AccountHealthSeverity } from './accountHealthSeverity';
-
 export { RelativeTime } from './RelativeTime';
 export type { RelativeTimeMode } from './RelativeTime';
 

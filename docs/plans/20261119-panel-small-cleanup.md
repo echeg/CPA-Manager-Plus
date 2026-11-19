@@ -10,11 +10,12 @@
 ## Decisions
 - **Context**: the items come from `docs/backlog/` (`unused-subscription-routing-components`, `web-lint-warnings`, `sensitive-text-mask-matches-inside-words`, `guide-disabled-provider`). The user chose to do them together on 2026-11-19.
 - **Chosen approach, masking**: the lookbehind `(?<![A-Za-z0-9])` before the `sk-` and `sess-` alternatives, as the backlog entry suggests. `\b` is not used, because it would let `api_key_sk-...` through unmasked.
+  - ➕ Changed in internal review: the boundary is a captured group put back by the replace callback, not a lookbehind. It was the only lookbehind regex literal in the bundle (the YAML library builds its lookbehinds with `RegExp()` inside `try`/`catch`), and Safari before 16.4 rejects such a literal when it parses the script, so the whole panel would fail to load there. The group also accepts a JSON escape (`\n`, `\t`, `\u001b`) or a percent-encoding (`%3D`) before the key, because the lookbehind let `\nsk-...` in `JSON.stringify` evidence and `key%3Dsk-...` through unmasked.
 - **Chosen approach, diagram**: edit `key-routing.workflow.json` and regenerate `key-routing.html` with archify, as `apps/web/src/features/guide/diagrams/README.md` requires. The HTML is never edited by hand.
 - **Verified facts**:
   - `SubscriptionRouting.tsx`, `SubscriptionAccounts.tsx` and `SubscriptionRouting.module.scss` (in `apps/web/src/features/quota/components/`) reference only each other. The hook `useSubscriptionRouting` (`apps/web/src/features/quota/hooks/useSubscriptionRouting.ts`) is used by `QuotaSettingsToolbar.tsx` and two lifecycle tests and stays.
   - The 7 lint warnings on 2026-11-19: `AccountsPage.test.tsx:13326`, `:13496`, `:17794` (`no-explicit-any`); `AccountHealthBadge.tsx:73` and `UsageMaintenanceCapabilityViews.tsx:15`, `:23` (`react-refresh/only-export-components`); `DashboardPage.tsx:394` (`react-hooks/exhaustive-deps`, `apiBase` reported as an unnecessary `useCallback` dependency).
-  - `API_KEY_MASK_REGEX` is in `apps/web/src/utils/format.ts:35-36`; `format.test.ts` exists next to it. The same regex masks log and error text.
+  - `API_KEY_MASK_REGEX` is in `apps/web/src/utils/format.ts:35-36`; `format.test.ts` exists next to it. The same regex masks failure summaries, account-action evidence (as `JSON.stringify` output) and masked account names.
   - `docs/personal-quota.md` ("How keys are shown") documents the current masking of names.
   - The Guide text is `guide.intro_key_routing` in `apps/web/src/i18n/locales/{en,ru,zh-CN,zh-TW}.json`; the manual pages are `apps/docs/en/manual/guide.md` and `apps/docs/manual/guide.md`.
   - The committed diagrams were generated with archify 2.16.0. On this machine archify is at `~/.agents/skills/archify/bin/archify.mjs`; it is not a repository dependency.
@@ -60,6 +61,7 @@
 ### Task 2: Fix the seven lint warnings
 - [x] type the three `any` casts in `apps/web/src/features/accounts/AccountsPage.test.tsx` (`:13326`, `:13496`, `:17794`)
 - [x] move the non-component export of `apps/web/src/features/accounts/components/AccountHealthBadge.tsx:73` to a sibling `.ts` module and update its importers
+- [x] ➕ internal review: `AccountHealthBadge` and the moved `severityFromQuotaStatus` had no importer outside the barrel, so delete `AccountHealthBadge.tsx`, its stylesheet, `accountHealthSeverity.ts` and its test, and their barrel exports in `components/index.ts`
 - [x] move the two non-component exports of `apps/web/src/features/usage-maintenance/UsageMaintenanceCapabilityViews.tsx` (`:15`, `:23`) to a sibling `.ts` module and update their importers
 - [x] in `apps/web/src/features/dashboard/DashboardPage.tsx:394`, find out whether `apiBase` is in the dependency list to reload when the connection changes; if it is, keep the reload by an explicit means, otherwise drop the dependency (it was for the reload, but `DashboardPage` already remounts `DashboardPageContent` keyed on `[apiBase, managementKey]`, so the dependency was dropped and the remount is the explicit means)
 - [x] write or update a test for the `DashboardPage` reload behaviour if the dependency carried one; run the existing tests of the moved exports
@@ -75,6 +77,8 @@
 ### Task 4: Describe a switched-off provider in the Guide
 - [x] add one sentence to `guide.intro_key_routing` in `apps/web/src/i18n/locales/en.json`, `ru.json`, `zh-CN.json` and `zh-TW.json`: a profile can switch a provider off; CPA then answers that provider's requests with 403 before any selection, and Claude's fallback to a switched-off Codex does not run
 - [x] add the same to `apps/docs/en/manual/guide.md` and `apps/docs/manual/guide.md`, with the note that the switch is ignored under a scheduler plugin
+- [x] ➕ internal review: name only Claude and Codex as switchable in the manual, and say the switch is also ignored in Home mode (`supported: false`)
+- [x] ➕ internal review: rename the `fallback` lane of `key-routing.workflow.json` to "Provider off, or fallback to a Codex subscription or API key", since the `disabled` node sits in it and is not a fallback step; regenerate the page
 - [x] in `apps/web/src/features/guide/diagrams/key-routing.workflow.json`, add a "provider off -> 403" branch after profile resolution and note in the "Fallback per provider" card that a fallback to a switched-off Codex is skipped; keep `meta.title`
 - [x] regenerate the page: `node ~/.agents/skills/archify/bin/archify.mjs deliver workflow <abs path>/key-routing.workflow.json <abs path>/key-routing.html --quality showcase --json`; accept it only when the command exits 0 and reports all checks passed. If archify is not available, leave the JSON change, mark this item with ⚠️ and do not edit the HTML
 - [x] run `npx vitest run src/features/guide src/i18n` in `apps/web` (diagram titles, theme contract, locale parity), updating `GuidePage.test.tsx` only if a check names text that changed (no check named changed text; new checks for the intro, the diagram source and the generated page were added to `guideWiring.test.ts`)
@@ -92,9 +96,9 @@
 - [x] delete the four backlog entries this plan closes: `docs/backlog/unused-subscription-routing-components.md`, `web-lint-warnings.md`, `sensitive-text-mask-matches-inside-words.md`, `guide-disabled-provider.md`; keep an entry, rewritten, for any item that was only partly done
 
 ## Technical Details
-- Mask boundary: `(?<![A-Za-z0-9])` before each of `sk-proj-`, `sk-ant-`, `sk-` and `sess-`. `_`, `-`, `/`, `=`, `:`, quotes and whitespace still allow a match, so `api_key_sk-...` stays masked.
-- The other alternatives of the regex (`ghp_`, `github_pat_`, `AIza`, `hf_`, `pk_`, `rk_`) are not changed.
-- Behaviour for the Guide text: `providers.<provider>.disabled: true` in a routing profile; requests to that provider get `403` with `provider_disabled`; ignored when CPA reports `supported: false` (scheduler plugin).
+- Mask boundary: before each of `sk-proj-`, `sk-ant-`, `sk-` and `sess-`, a captured group: the start of the text, a character other than a letter or digit, a JSON escape (`\[bfnrt]`, `\uXXXX`) or a percent-encoding (`%XX`). `_`, `-`, `/`, `=`, `:`, quotes and whitespace still allow a match, so `api_key_sk-...` stays masked.
+- The other alternatives of the regex (`ghp_`, `github_pat_`, `AIza`, `hf_`, `pk_`, `rk_`) are not changed; that they still match inside words is filed as `docs/backlog/key-mask-underscore-prefixes-inside-words.md`.
+- Behaviour for the Guide text: `providers.<provider>.disabled: true` in a routing profile; requests to that provider get `403` with `provider_disabled`; ignored when CPA reports `supported: false` (Home mode or a scheduler plugin).
 
 ## Post-Completion
 
