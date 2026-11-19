@@ -27,7 +27,11 @@ import { QuotaSettingsBar, QuotaSettingsToolbar } from './components/QuotaSettin
 import { RoutingProfilesModal } from './components/RoutingProfilesModal';
 import { Select } from './components/Select';
 import { useClaudeFallback } from './hooks/useClaudeFallback';
-import { useKeyProfiles, type KeyProfilesState } from './hooks/useKeyProfiles';
+import {
+  useKeyProfiles,
+  type KeyProfilesState,
+  type ProfileSaveOutcome,
+} from './hooks/useKeyProfiles';
 import { useSubscriptionRouting } from './hooks/useSubscriptionRouting';
 import { buildKeyRows } from './keyProfilesModel';
 
@@ -139,8 +143,8 @@ function makeKeyProfiles(
     saving: false,
     error: '',
     reload: vi.fn(),
-    saveKeyProfile: vi.fn(async () => true),
-    saveShared: vi.fn(async () => true),
+    saveKeyProfile: vi.fn(async (): Promise<ProfileSaveOutcome> => 'saved'),
+    saveShared: vi.fn(async (): Promise<ProfileSaveOutcome> => 'saved'),
     saveCodexSpeed: vi.fn(async () => true),
     addKey: vi.fn(async () => ({ ok: true })),
     removeKey: vi.fn(async () => ({ ok: true })),
@@ -322,7 +326,8 @@ describe('quota settings bar on a backend with /routing/profiles', () => {
     await click(buttonWith('data-key-profile-save'));
     expect(keyProfiles.saveShared).toHaveBeenCalledWith(
       { ...stored, preferredAccounts: {} },
-      undefined
+      undefined,
+      stored
     );
   });
 

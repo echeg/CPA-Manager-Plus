@@ -183,17 +183,65 @@ key profile starts with the default profile's speed and flag (see
 **Enabled toggle.** On a backend that reports `disabled` in the provider blocks, each
 provider block of every profile editor (Default and key profiles) has an **Enabled**
 switch next to its title. Switching a provider off makes CPA refuse that provider's
-requests for every key that uses the profile, so a key can be made Codex-only or
-Claude-only. The rest of the block is disabled while the provider is off, with a note
-that it is off for this profile, and the Speed row shows no mode notes; the mode, API
-key, preferred subscription, fallback, mappings and Codex speed stay in the profile,
-so switching it back on restores them unchanged. The flag is saved as `disabled` in
-the provider block, together with the rest of the profile: `true` when off and an
-explicit `false` when on, so re-enabling overwrites a stored `true`. CPA still checks
-every field of a disabled provider, so an invalid field still blocks the save; the
-switch stays usable, so the provider can be switched back on to fix it. Both
-providers may be off; the editor then warns that the profile allows no provider,
-and the profile still saves.
+requests for every key that uses the profile, so a key can be kept off Claude or off
+Codex. The switches cover only Claude and Codex: requests to other providers, such as
+Gemini, are not affected, so on a CPA that also serves other providers a key with
+Claude off is not Codex-only. The rest of the block is disabled while the provider
+is off, with a note that it is off for this profile, and the Speed row shows no mode
+notes; the mode, API key, preferred subscription, fallback, mappings and Codex speed
+stay in the profile, so switching it back on restores them unchanged. One exception:
+the editor fills an empty Claude mapping list with the suggested rows, and every save
+stores them, even one that only flips the switch. The flag is saved as `disabled` in
+the provider block, together with the rest of the profile: `true` when off, and an
+explicit `false` only for a provider that was off when the editor opened and was
+switched back on in it. A provider that stays on gets no `disabled` in the save, so
+CPA keeps the stored flag: a save from an editor opened before someone else switched
+that provider off leaves it off, and the profile list then shows it off. A key that
+owns no profile when the save is made (a new key profile, or one reset after its
+editor opened) follows the Default profile, and a profile the save creates would
+start with the provider on. So before a key save that leaves a flag out, the panel
+reads the stored config (`GET /v8/management/config`): the file the save merges
+into, which can be newer than the profiles CPA serves while a hand edit of it waits
+for the hot reload. When the key owns no profile in that file, the save carries the
+flag the Default holds there, read as CPA reads it: a hand-written `yes` or `on`
+counts as `true`. The save is conditional on that read's `ETag` (`If-Match`), so CPA
+refuses it when the config changed in between; the editor then says the
+configuration changed, nothing is written, and the profiles reload. Behind a proxy
+that drops or weakens the `ETag`, the save goes out unconditionally, as the other
+editor saves do. Every key save, also a reset or one that sends both flags, first
+reads the profiles again (at the same time as that config read) and writes nothing
+when CPA no longer uses key profiles: Home mode or a scheduler plugin owns routing
+now, or the backend no longer serves the route. A key profile save also writes
+nothing when the backend offers the switch and the editor opened without it (CPA was
+upgraded since, and a profile the save creates would start with both providers on),
+or the other way round. When the upgrade lands between that read and the write, the
+read after the write finds it: the editor says the profile was stored without the
+switches, so a provider the Default profile has off may be on in it, and the profiles
+reload with the switch. A Default profile save that sends a flag makes the same
+check and writes nothing after Home mode or a scheduler plugin took over routing, or
+on a backend without the switch; the editor then says the configuration changed and
+the profiles reload, which locks the switches. When such a change is found by that reload, an open editor starts
+over from the stored profile, so it never shows a switched-off provider that its next
+save would leave out. When native routing becomes inactive between that check and the
+write (Home mode or a scheduler plugin, both reported as `supported: false`), the read
+after the write finds it: the editor then says CPA stored the change but does not
+apply it until native routing is active again, and the profiles reload. For the
+Default profile it names what CPA ignores there, the provider mode, fallback and
+switches, since the rest of the Default profile, such as the Codex speed, still
+applies. A save that fails without proof that CPA refused it (the write got no answer,
+or the read after it failed or did not confirm it) may still have been stored. The
+editor stays open and remembers the switch that save sent, in either direction, also
+when the reload after the error failed and the editor still shows the stored value. A
+provider that save switched off then counts as off: switching it back on and saving
+writes it as on. One that save switched back on keeps Save available when it is
+switched off again, so that can be saved too. A save that CPA refused, or that stopped
+before its write, stored nothing, so the editor forgets the switch it sent: switching
+it back and saving another field leaves the provider's flag out as before, and a
+provider someone else switched off meanwhile stays off. CPA still checks every field
+of a disabled provider, so an invalid field still blocks the save; the switch stays
+usable, so the provider can be switched back on to fix it. Both providers may be
+off; the editor then warns that CPA refuses every Claude and Codex request made with
+the profile, and the profile still saves.
 
 CPA answers a request to a disabled provider with 403 and the message `<provider> is
 disabled by the routing profile of this API key` (a key profile) or `<provider> is
@@ -204,7 +252,11 @@ its block keeps a fallback to Codex; CPA does not translate its requests to Code
 A disabled Codex stops the Claude to Codex fallback of the same profile in both
 Automatic and Force Codex now, so while Claude is on and falls back to Codex, the
 Claude block warns that this fallback will not run. A switch applies to new requests
-and connections; a Codex websocket already open keeps running until it closes.
+and connections once CPA has reloaded the config. A Responses websocket that stays
+open checks its pinned account at the start of every turn, so its next turn moves to
+another account that can serve it or gets an `error` event with status 403, without a
+reconnect. Only an open Codex duplex websocket, which forwards follow-up frames inside
+its existing upstream stream, keeps running until it closes.
 
 **Chain summary.** The profile list, the Keys modal and the editor footer show one
 entry per provider: `Claude: <preferred or Automatic> → Codex`, `Claude: Codex
@@ -522,7 +574,8 @@ and **+ Profile for a key** are hidden. The Default row stays editable except th
 mode and fallback of both provider blocks, which CPA ignores in this mode; the
 preferred subscriptions and the Codex speed stay editable, and a Save keeps the
 stored mode and fallback. The **Enabled** switch is locked like the mode, and a Save
-keeps the stored `disabled`. CPA does not enforce `disabled` in this mode, so a stored
+sends no `disabled`, so CPA keeps the stored flags, even ones changed after the
+editor opened. CPA does not enforce `disabled` in this mode, so a stored
 off locks no other control and shows no off note or warning, and the speed table
 ignores it; the chain summary still names it as off, as it names the stored mode. In the
 Keys modal the profile select is read-only, while adding and deleting keys stay
@@ -572,7 +625,7 @@ routing:
       providers:
         claude: {api-credential: "claude-key-auth-index", fallback: {target: api}}
         codex: {mode: subscription, speed: ultrafast, ignore-client-tier: true}
-    "client-key-codex-only":
+    "client-key-claude-off":
       providers:
         claude: {mode: subscription, fallback: {target: codex}, disabled: true} # refused with 403; settings kept
         codex: {mode: subscription, disabled: false}

@@ -85,6 +85,11 @@ export function RoutingProfilesModal({
     providerConfigs: keyProfiles.apiKeyConfigs,
   });
 
+  // Part of every editor's key, so an editor starts over from the stored profile when a
+  // reload changes what its save can store: a draft from before could show Claude off
+  // while the save, without the switch or under the mode lock, leaves the flag out.
+  const capabilities = state ? `${state.supported}-${state.providerToggleSupported}` : '';
+
   const own = rows.filter((row) => row.profile !== null);
   const onDefault = rows.filter((row) => row.profile === null);
 
@@ -113,15 +118,28 @@ export function RoutingProfilesModal({
   // cached rows while a reload is still running; an open one can still be closed.
   const toggleDisabled = (isOpen: boolean) => saving || (loading && !isOpen);
 
-  const saveKey = async (key: string, profile: RoutingProfile | null) => {
-    if (await keyProfiles.saveKeyProfile(key, profile)) {
+  // Both return the outcome, so an editor left open knows whether CPA may hold its save.
+  const saveKey = async (
+    key: string,
+    profile: RoutingProfile | null,
+    opened: RoutingProfile | null = null
+  ) => {
+    const outcome = await keyProfiles.saveKeyProfile(key, profile, opened);
+    if (outcome === 'saved') {
       setEditing((current) => (current?.kind === 'key' && current.key === key ? null : current));
     }
+    return outcome;
   };
 
-  const saveDefault = async (profile: RoutingProfile, nextTTL?: string) => {
-    const saved = await keyProfiles.saveShared(profile, nextTTL);
-    if (saved) setEditing((current) => (current?.kind === 'default' ? null : current));
+  const saveDefault = async (
+    profile: RoutingProfile,
+    nextTTL: string | undefined,
+    opened: RoutingProfile
+  ) => {
+    const outcome = await keyProfiles.saveShared(profile, nextTTL, opened);
+    if (outcome === 'saved')
+      setEditing((current) => (current?.kind === 'default' ? null : current));
+    return outcome;
   };
 
   const confirmReset = (row: KeyDisplayRow) => {
@@ -131,7 +149,9 @@ export function RoutingProfilesModal({
       confirmText: t('quota_management.key_profiles.profiles.reset'),
       cancelText: t('common.cancel'),
       variant: 'danger',
-      onConfirm: () => saveKey(row.key, null),
+      onConfirm: async () => {
+        await saveKey(row.key, null);
+      },
     });
   };
 
@@ -139,7 +159,7 @@ export function RoutingProfilesModal({
     state && (
       <KeyProfileEditor
         // Keyed by the hash and the mode, so a row that gains or loses a profile starts over.
-        key={`${keyHash(row.key)}-${row.profile ? 'own' : 'new'}`}
+        key={`${keyHash(row.key)}-${row.profile ? 'own' : 'new'}-${capabilities}`}
         initial={row.profile ?? copyOfShared(state.shared)}
         isNew={!row.profile}
         variant="key"
@@ -159,7 +179,7 @@ export function RoutingProfilesModal({
         // CPA ignores a key profile while read-only (`supported: false`), so a stored
         // `disabled` must not claim that requests are refused.
         fallbackReadOnly={readOnly}
-        onSave={(profile) => void saveKey(row.key, profile)}
+        onSave={(profile, _ttl, opened) => saveKey(row.key, profile, opened)}
         onCancel={() => setEditing(null)}
       />
     );
@@ -255,7 +275,7 @@ export function RoutingProfilesModal({
               </p>
               {defaultOpen && (
                 <KeyProfileEditor
-                  key="default"
+                  key={`default-${capabilities}`}
                   initial={state.shared}
                   isNew={false}
                   variant="default"
@@ -273,7 +293,7 @@ export function RoutingProfilesModal({
                   // except the provider mode and fallback, which CPA ignores there.
                   readOnly={false}
                   fallbackReadOnly={readOnly}
-                  onSave={(profile, nextTTL) => void saveDefault(profile, nextTTL)}
+                  onSave={(profile, nextTTL, opened) => saveDefault(profile, nextTTL, opened)}
                   onCancel={() => setEditing(null)}
                 />
               )}

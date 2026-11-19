@@ -5755,6 +5755,9 @@
       "errors": {
         "unknown_key": "This key was removed on the Config page, so nothing was saved.",
         "config_changed": "The configuration changed elsewhere after it was read, so nothing was saved. Check the current values and try again.",
+        "not_applied": "CPA stored the change, but native CPA routing is not active now, so it is not applied. It takes effect once native routing is active again.",
+        "not_applied_default": "CPA stored the change, but native CPA routing is not active now: until it is, CPA ignores the provider mode, fallback and Enabled switches of the Default profile. Its other settings, such as the Codex speed, apply.",
+        "toggle_unsent": "CPA started offering the Enabled switches while this profile was being saved, so it was stored without them: a provider the Default profile switches off may be on in it. Check the reloaded profile and save it again.",
         "config_version_missing": "CPA's answer carried no usable configuration version (ETag), so a key's speed cannot be changed here without the risk of undoing a change made elsewhere. Nothing was saved; change the speed in the key's profile editor.",
         "copy_unconfirmed": "The key may now have its own profile: a copy of the Default profile that could not be confirmed. Refresh to see whether it has one, and reset it to default if the key should follow the Default profile.",
         "legacy_fallback_default": "The Default profile keeps its Claude fallback in the old claude-fallback block beside an empty providers.claude.fallback, and CPA would drop that block on this change, which turns the fallback off. Nothing was saved; save the Default profile once in Profiles, then change the speed.",
@@ -5768,7 +5771,7 @@
         "selection": "Pool selection",
         "summary": "Chain:",
         "read_only": "Per-key profiles need native CPA routing. Home mode and scheduler plugins manage their own routing, so this profile is read-only.",
-        "no_provider": "Both providers are off: this profile allows no provider, so CPA refuses every request made with it."
+        "no_provider": "Claude and Codex are both off: CPA refuses every Claude and Codex request made with this profile. Other providers are not affected."
       },
       "edit": "Edit",
       "collapse": "Collapse",

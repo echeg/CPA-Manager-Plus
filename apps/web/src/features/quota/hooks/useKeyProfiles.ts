@@ -25,7 +25,10 @@ import {
   mergeKeyRows,
   routingProfilesApi,
   InvalidRoutingConfigError,
+  ProviderToggleChangedError,
+  RoutingNotAppliedError,
   UnknownApiKeyError,
+  wroteNothing,
   type RoutingProfile,
   type RoutingProfilesState,
 } from '@/features/personal-quota-support/services/api/routingProfiles';
@@ -42,6 +45,14 @@ import {
 import { errorText } from '../routingModel';
 
 const DEFAULT_TTL = '1h';
+
+/**
+ * Result of a profile editor save: `saved` once CPA confirmed it; `unwritten` when it
+ * failed and CPA stored nothing (it was refused before its write, or CPA's answer
+ * refused the write, `wroteNothing`); `unconfirmed` when it failed in a way that leaves
+ * open whether CPA stored it, such as a write without an answer or a failed read-back.
+ */
+export type ProfileSaveOutcome = 'saved' | 'unwritten' | 'unconfirmed';
 
 /** Result of a key add or remove. `aliasWarning` is set when only the alias write failed. */
 export interface ClientKeyWriteResult {
@@ -214,6 +225,22 @@ export function useKeyProfiles(disabled: boolean) {
       // A conditional write found a newer config and wrote nothing: show the stored state.
       setSaveError(t('quota_management.key_profiles.errors.config_changed'));
       refetch();
+    } else if (err instanceof RoutingNotAppliedError) {
+      // Written, but CPA does not route by it now: show the stored state, read-only.
+      // CPA still applies most of the Default profile there, so its text names the parts.
+      setSaveError(
+        t(
+          err.profile === 'default'
+            ? 'quota_management.key_profiles.errors.not_applied_default'
+            : 'quota_management.key_profiles.errors.not_applied'
+        )
+      );
+      refetch();
+    } else if (err instanceof ProviderToggleChangedError) {
+      // Written without the flags the backend serves now: reload, so the editor starts
+      // over from the stored profile with the switch.
+      setSaveError(t('quota_management.key_profiles.errors.toggle_unsent'));
+      refetch();
     } else if (err instanceof ConfigVersionUnavailableError) {
       // Refused before any write, so the stored state is unchanged.
       setSaveError(t('quota_management.key_profiles.errors.config_version_missing'));
@@ -239,9 +266,17 @@ export function useKeyProfiles(disabled: boolean) {
     }
   };
 
-  /** Write one key profile, or return the key to the shared settings with `null`. */
-  const saveKeyProfile = async (key: string, profile: RoutingProfile | null) => {
-    if (!state?.supported || !beginWrite()) return false;
+  /**
+   * Write one key profile, or return the key to the shared settings with `null`.
+   * `opened` is the profile the editor started from; only a provider it had off is
+   * written as switched on (`sentDisabled`).
+   */
+  const saveKeyProfile = async (
+    key: string,
+    profile: RoutingProfile | null,
+    opened: RoutingProfile | null = null
+  ): Promise<ProfileSaveOutcome> => {
+    if (!state?.supported || !beginWrite()) return 'unwritten';
     try {
       const saved = await routingProfilesApi.saveKeyProfile(
         key,
@@ -249,15 +284,17 @@ export function useKeyProfiles(disabled: boolean) {
         state.selectionOptions,
         state.providersSupported,
         state.speedSupported,
-        state.providerToggleSupported
+        state.providerToggleSupported,
+        opened
       );
-      if (!isCurrent()) return false;
+      // Stored, but its result is dropped with the connection or the panel.
+      if (!isCurrent()) return 'unconfirmed';
       useConfigStore.getState().clearCache();
       setState(saved);
-      return true;
+      return 'saved';
     } catch (err) {
       if (isCurrent()) failWrite(err);
-      return false;
+      return wroteNothing(err) ? 'unwritten' : 'unconfirmed';
     } finally {
       endWrite();
     }
@@ -266,10 +303,20 @@ export function useKeyProfiles(disabled: boolean) {
   /**
    * Write the shared profile, and the global TTL when passed, then reload profiles
    * and config. Not gated on `supported`: the shared values stay editable in Home
-   * or scheduler-plugin mode, as the toolbar allowed before.
+   * or scheduler-plugin mode, as the toolbar allowed before. `opened` is the profile
+   * the editor started from, as for `saveKeyProfile`. There CPA ignores `disabled` and
+   * the editor locks the Enabled switches, so the save sends no flag at all and the
+   * merge keeps the stored ones; an editor opened before a reload would otherwise
+   * write the flags it opened with over newer ones. A state loaded before a scheduler
+   * plugin took over still sends them, so the API method rereads the profiles first
+   * and then writes nothing.
    */
-  const saveShared = async (profile: RoutingProfile, nextTTL?: string) => {
-    if (!state || state.unsupportedBackend || !beginWrite()) return false;
+  const saveShared = async (
+    profile: RoutingProfile,
+    nextTTL?: string,
+    opened: RoutingProfile | null = null
+  ): Promise<ProfileSaveOutcome> => {
+    if (!state || state.unsupportedBackend || !beginWrite()) return 'unwritten';
     try {
       const saved = await routingProfilesApi.saveSharedProfile(
         profile,
@@ -277,17 +324,19 @@ export function useKeyProfiles(disabled: boolean) {
         state.selectionOptions,
         state.providersSupported,
         state.speedSupported,
-        state.providerToggleSupported
+        state.supported && state.providerToggleSupported,
+        opened
       );
-      if (!isCurrent()) return false;
+      // Stored, but its result is dropped with the connection or the panel.
+      if (!isCurrent()) return 'unconfirmed';
       useConfigStore.getState().clearCache();
       setState(saved);
       if (nextTTL !== undefined) setTtl(nextTTL.trim());
       refetch();
-      return true;
+      return 'saved';
     } catch (err) {
       if (isCurrent()) failWrite(err);
-      return false;
+      return wroteNothing(err) ? 'unwritten' : 'unconfirmed';
     } finally {
       endWrite();
     }

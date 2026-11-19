@@ -7,6 +7,7 @@ import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
 import {
   providersFromClaudeFallback,
+  sentDisabled,
   type ApiCredentials,
   type ApiProvider,
   type ProviderRouting,
@@ -167,6 +168,12 @@ function textOf(node: ReactTestInstance | string): string {
 }
 
 const click = (node: ReactTestInstance) => act(() => node.props.onClick());
+/** Click Save, then let the editor take the outcome the last `onSave` call resolves to. */
+const clickSave = (onSave: ReturnType<typeof vi.fn>) =>
+  act(async () => {
+    saveButton().props.onClick();
+    await onSave.mock.results[onSave.mock.results.length - 1]?.value;
+  });
 
 describe('KeyProfileEditor', () => {
   test('renders the shared stages on top and one block per provider', async () => {
@@ -210,7 +217,7 @@ describe('KeyProfileEditor', () => {
     const { onSave } = await mount({ initial, isNew: true });
     expect(saveButton().props.disabled).toBe(false);
     click(saveButton());
-    expect(onSave).toHaveBeenCalledWith(copyOfShared(shared), undefined);
+    expect(onSave).toHaveBeenCalledWith(copyOfShared(shared), undefined, initial);
     expect(onSave.mock.calls[0][0]).not.toBe(initial);
   });
 
@@ -236,7 +243,7 @@ describe('KeyProfileEditor', () => {
     typeTTL(' 30m ');
     expect(saveButton().props.disabled).toBe(false);
     click(saveButton());
-    expect(onSave).toHaveBeenLastCalledWith(copyOfShared(shared), '30m');
+    expect(onSave).toHaveBeenLastCalledWith(copyOfShared(shared), '30m', shared);
 
     // Back to the stored TTL: only the profile edit is saved.
     typeTTL('1h');
@@ -246,6 +253,7 @@ describe('KeyProfileEditor', () => {
     expect(onSave.mock.calls[1]).toEqual([
       { ...copyOfShared(shared), sessionAffinity: false },
       undefined,
+      shared,
     ]);
   });
 
@@ -451,7 +459,8 @@ describe('KeyProfileEditor', () => {
           mappings: shared.providers.claude.fallback.mappings,
         }),
       },
-      undefined
+      undefined,
+      shared
     );
   });
 
@@ -819,10 +828,149 @@ describe('KeyProfileEditor', () => {
     expect(saved.providers.claude).toEqual({ ...shared.providers.claude, disabled: true });
     expect(saved.providers.codex).toEqual(shared.providers.codex);
 
-    // Back on: the stored settings come back unchanged and the draft is clean again.
+    // Back on: the stored settings come back unchanged. The save stays available, since
+    // the save above may have stored the off (see the no-reload test below).
     setEnabled('claude', true);
     expect(block('claude').props.value).toEqual(shared.providers.claude);
+  });
+
+  test('a save passes the profile the editor opened with, not one a reload brought later', async () => {
+    const opened = copyOfShared(shared);
+    const { onSave } = await mount({ initial: opened, providerToggleSupported: true });
+    // A reload while the editor is open shows Claude switched off elsewhere.
+    const reloaded = copyOfShared(shared);
+    reloaded.providers.claude.disabled = true;
+    await act(async () => {
+      renderer!.update(
+        createElement(KeyProfileEditor, {
+          ...(root().props as KeyProfileEditorProps),
+          initial: reloaded,
+        })
+      );
+    });
+    act(() => sticky().props.onChange(false));
+    click(saveButton());
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave.mock.calls[0][0].providers.claude.disabled).toBe(false);
+    // Claude was on when the editor opened, so the save does not switch it back on.
+    expect(onSave.mock.calls[0][2]).toBe(opened);
+  });
+
+  test('after a save that sent Claude off, switching it back on is saved as switched on', async () => {
+    const opened = copyOfShared(shared);
+    const { onSave } = await mount({ initial: opened, providerToggleSupported: true });
+    onSave.mockResolvedValue('unconfirmed');
+    setEnabled('claude', false);
+    await clickSave(onSave);
+    // The first save starts from the profile the editor opened with.
+    expect(onSave.mock.calls[0][2]).toBe(opened);
+    expect(onSave.mock.calls[0][0].providers.claude.disabled).toBe(true);
+
+    // That save failed after CPA stored the off, so the editor stays open and the reload
+    // after the error shows Claude off; a retry with Claude back on must write it as on.
+    const reloaded = copyOfShared(shared);
+    reloaded.providers.claude.disabled = true;
+    await act(async () => {
+      renderer!.update(
+        createElement(KeyProfileEditor, {
+          ...(root().props as KeyProfileEditorProps),
+          initial: reloaded,
+        })
+      );
+    });
+    setEnabled('claude', true);
+    click(saveButton());
+    expect(onSave).toHaveBeenCalledTimes(2);
+    const [saved, , from] = onSave.mock.calls[1] as [RoutingProfile, unknown, RoutingProfile];
+    expect(saved.providers.claude.disabled).toBe(false);
+    expect(from.providers.claude.disabled).toBe(true);
+    // Codex was never saved off, so it still counts as on.
+    expect(from.providers.codex.disabled).toBe(false);
+    expect(
+      sentDisabled(saved, from, true, true),
+      'the retry writes an explicit Claude disabled: false'
+    ).toEqual({ claude: true, codex: false });
+  });
+
+  test('with no reload after a save that sent Claude off, switching it back on still saves', async () => {
+    const opened = copyOfShared(shared);
+    const { onSave } = await mount({ initial: opened, providerToggleSupported: true });
+    onSave.mockResolvedValue('unconfirmed');
+    // Before any save, off and back on is no change.
+    setEnabled('claude', false);
+    setEnabled('claude', true);
     expect(saveButton().props.disabled).toBe(true);
+
+    setEnabled('claude', false);
+    await clickSave(onSave);
+    expect(onSave.mock.calls[0][0].providers.claude.disabled).toBe(true);
+    // That save failed after CPA may have stored the off, and so did the reload after
+    // the error: `initial` still shows Claude on. Back on, the draft equals it, but CPA
+    // may hold Claude off, so the save stays available and writes it as on.
+    setEnabled('claude', true);
+    expect(saveButton().props.disabled).toBe(false);
+    click(saveButton());
+    expect(onSave).toHaveBeenCalledTimes(2);
+    const [saved, , from] = onSave.mock.calls[1] as [RoutingProfile, unknown, RoutingProfile];
+    expect(saved.providers.claude.disabled).toBe(false);
+    expect(sentDisabled(saved, from, true, true)).toEqual({ claude: true, codex: false });
+  });
+
+  test('with no reload after a save that sent Claude on, switching it back off still saves', async () => {
+    const opened = copyOfShared(shared);
+    opened.providers.claude.disabled = true;
+    const { onSave } = await mount({ initial: opened, providerToggleSupported: true });
+    onSave.mockResolvedValue('unconfirmed');
+    setEnabled('claude', true);
+    await clickSave(onSave);
+    const [first, , firstFrom] = onSave.mock.calls[0] as [RoutingProfile, unknown, RoutingProfile];
+    expect(sentDisabled(first, firstFrom, true, true)).toEqual({ claude: true, codex: false });
+    expect(first.providers.claude.disabled).toBe(false);
+
+    // That save may have stored Claude on, and no reload showed it: `initial` still has
+    // Claude off. Back off, the draft equals it, but CPA may hold Claude on.
+    setEnabled('claude', false);
+    expect(saveButton().props.disabled).toBe(false);
+    await clickSave(onSave);
+    expect(onSave).toHaveBeenCalledTimes(2);
+    expect(onSave.mock.calls[1][0].providers.claude.disabled).toBe(true);
+  });
+
+  test.each(['unwritten', 'saved'] as const)(
+    'a save whose outcome is %s leaves no switch behind for the next save',
+    async (outcome) => {
+      const opened = copyOfShared(shared);
+      const { onSave } = await mount({ initial: opened, providerToggleSupported: true });
+      onSave.mockResolvedValue(outcome);
+      setEnabled('claude', false);
+      await clickSave(onSave);
+      expect(onSave.mock.calls[0][0].providers.claude.disabled).toBe(true);
+
+      // Nothing CPA may hold differs from `initial`: back on is no change again.
+      setEnabled('claude', true);
+      expect(saveButton().props.disabled).toBe(true);
+      // A save of another field leaves Claude out, so the merge keeps a Claude off
+      // that someone else saved meanwhile.
+      act(() => sticky().props.onChange(false));
+      await clickSave(onSave);
+      expect(onSave).toHaveBeenCalledTimes(2);
+      const [saved, , from] = onSave.mock.calls[1] as [RoutingProfile, unknown, RoutingProfile];
+      expect(from).toBe(opened);
+      expect(sentDisabled(saved, from, true, true)).toEqual({ claude: false, codex: false });
+    }
+  );
+
+  test('a save that sent no provider off keeps the profile the editor opened with', async () => {
+    const opened = copyOfShared(shared);
+    const { onSave } = await mount({ initial: opened, providerToggleSupported: true });
+    onSave.mockResolvedValue('unconfirmed');
+    act(() => sticky().props.onChange(false));
+    await clickSave(onSave);
+    act(() => sticky().props.onChange(true));
+    act(() => sticky().props.onChange(false));
+    await clickSave(onSave);
+    expect(onSave).toHaveBeenCalledTimes(2);
+    expect(onSave.mock.calls[1][2]).toBe(opened);
   });
 
   test('both providers off shows a warning and still saves', async () => {
@@ -832,7 +980,10 @@ describe('KeyProfileEditor', () => {
     expect(noProviderWarnings()).toHaveLength(0);
     setEnabled('codex', false);
     expect(noProviderWarnings()).toHaveLength(1);
-    expect(textOf(noProviderWarnings()[0])).toContain('this profile allows no provider');
+    const warning = textOf(noProviderWarnings()[0]);
+    // CPA refuses only Claude and Codex requests; other providers stay usable.
+    expect(warning).toContain('CPA refuses every Claude and Codex request');
+    expect(warning).toContain('Other providers are not affected');
     expect(saveButton().props.disabled).toBe(false);
     click(saveButton());
     const saved: RoutingProfile = onSave.mock.calls[0][0];

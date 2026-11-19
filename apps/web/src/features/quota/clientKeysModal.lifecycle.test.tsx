@@ -14,7 +14,7 @@ import { sha256Hex } from '@/utils/apiKeyHash';
 import { copyToClipboard } from '@/utils/clipboard';
 import { ClientKeysModal, type ClientKeysModalProps } from './components/ClientKeysModal';
 import { Select } from './components/Select';
-import type { KeyProfilesState } from './hooks/useKeyProfiles';
+import type { KeyProfilesState, ProfileSaveOutcome } from './hooks/useKeyProfiles';
 import { buildKeyRows, chainSummary } from './keyProfilesModel';
 
 vi.mock('@/components/ui/Modal', () => ({
@@ -99,7 +99,7 @@ function makeKeyProfiles(
     saving: false,
     error: '',
     reload: vi.fn(),
-    saveKeyProfile: vi.fn(async () => true),
+    saveKeyProfile: vi.fn(async (): Promise<ProfileSaveOutcome> => 'saved'),
     addKey: vi.fn(async () => ({ ok: true })),
     removeKey: vi.fn(async () => ({ ok: true })),
     apiKeyConfigs: { claude: [], codex: [] },

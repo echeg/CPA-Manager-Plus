@@ -19,7 +19,7 @@ import {
   type RoutingProfilesModalProps,
 } from './components/RoutingProfilesModal';
 import { Select } from './components/Select';
-import type { KeyProfilesState } from './hooks/useKeyProfiles';
+import type { KeyProfilesState, ProfileSaveOutcome } from './hooks/useKeyProfiles';
 import { buildKeyRows, chainSummary } from './keyProfilesModel';
 
 vi.mock('@/components/ui/Modal', () => ({
@@ -113,8 +113,8 @@ function makeKeyProfiles(
     saving: false,
     error: '',
     reload: vi.fn(),
-    saveKeyProfile: vi.fn(async () => true),
-    saveShared: vi.fn(async () => true),
+    saveKeyProfile: vi.fn(async (): Promise<ProfileSaveOutcome> => 'saved'),
+    saveShared: vi.fn(async (): Promise<ProfileSaveOutcome> => 'saved'),
     apiKeyConfigs: { claude: [], codex: [] },
     ...overrides,
   };
@@ -336,7 +336,8 @@ describe('routing profiles modal rows', () => {
     await click(editorSave());
     expect(keyProfiles.saveShared).toHaveBeenCalledWith(
       { ...shared(), sessionAffinity: false },
-      undefined
+      undefined,
+      shared()
     );
     expect(editors()).toHaveLength(0);
 
@@ -346,11 +347,43 @@ describe('routing profiles modal rows', () => {
     );
     await act(async () => ttl.props.onChange({ target: { value: '24h' } }));
     await click(editorSave());
-    expect(keyProfiles.saveShared).toHaveBeenLastCalledWith(shared(), '24h');
+    expect(keyProfiles.saveShared).toHaveBeenLastCalledWith(shared(), '24h', shared());
+  });
+
+  test('an editor an unconfirmed save left open counts the switch that save sent', async () => {
+    // Beta's stored profile has Claude off.
+    const stored = betaProfile();
+    stored.providers.claude.disabled = true;
+    const saveKeyProfile = vi.fn<KeyProfilesState['saveKeyProfile']>(async () => 'unconfirmed');
+    keyProfiles = makeKeyProfiles(
+      profilesState({ providerToggleSupported: true, keys: [{ key: RAW_BETA, profile: stored }] }),
+      { saveKeyProfile }
+    );
+    await mount();
+    const claudeEnabled = i18n.t('quota_management.provider_routing.enabled_label', {
+      provider: 'Claude',
+    });
+    const claudeSwitch = () =>
+      editors()[0]
+        .findAllByType(ToggleSwitch)
+        .find((node) => node.props.ariaLabel === claudeEnabled)!;
+    await click(buttonIn(keyRows()[0], 'data-profile-edit'));
+    await act(async () => claudeSwitch().props.onChange(true));
+    await click(editorSave());
+    expect(editors()).toHaveLength(1);
+    // No reload showed the result: the editor still holds Claude off as stored, while CPA
+    // may hold the Claude on that save sent. Back off, the save stays available.
+    await act(async () => claudeSwitch().props.onChange(false));
+    expect(editorSave().props.disabled).toBe(false);
+    await click(editorSave());
+    expect(saveKeyProfile).toHaveBeenCalledTimes(2);
+    expect(saveKeyProfile.mock.calls[1][1]?.providers.claude.disabled).toBe(true);
   });
 
   test('a failed shared save keeps the editor open', async () => {
-    keyProfiles = makeKeyProfiles(profilesState(), { saveShared: vi.fn(async () => false) });
+    keyProfiles = makeKeyProfiles(profilesState(), {
+      saveShared: vi.fn(async (): Promise<ProfileSaveOutcome> => 'unwritten'),
+    });
     await mount();
     await click(buttonIn(defaultRow(), 'data-profile-edit'));
     await act(async () => editors()[0].findAllByType(ToggleSwitch)[0].props.onChange(false));
@@ -367,10 +400,11 @@ describe('routing profiles modal rows', () => {
     expect(editor.props.initial).toEqual(betaProfile());
     await act(async () => editor.findAllByType(ToggleSwitch)[0].props.onChange(false));
     await click(editorSave());
-    expect(keyProfiles.saveKeyProfile).toHaveBeenCalledWith(RAW_BETA, {
-      ...betaProfile(),
-      sessionAffinity: false,
-    });
+    expect(keyProfiles.saveKeyProfile).toHaveBeenCalledWith(
+      RAW_BETA,
+      { ...betaProfile(), sessionAffinity: false },
+      betaProfile()
+    );
     expect(editors()).toHaveLength(0);
   });
 
@@ -395,7 +429,7 @@ describe('routing profiles modal rows', () => {
     expect(options.variant).toBe('danger');
     for (const raw of RAW_KEYS) expect(JSON.stringify(options)).not.toContain(raw);
     await act(async () => options.onConfirm());
-    expect(keyProfiles.saveKeyProfile).toHaveBeenCalledWith(RAW_BETA, null);
+    expect(keyProfiles.saveKeyProfile).toHaveBeenCalledWith(RAW_BETA, null, null);
     expect(editors()).toHaveLength(0);
   });
 
@@ -416,7 +450,7 @@ describe('routing profiles modal rows', () => {
     expect(text(root().find((node) => node.props['data-profile-draft']))).toContain('Laptop');
 
     await click(editorSave());
-    expect(keyProfiles.saveKeyProfile).toHaveBeenCalledWith(RAW_ALPHA, shared());
+    expect(keyProfiles.saveKeyProfile).toHaveBeenCalledWith(RAW_ALPHA, shared(), shared());
     expect(editors()).toHaveLength(0);
   });
 
@@ -542,7 +576,8 @@ describe('routing profiles modal states', () => {
     await click(editorSave());
     expect(keyProfiles.saveShared).toHaveBeenCalledWith(
       { ...shared(), sessionAffinity: false },
-      undefined
+      undefined,
+      shared()
     );
   });
 
@@ -596,6 +631,51 @@ describe('routing profiles modal states', () => {
       await click(editorCancel());
     }
   });
+
+  test.each([
+    ['a backend that lost disabled', { providerToggleSupported: false }],
+    ['a scheduler plugin owning routing', { supported: false }],
+  ])(
+    'an open editor starts over from the stored profile after a reload finds %s',
+    async (_name, after) => {
+      // Every save is refused, as the pre-write check refuses it after such a change.
+      const hooks = {
+        saveKeyProfile: vi.fn(async (): Promise<ProfileSaveOutcome> => 'unwritten'),
+        saveShared: vi.fn(async (): Promise<ProfileSaveOutcome> => 'unwritten'),
+      };
+      keyProfiles = makeKeyProfiles(profilesState({ providerToggleSupported: true }), hooks);
+      await mount();
+      const claudeEnabled = i18n.t('quota_management.provider_routing.enabled_label', {
+        provider: 'Claude',
+      });
+      const claudeSwitch = () =>
+        editors()[0]
+          .findAllByType(ToggleSwitch)
+          .find((node) => node.props.ariaLabel === claudeEnabled)!;
+      for (const row of [defaultRow, () => keyRows()[0]]) {
+        keyProfiles = makeKeyProfiles(profilesState({ providerToggleSupported: true }), hooks);
+        await rerender();
+        await click(buttonIn(row(), 'data-profile-edit'));
+        await act(async () => claudeSwitch().props.onChange(false));
+        expect(claudeSwitch().props.checked).toBe(false);
+        await click(editorSave());
+        expect(editors()).toHaveLength(1);
+
+        // The reload after the refused save: the save can no longer carry the switch.
+        keyProfiles = makeKeyProfiles(
+          profilesState({ providerToggleSupported: true, ...after }),
+          hooks
+        );
+        await rerender();
+        expect(editors()).toHaveLength(1);
+        // The draft's "Claude off" is gone, so no save can drop it unseen.
+        expect(claudeSwitch().props.checked).toBe(true);
+        expect(claudeSwitch().props.disabled).toBe(true);
+        expect(editorSave().props.disabled).toBe(true);
+        await click(editorCancel());
+      }
+    }
+  );
 
   test('Edit is disabled while the profiles reload unless that editor is open', async () => {
     keyProfiles = makeKeyProfiles(profilesState(), { loading: true });

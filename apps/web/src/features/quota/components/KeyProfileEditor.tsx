@@ -3,11 +3,14 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { withSuggestions } from '@/features/personal-quota-support/services/api/claudeFallback';
-import type {
-  RoutingProfile,
-  RoutingSelectionOptions,
+import {
+  sentDisabled,
+  type ApiProvider,
+  type RoutingProfile,
+  type RoutingSelectionOptions,
 } from '@/features/personal-quota-support/services/api/routingProfiles';
 import type { AuthFileItem } from '@/features/personal-quota-support/types';
+import type { ProfileSaveOutcome } from '../hooks/useKeyProfiles';
 import { getQuotaDisplayName } from '@/features/quota/utils/quota/identity';
 import { codexSpeedUse } from '../codexSpeedModel';
 import {
@@ -65,8 +68,19 @@ export interface KeyProfileEditorProps {
   providerToggleSupported?: boolean;
   /** The API keys CPA can route to, per provider, and the masked key configs that name them. */
   apiKeys: ApiKeyLabelSource;
-  /** Saves the complete profile; the TTL is passed only when the default variant changed it. */
-  onSave: (profile: RoutingProfile, ttl?: string) => void;
+  /**
+   * Saves the complete profile; the TTL is passed only when the default variant changed
+   * it. `opened` is `initial` as the editor opened with it, so the save switches a
+   * provider back on only when this edit did (`sentDisabled`). A provider an earlier
+   * save of this editor sent off, and that CPA may hold, counts as off there
+   * (`withUnconfirmedOff`). Resolves to the outcome: only an `unconfirmed` one leaves
+   * CPA possibly holding flags the editor's `initial` does not show.
+   */
+  onSave: (
+    profile: RoutingProfile,
+    ttl: string | undefined,
+    opened: RoutingProfile
+  ) => Promise<ProfileSaveOutcome>;
   onCancel: () => void;
 }
 
@@ -104,6 +118,49 @@ const withDraftCodexSpeed = (
 });
 
 /**
+ * Per provider, whether a save of this editor whose outcome is unknown (`unconfirmed`)
+ * sent it off, and whether one sent it on. CPA may hold such a flag although `initial`
+ * does not show it: no reload ran since, or it failed too.
+ */
+type UnconfirmedFlags = Record<ApiProvider, { off: boolean; on: boolean }>;
+
+const noUnconfirmedFlags: UnconfirmedFlags = {
+  claude: { off: false, on: false },
+  codex: { off: false, on: false },
+};
+
+/** `flags` plus every `disabled` a save sent (`sent`) for `providers`. */
+const withUnconfirmedSent = (
+  flags: UnconfirmedFlags,
+  providers: RoutingProfile['providers'],
+  sent: Record<ApiProvider, boolean>
+): UnconfirmedFlags => {
+  const next = { ...flags };
+  for (const provider of API_PROVIDERS) {
+    if (!sent[provider]) continue;
+    next[provider] = providers[provider].disabled
+      ? { ...next[provider], off: true }
+      : { ...next[provider], on: true };
+  }
+  return next;
+};
+
+/**
+ * `opened` with every provider that an unconfirmed save sent off counted as off, or
+ * `opened` itself when that changes nothing: CPA may hold the `true` such a save sent,
+ * so switching the provider back on must write an explicit `disabled: false`.
+ */
+const withUnconfirmedOff = (opened: RoutingProfile, flags: UnconfirmedFlags): RoutingProfile => {
+  const newlyOff = API_PROVIDERS.filter(
+    (provider) => flags[provider].off && !opened.providers[provider].disabled
+  );
+  if (newlyOff.length === 0) return opened;
+  const providers = { ...opened.providers };
+  for (const provider of newlyOff) providers[provider] = { ...providers[provider], disabled: true };
+  return { ...opened, providers };
+};
+
+/**
  * Editor for one routing profile: the shared stages (sticky session, pool selection,
  * plus the TTL for the default profile), then one block per provider with its mode,
  * preferred subscription, fallback target and API key.
@@ -129,7 +186,10 @@ export function KeyProfileEditor({
 }: KeyProfileEditorProps) {
   const { t } = useTranslation();
   const id = useId();
-  // The editor copies the profile once; the caller remounts it to start over.
+  // The editor copies the profile once; the caller remounts it to start over. A reload
+  // does not move `opened`; an unconfirmed save of this editor adds to `unconfirmed`.
+  const [opened] = useState(initial);
+  const [unconfirmed, setUnconfirmed] = useState(noUnconfirmedFlags);
   const [draft, setDraft] = useState<RoutingProfile>(() =>
     withFallbackSuggestions(copyOfShared(initial))
   );
@@ -157,12 +217,23 @@ export function KeyProfileEditor({
   // CPA ignores `disabled` under the lock, so a stored "both off" refuses nothing there.
   const noProvider =
     !fallbackReadOnly && draft.providers.claude.disabled && draft.providers.codex.disabled;
-  const dirty = !baseline || profileDirty(draft, baseline, selectionOptions) || ttlChanged;
+  // CPA may hold either what `baseline` shows or a flag an unconfirmed save sent
+  // (`unconfirmed`), in either direction. A draft that differs from such a flag differs
+  // from what CPA may hold, so the save stays available, also when the draft equals
+  // `baseline`. Under the lock or without the switch no save sends a flag, so none is kept.
+  const differsFromUnconfirmed = API_PROVIDERS.some((provider) =>
+    draft.providers[provider].disabled ? unconfirmed[provider].on : unconfirmed[provider].off
+  );
+  const dirty =
+    !baseline ||
+    profileDirty(draft, baseline, selectionOptions) ||
+    ttlChanged ||
+    differsFromUnconfirmed;
 
   const update = (patch: Partial<RoutingProfile>) =>
     setDraft((current) => ({ ...current, ...patch }));
 
-  const save = () => {
+  const save = async () => {
     if (readOnly || saving || !dirty || invalid) return;
     const profile = {
       ...draft,
@@ -171,7 +242,20 @@ export function KeyProfileEditor({
         ? withDraftCodexSpeed(initial.providers, draft.providers)
         : withApiModeNormalization(draft.providers),
     };
-    onSave(profile, ttlChanged ? ttlDraft.trim() : undefined);
+    const from = withUnconfirmedOff(opened, unconfirmed);
+    const outcome = await onSave(profile, ttlChanged ? ttlDraft.trim() : undefined, from);
+    // A save refused before or by its write stored nothing, so it leaves no flag behind:
+    // kept, an undone off would make a later save write `disabled: false` over an off
+    // set elsewhere. A saved one closes the editor.
+    if (outcome !== 'unconfirmed') return;
+    // The flags the save sent, as `profileBody` decides; under the lock it sends none.
+    const sent = sentDisabled(
+      profile,
+      from,
+      providersSupported,
+      providerToggleSupported && !fallbackReadOnly
+    );
+    setUnconfirmed((current) => withUnconfirmedSent(current, profile.providers, sent));
   };
 
   const slots = selectionSlotOptions(t, selectionOptions, draft.selection);
@@ -336,7 +420,7 @@ export function KeyProfileEditor({
             data-key-profile-save
             disabled={readOnly || !dirty || invalid}
             loading={saving}
-            onClick={save}
+            onClick={() => void save()}
           >
             {t('common.save')}
           </Button>

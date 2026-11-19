@@ -33,11 +33,16 @@ import {
   profiledKeysOf,
   providersFromClaudeFallback,
   readRoutingProfiles,
+  ProviderToggleChangedError,
+  RoutingNotAppliedError,
   routingProfilesApi,
   sharedCodexSpeedPatch,
+  sentDisabled,
+  sharedDisabledOf,
   sharedProfilePatch,
   strongETag,
   UnknownApiKeyError,
+  wroteNothing,
   type RoutingProfile,
 } from './routingProfiles';
 
@@ -706,6 +711,7 @@ describe('writing a key profile', () => {
       clientKeys: new Set(),
       profiledKeys: new Set(),
       legacyClaudeFallback: { shared: false, keys: new Set() },
+      sharedDisabled: { claude: false, codex: false },
     });
     expect(mocks.getRaw).toHaveBeenCalledExactlyOnceWith('/config');
     mocks.getRaw.mockResolvedValueOnce({ headers: {}, data: {} });
@@ -743,9 +749,35 @@ describe('writing a key profile', () => {
     expect([...snapshot.clientKeys]).toEqual([RAW_KEY, OTHER_KEY]);
     // A null entry owns no profile: CPA ignores it.
     expect([...snapshot.profiledKeys]).toEqual([RAW_KEY]);
+    expect(snapshot.sharedDisabled).toEqual({ claude: false, codex: false });
     expect(profiledKeysOf({ routing: {} })).toEqual(new Set());
     expect(profiledKeysOf({ routing: { 'key-profiles': [] } })).toEqual(new Set());
     expect(profiledKeysOf(null)).toEqual(new Set());
+  });
+
+  it("reads the stored Default profile's disabled flags from the same config document", async () => {
+    mocks.getRaw.mockResolvedValueOnce({
+      headers: { etag: '"abc123"' },
+      data: { routing: { providers: { claude: { disabled: true }, codex: { mode: 'api' } } } },
+    });
+    const snapshot = await routingProfilesApi.configSnapshot();
+    expect(snapshot.sharedDisabled).toEqual({ claude: true, codex: false });
+    // `GET /config` decodes the file without types, so a YAML 1.1 spelling CPA's typed
+    // bool reads as `true` arrives as a string; it is off as well.
+    const claudeDisabled = (value: unknown) =>
+      sharedDisabledOf({ routing: { providers: { claude: { disabled: value }, codex: null } } })
+        .claude;
+    for (const on of ['y', 'Y', 'yes', 'Yes', 'YES', 'on', 'On', 'ON'])
+      expect(claudeDisabled(on), on).toBe(true);
+    // CPA's bool reads these as `false`; any other value fails CPA's load, so CPA
+    // refuses a PATCH over it.
+    for (const off of [false, 'no', 'off', 'n', 'false', 'true', 'yEs', 1, null, undefined])
+      expect(claudeDisabled(off), String(off)).toBe(false);
+    expect(sharedDisabledOf({ routing: { providers: { codex: { disabled: true } } } })).toEqual({
+      claude: false,
+      codex: true,
+    });
+    expect(sharedDisabledOf(null)).toEqual({ claude: false, codex: false });
   });
 
   it('finds the profiles whose legacy Claude fallback a routing write would drop', async () => {
@@ -987,6 +1019,11 @@ describe('writing a key profile', () => {
 });
 
 describe('write errors', () => {
+  // The read every key save makes before it writes.
+  beforeEach(() => {
+    mocks.get.mockResolvedValue(response());
+  });
+
   it('maps 400 unknown_api_key to UnknownApiKeyError without the raw key', async () => {
     mocks.patch.mockRejectedValue(
       Object.assign(new Error('x'), { status: 400, apiCode: 'unknown_api_key' })
@@ -994,7 +1031,8 @@ describe('write errors', () => {
     const error = await routingProfilesApi.saveKeyProfile(RAW_KEY, keyProfile()).catch((e) => e);
     expect(error).toBeInstanceOf(UnknownApiKeyError);
     expect(error.message).not.toContain(RAW_KEY);
-    expect(mocks.get).not.toHaveBeenCalled();
+    // The read before the write only: nothing is read back.
+    expect(mocks.get).toHaveBeenCalledTimes(1);
     assertNoKeyInRequests();
   });
 
@@ -1038,7 +1076,7 @@ describe('write errors', () => {
       .saveKeyProfile(RAW_KEY, keyProfile(), options, false)
       .catch((e) => e);
     expect(error).toBeInstanceOf(ConfigChangedError);
-    expect(mocks.get).not.toHaveBeenCalled();
+    expect(mocks.get).toHaveBeenCalledTimes(1);
   });
 
   it('passes through a write error that is not an object', async () => {
@@ -1052,12 +1090,12 @@ describe('write errors', () => {
     const notFound = Object.assign(new Error('not found'), { status: 404 });
     mocks.patch.mockRejectedValue(notFound);
     await expect(routingProfilesApi.saveKeyProfile(RAW_KEY, keyProfile())).rejects.toBe(notFound);
-    expect(mocks.get).not.toHaveBeenCalled();
+    expect(mocks.get).toHaveBeenCalledTimes(1);
   });
 
   it('fails the save when the read-back finds an older backend', async () => {
     mocks.patch.mockResolvedValue({});
-    mocks.get.mockRejectedValue({ status: 404 });
+    mocks.get.mockResolvedValueOnce(response([])).mockRejectedValue({ status: 404 });
     await expect(routingProfilesApi.saveKeyProfile(RAW_KEY, null)).rejects.toThrow(
       'did not retain'
     );
@@ -1071,7 +1109,18 @@ describe('write errors', () => {
     await expect(routingProfilesApi.saveKeyProfile(RAW_KEY, keyProfile())).rejects.toThrow(
       'connection changed'
     );
-    expect(mocks.get).not.toHaveBeenCalled();
+    expect(mocks.get).toHaveBeenCalledTimes(1);
+  });
+
+  it('aborts when the connection changes during the read before the write', async () => {
+    mocks.get.mockImplementation(async () => {
+      mocks.revision++;
+      return response();
+    });
+    await expect(routingProfilesApi.saveKeyProfile(RAW_KEY, null)).rejects.toThrow(
+      'connection changed'
+    );
+    expect(mocks.patch).not.toHaveBeenCalled();
   });
 
   it('reports the connection change instead of a write error from the old connection', async () => {
@@ -1083,9 +1132,47 @@ describe('write errors', () => {
     expect(error.name).toBe('AbortError');
   });
 
+  it.each([
+    ['a 422', { status: 422, apiCode: 'invalid_config' }, true],
+    ['a 412', { status: 412, apiCode: 'precondition_failed' }, true],
+    ['a 400 for a removed key', { status: 400, apiCode: 'unknown_api_key' }, true],
+    ['another refusal', { status: 403 }, true],
+    ['no answer', new Error('network down'), false],
+    ['a gateway timeout', { status: 504 }, false],
+    ["CPA's write_failed", { status: 500, apiCode: 'write_failed' }, false],
+  ])('a key save whose write fails with %s stored nothing: %s', async (_name, failure, none) => {
+    mocks.patch.mockRejectedValue(failure);
+    const error = await routingProfilesApi.saveKeyProfile(RAW_KEY, keyProfile()).catch((e) => e);
+    expect(wroteNothing(error)).toBe(none);
+  });
+
+  it('a key save that fails before its write stored nothing', async () => {
+    mocks.get.mockRejectedValueOnce(new Error('offline'));
+    const offline = await routingProfilesApi.saveKeyProfile(RAW_KEY, keyProfile()).catch((e) => e);
+    expect(offline.message).toBe('offline');
+    expect(wroteNothing(offline)).toBe(true);
+    mocks.get.mockResolvedValueOnce({ ...response(), supported: false });
+    const inert = await routingProfilesApi.saveKeyProfile(RAW_KEY, keyProfile()).catch((e) => e);
+    expect(inert).toBeInstanceOf(ConfigChangedError);
+    expect(wroteNothing(inert)).toBe(true);
+    expect(mocks.patch).not.toHaveBeenCalled();
+  });
+
+  it('a key save that fails after its write may have stored it', async () => {
+    mocks.patch.mockResolvedValue({});
+    mocks.get.mockResolvedValueOnce(response()).mockRejectedValueOnce(new Error('offline'));
+    const offline = await routingProfilesApi.saveKeyProfile(RAW_KEY, keyProfile()).catch((e) => e);
+    expect(offline.message).toBe('offline');
+    expect(wroteNothing(offline)).toBe(false);
+    mocks.get.mockResolvedValueOnce(response()).mockResolvedValueOnce(response([]));
+    const lost = await routingProfilesApi.saveKeyProfile(RAW_KEY, keyProfile()).catch((e) => e);
+    expect(lost.message).toContain('did not retain');
+    expect(wroteNothing(lost)).toBe(false);
+  });
+
   it('aborts when the connection changes during the read-back', async () => {
     mocks.patch.mockResolvedValue({});
-    mocks.get.mockImplementation(async () => {
+    mocks.get.mockResolvedValueOnce(response()).mockImplementation(async () => {
       mocks.revision++;
       return response();
     });
@@ -1296,6 +1383,44 @@ describe('writing the shared profile', () => {
     expect(error).toBeInstanceOf(InvalidRoutingConfigError);
     expect(error.message).toBe(message);
     expect(mocks.get).not.toHaveBeenCalled();
+  });
+
+  it('a shared save refused by CPA or before its write stored nothing', async () => {
+    mocks.patch.mockRejectedValueOnce({ status: 422, apiCode: 'invalid_config' });
+    const refused = await routingProfilesApi
+      .saveSharedProfile(sharedProfile(), undefined, options)
+      .catch((e) => e);
+    expect(wroteNothing(refused)).toBe(true);
+    const invalid = await routingProfilesApi
+      .saveSharedProfile(sharedProfile(), 'soon', options)
+      .catch((e) => e);
+    expect(invalid.message).toBe('Invalid session affinity TTL');
+    expect(wroteNothing(invalid)).toBe(true);
+    // A save that sends a flag reads the profiles first.
+    const off = sharedProfile();
+    off.providers.claude.disabled = true;
+    mocks.get.mockRejectedValueOnce(new Error('offline'));
+    const offline = await routingProfilesApi
+      .saveSharedProfile(off, undefined, options, true, false, true)
+      .catch((e) => e);
+    expect(offline.message).toBe('offline');
+    expect(wroteNothing(offline)).toBe(true);
+    expect(mocks.patch).toHaveBeenCalledTimes(1);
+  });
+
+  it('a shared save whose write got no answer or whose read-back failed may have stored it', async () => {
+    mocks.patch.mockRejectedValueOnce(new Error('network down'));
+    const unanswered = await routingProfilesApi
+      .saveSharedProfile(sharedProfile(), undefined, options)
+      .catch((e) => e);
+    expect(wroteNothing(unanswered)).toBe(false);
+    mocks.patch.mockResolvedValue({});
+    mocks.get.mockRejectedValueOnce(new Error('offline'));
+    const offline = await routingProfilesApi
+      .saveSharedProfile(sharedProfile(), undefined, options)
+      .catch((e) => e);
+    expect(offline.message).toBe('offline');
+    expect(wroteNothing(offline)).toBe(false);
   });
 
   it('aborts when the connection changes during the write', async () => {
@@ -1940,18 +2065,40 @@ describe('provider toggle', () => {
     });
   });
 
-  it('sends disabled in both provider blocks, explicit false when on, only when supported', () => {
+  it('sends disabled: true for a provider that is off and leaves an untouched one out', () => {
     const profile = providersProfile();
     profile.providers.claude.disabled = true;
     const body = blocks(profileBody(profile, options, true, false, true));
     expect(body.claude.disabled).toBe(true);
-    expect(body.codex.disabled).toBe(false);
-    expect(Object.prototype.hasOwnProperty.call(body.codex, 'disabled')).toBe(true);
+    // Codex is on and was not switched on by the edit, so the merge keeps its stored flag.
+    expect(body.codex).not.toHaveProperty('disabled');
     profile.providers.claude.disabled = false;
     profile.providers.codex.disabled = true;
     const swapped = blocks(profileBody(profile, options, true, true, true));
-    expect(swapped.claude.disabled).toBe(false);
+    expect(swapped.claude).not.toHaveProperty('disabled');
     expect(swapped.codex).toMatchObject({ disabled: true, speed: 'standard' });
+  });
+
+  it('sends an explicit disabled: false only for a provider the edit switched back on', () => {
+    const opened = providersProfile();
+    opened.providers.codex.disabled = true;
+    const body = blocks(profileBody(providersProfile(), options, true, false, true, opened));
+    expect(body.codex).toHaveProperty('disabled', false);
+    expect(body.claude).not.toHaveProperty('disabled');
+    // Still off: the flag is sent as it is.
+    const stillOff = blocks(profileBody(opened, options, true, false, true, opened));
+    expect(stillOff.codex).toHaveProperty('disabled', true);
+  });
+
+  it('sentDisabled sends a flag only when on a toggle-capable backend with providers', () => {
+    const off = providersProfile();
+    off.providers.claude.disabled = true;
+    const on = providersProfile();
+    expect(sentDisabled(off, null, true, true)).toEqual({ claude: true, codex: false });
+    expect(sentDisabled(on, null, true, true)).toEqual({ claude: false, codex: false });
+    expect(sentDisabled(on, off, true, true)).toEqual({ claude: true, codex: false });
+    expect(sentDisabled(off, null, true, false)).toEqual({ claude: false, codex: false });
+    expect(sentDisabled(off, off, false, true)).toEqual({ claude: false, codex: false });
   });
 
   it('keeps the other fields of a disabled provider in the body', () => {
@@ -1962,19 +2109,23 @@ describe('provider toggle', () => {
     expect(off.claude).toEqual({ ...on.claude, disabled: true });
   });
 
-  it('threads the toggle flag through the key and shared patches', () => {
+  it('threads the toggle flag and the opened profile through the key and shared patches', () => {
     const profile = providersProfile();
     profile.providers.codex.disabled = true;
-    const key = keyProfilePatch(RAW_KEY, profile, options, true, false, true).routing as Record<
-      string,
-      Record<string, Record<string, unknown>>
-    >;
+    const opened = providersProfile();
+    opened.providers.claude.disabled = true;
+    const key = keyProfilePatch(RAW_KEY, profile, options, true, false, true, opened)
+      .routing as Record<string, Record<string, Record<string, unknown>>>;
     expect(blocks(key['key-profiles'][RAW_KEY]).codex.disabled).toBe(true);
-    expect(blocks(key['key-profiles'][RAW_KEY]).claude.disabled).toBe(false);
-    const shared = sharedProfilePatch(profile, undefined, options, true, false, true)
+    expect(blocks(key['key-profiles'][RAW_KEY]).claude).toHaveProperty('disabled', false);
+    const shared = sharedProfilePatch(profile, undefined, options, true, false, true, opened)
       .routing as Record<string, unknown>;
     expect(blocks(shared).codex.disabled).toBe(true);
-    expect(blocks(shared).claude.disabled).toBe(false);
+    expect(blocks(shared).claude).toHaveProperty('disabled', false);
+    // Without the opened profile Claude was never off, so its flag stays out.
+    const fresh = sharedProfilePatch(profile, undefined, options, true, false, true)
+      .routing as Record<string, unknown>;
+    expect(blocks(fresh).claude).not.toHaveProperty('disabled');
   });
 
   it.each([
@@ -2022,11 +2173,11 @@ describe('provider toggle', () => {
         },
         ...(toggle ? { disabled: true } : {}),
       },
+      // Codex is on and the edit did not switch it on, so no flag is sent.
       codex: {
         mode: 'api',
         'api-credential': 'codex-idx',
         fallback: { target: 'off', mode: null, mappings: null },
-        ...(toggle ? { disabled: false } : {}),
       },
     });
     const sentProfile = (toggle: boolean) => ({
@@ -2047,20 +2198,44 @@ describe('provider toggle', () => {
       profile.providers.claude.disabled = true;
       return profile;
     };
-    const routeGets = (profiles: unknown) =>
-      mocks.get.mockImplementation(async (url: string) => {
+    const CONFIG_VERSION = '"config-v1"';
+    const conditional = { headers: { 'If-Match': CONFIG_VERSION } };
+    /**
+     * `GET /config`, the file a key save reads before it writes: the Default profile's
+     * provider blocks, and the key's own profile unless `profiled` is false.
+     */
+    const routeConfig = (
+      profiled = true,
+      providers: unknown = toggleProviders(false, false),
+      etag: string | undefined = CONFIG_VERSION
+    ) =>
+      mocks.getRaw.mockResolvedValue({
+        headers: etag === undefined ? {} : { etag },
+        data: {
+          access: { 'api-keys': [RAW_KEY] },
+          routing: { providers, 'key-profiles': profiled ? { [RAW_KEY]: rawShared() } : {} },
+        },
+      });
+    const routeGets = (profiles: unknown) => {
+      routeConfig();
+      return mocks.get.mockImplementation(async (url: string) => {
         if (url === '/routing/profiles') return profiles;
         throw new Error(`unexpected GET ${url}`);
       });
+    };
 
     it('saveKeyProfile sends disabled in the exact body on a toggle-capable backend', async () => {
       mocks.patch.mockResolvedValue({});
       routeGets(claudeOffResponse(true));
       await routingProfilesApi.saveKeyProfile(RAW_KEY, claudeOff(), options, true, false, true);
       expect(mocks.patch).toHaveBeenCalledTimes(1);
-      expect(mocks.patch).toHaveBeenCalledWith('/config', {
-        routing: { 'key-profiles': { [RAW_KEY]: sentProfile(true) } },
-      });
+      // Codex's flag is left out, so the write is conditional on the config it read.
+      expect(mocks.patch).toHaveBeenCalledWith(
+        '/config',
+        { routing: { 'key-profiles': { [RAW_KEY]: sentProfile(true) } } },
+        conditional
+      );
+      expect(mocks.getRaw).toHaveBeenCalledExactlyOnceWith('/config');
       assertNoKeyInRequests();
     });
 
@@ -2087,8 +2262,11 @@ describe('provider toggle', () => {
         ])
       );
       const on = providersProfile();
-      await routingProfilesApi.saveKeyProfile(RAW_KEY, on, options, true, false, true);
-      await routingProfilesApi.saveSharedProfile(on, undefined, options, true, false, true);
+      const opened = providersProfile();
+      opened.providers.claude.disabled = true;
+      opened.providers.codex.disabled = true;
+      await routingProfilesApi.saveKeyProfile(RAW_KEY, on, options, true, false, true, opened);
+      await routingProfilesApi.saveSharedProfile(on, undefined, options, true, false, true, opened);
       const keyBody = mocks.patch.mock.calls[0][1].routing['key-profiles'][RAW_KEY];
       const sharedBody = mocks.patch.mock.calls[1][1].routing;
       for (const body of [keyBody, sharedBody]) {
@@ -2125,6 +2303,219 @@ describe('provider toggle', () => {
         routing: { 'key-profiles': { [RAW_KEY]: sentProfile(false) } },
       });
       expect(mocks.patch.mock.calls[1][1]).toEqual({ routing: sentProfile(false) });
+      // No flag can be left out there, so the key save reads no config before it writes,
+      // only the profiles; the shared save sends no flag and reads only its read-back.
+      expect(mocks.get).toHaveBeenCalledTimes(3);
+      expect(mocks.getRaw).not.toHaveBeenCalled();
+    });
+
+    it('a write that creates the key profile sends a left-out flag as the stored Default holds it', async () => {
+      mocks.patch.mockResolvedValue({});
+      // The editor opened with Claude on: a new key's copy of the Default, or the key's
+      // own profile before someone reset it. Since then the Default switched Claude off
+      // in the file, and the key owns no profile there, so the PATCH creates one. CPA
+      // has not reloaded the file yet: its profiles still show Claude on in the Default.
+      routeConfig(false, toggleProviders(true, false));
+      const stored = toggleProviders(true, false);
+      mocks.get
+        .mockResolvedValueOnce(providersResponse({ providers: toggleProviders(false, false) }, []))
+        .mockResolvedValueOnce(
+          providersResponse({ providers: stored }, [
+            { key: RAW_KEY, profile: { ...rawShared(), providers: stored } },
+          ])
+        );
+      const on = providersProfile();
+      const state = await routingProfilesApi.saveKeyProfile(
+        RAW_KEY,
+        on,
+        options,
+        true,
+        false,
+        true,
+        on
+      );
+      expect(mocks.patch).toHaveBeenCalledTimes(1);
+      const [, sent, request] = mocks.patch.mock.calls[0];
+      const body = sent.routing['key-profiles'][RAW_KEY];
+      expect(blocks(body).claude).toHaveProperty('disabled', true);
+      // The Default has Codex on, which is what a new profile starts with.
+      expect(blocks(body).codex).not.toHaveProperty('disabled');
+      // Conditional on the version the flags were read from.
+      expect(request).toEqual(conditional);
+      expect(state.keys[0].profile.providers.claude.disabled).toBe(true);
+      assertNoKeyInRequests();
+    });
+
+    it('a key that owns a profile in the file keeps its stored flags before CPA loads it', async () => {
+      mocks.patch.mockResolvedValue({});
+      // A hand edit gave the key its own profile, and CPA has not reloaded the file:
+      // its profiles show the key on the Default, which has Claude off. The merge keeps
+      // the flags of the profile in the file, so none is filled in from the Default.
+      routeConfig(true, toggleProviders(true, false));
+      const own = toggleProviders(false, false);
+      mocks.get
+        .mockResolvedValueOnce(providersResponse({ providers: toggleProviders(true, false) }, []))
+        .mockResolvedValueOnce(
+          providersResponse({ providers: toggleProviders(true, false) }, [
+            { key: RAW_KEY, profile: { ...rawShared(), providers: own } },
+          ])
+        );
+      const on = providersProfile();
+      await routingProfilesApi.saveKeyProfile(RAW_KEY, on, options, true, false, true, on);
+      const [, sent, request] = mocks.patch.mock.calls[0];
+      const body = sent.routing['key-profiles'][RAW_KEY];
+      expect(blocks(body).claude).not.toHaveProperty('disabled');
+      expect(blocks(body).codex).not.toHaveProperty('disabled');
+      expect(request).toEqual(conditional);
+    });
+
+    it('a config change after the read fails the conditional write', async () => {
+      routeGets(claudeOffResponse(true));
+      mocks.patch.mockRejectedValueOnce(Object.assign(new Error('pf'), { status: 412 }));
+      const on = providersProfile();
+      await expect(
+        routingProfilesApi.saveKeyProfile(RAW_KEY, on, options, true, false, true, on)
+      ).rejects.toBeInstanceOf(ConfigChangedError);
+      expect(mocks.patch).toHaveBeenCalledTimes(1);
+      // The read before the write only: nothing is read back.
+      expect(mocks.get).toHaveBeenCalledTimes(1);
+    });
+
+    it('a config read without a version leaves the write unconditional', async () => {
+      mocks.patch.mockResolvedValue({});
+      routeGets(claudeOffResponse(true));
+      routeConfig(true, toggleProviders(false, false), 'W/"weak"');
+      const on = providersProfile();
+      await routingProfilesApi.saveKeyProfile(RAW_KEY, on, options, true, false, true, on);
+      expect(mocks.patch).toHaveBeenCalledTimes(1);
+      expect(mocks.patch.mock.calls[0]).toHaveLength(2);
+    });
+
+    it.each([
+      ['a backend without the route', 'missing'],
+      ['a scheduler plugin owning routing', 'unsupported'],
+      ['a backend without disabled', 'no-toggle'],
+      ['a backend without providers', 'no-providers'],
+    ])('a key save whose read finds %s writes nothing', async (_name, fresh) => {
+      routeConfig(false);
+      mocks.get.mockImplementation(async () => {
+        if (fresh === 'missing') throw Object.assign(new Error('nf'), { status: 404 });
+        if (fresh === 'unsupported') return { ...claudeOffResponse(true), supported: false };
+        if (fresh === 'no-toggle') return claudeOffResponse(false);
+        return response();
+      });
+      const on = providersProfile();
+      await expect(
+        routingProfilesApi.saveKeyProfile(RAW_KEY, on, options, true, false, true, on)
+      ).rejects.toBeInstanceOf(ConfigChangedError);
+      expect(mocks.patch).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['a backend without the route', 'missing'],
+      ['a scheduler plugin owning routing', 'unsupported'],
+      ['a backend without disabled', 'no-toggle'],
+    ])(
+      'a key save that sends both flags writes nothing when its read finds %s',
+      async (_name, fresh) => {
+        routeConfig(false);
+        mocks.get.mockImplementation(async () => {
+          if (fresh === 'missing') throw Object.assign(new Error('nf'), { status: 404 });
+          if (fresh === 'unsupported') return { ...claudeOffResponse(true), supported: false };
+          return claudeOffResponse(false);
+        });
+        // Both providers switched off after the editor opened with them on: no flag is
+        // left out, so nothing is taken from the file, but the capability still counts.
+        const off = claudeOff();
+        off.providers.codex.disabled = true;
+        await expect(
+          routingProfilesApi.saveKeyProfile(
+            RAW_KEY,
+            off,
+            options,
+            true,
+            false,
+            true,
+            providersProfile()
+          )
+        ).rejects.toBeInstanceOf(ConfigChangedError);
+        expect(mocks.patch).not.toHaveBeenCalled();
+        expect(mocks.getRaw).not.toHaveBeenCalled();
+      }
+    );
+
+    it('a key save that sends both flags reads no config and writes unconditionally', async () => {
+      mocks.patch.mockResolvedValue({});
+      const stored = toggleProviders(true, true);
+      routeConfig(false);
+      const off = claudeOff();
+      off.providers.codex.disabled = true;
+      mocks.get
+        .mockResolvedValueOnce(providersResponse({ providers: toggleProviders(false, false) }, []))
+        .mockResolvedValueOnce(
+          providersResponse({ providers: toggleProviders(false, false) }, [
+            { key: RAW_KEY, profile: { ...rawShared(), providers: stored } },
+          ])
+        );
+      await routingProfilesApi.saveKeyProfile(RAW_KEY, off, options, true, false, true, null);
+      expect(mocks.get).toHaveBeenCalledTimes(2);
+      expect(mocks.getRaw).not.toHaveBeenCalled();
+      expect(mocks.patch).toHaveBeenCalledTimes(1);
+      const call = mocks.patch.mock.calls[0];
+      expect(call).toHaveLength(2);
+      const body = call[1].routing['key-profiles'][RAW_KEY];
+      expect(blocks(body).claude).toHaveProperty('disabled', true);
+      expect(blocks(body).codex).toHaveProperty('disabled', true);
+    });
+
+    it.each(['/routing/profiles', '/config'])(
+      'a key save whose read of %s before the write fails writes nothing',
+      async (failing) => {
+        routeGets(claudeOffResponse(true));
+        if (failing === '/config') mocks.getRaw.mockRejectedValue(new Error('offline'));
+        else mocks.get.mockRejectedValue(new Error('offline'));
+        const on = providersProfile();
+        await expect(
+          routingProfilesApi.saveKeyProfile(RAW_KEY, on, options, true, false, true, on)
+        ).rejects.toThrow('offline');
+        expect(mocks.patch).not.toHaveBeenCalled();
+      }
+    );
+
+    it('a flag the save left out keeps the stored value, also in the read-back', async () => {
+      mocks.patch.mockResolvedValue({});
+      // Claude was switched off elsewhere after the editor opened with it on.
+      routeGets(claudeOffResponse(true));
+      const on = providersProfile();
+      await expect(
+        routingProfilesApi.saveKeyProfile(RAW_KEY, on, options, true, false, true, on)
+      ).resolves.toMatchObject({ providerToggleSupported: true });
+      await expect(
+        routingProfilesApi.saveSharedProfile(on, undefined, options, true, false, true, on)
+      ).resolves.toMatchObject({ providerToggleSupported: true });
+      const keyBody = mocks.patch.mock.calls[0][1].routing['key-profiles'][RAW_KEY];
+      const sharedBody = mocks.patch.mock.calls[1][1].routing;
+      for (const body of [keyBody, sharedBody]) {
+        expect(blocks(body).claude).not.toHaveProperty('disabled');
+        expect(blocks(body).codex).not.toHaveProperty('disabled');
+      }
+    });
+
+    it('rejects a switched-on provider the backend did not retain', async () => {
+      mocks.patch.mockResolvedValue({});
+      routeGets(claudeOffResponse(true));
+      const opened = claudeOff();
+      await expect(
+        routingProfilesApi.saveKeyProfile(
+          RAW_KEY,
+          providersProfile(),
+          options,
+          true,
+          false,
+          true,
+          opened
+        )
+      ).rejects.toThrow('CPA did not retain the routing profile');
     });
 
     it('rejects a disabled provider the backend did not retain', async () => {
@@ -2139,6 +2530,238 @@ describe('provider toggle', () => {
       ).rejects.toThrow('CPA did not retain the routing profile');
       await expect(
         routingProfilesApi.saveSharedProfile(claudeOff(), undefined, options, true, false, true)
+      ).rejects.toThrow('CPA did not retain the routing profile');
+    });
+
+    it('a key save built without the switch writes nothing once the backend serves it', async () => {
+      // The editor opened on a backend without `disabled`; CPA was then upgraded and the
+      // Default switched Claude off. A profile created without the flag would start with
+      // Claude on, so the stale save is refused instead.
+      routeGets(
+        providersResponse({ providers: toggleProviders(true, false) }, [
+          { key: OTHER_KEY, profile: { ...rawShared(), providers: toggleProviders(false, false) } },
+        ])
+      );
+      await expect(
+        routingProfilesApi.saveKeyProfile(RAW_KEY, providersProfile(), options, true, false, false)
+      ).rejects.toBeInstanceOf(ConfigChangedError);
+      // Also from an editor that opened on a backend without `providers`.
+      await expect(
+        routingProfilesApi.saveKeyProfile(RAW_KEY, keyProfile(), options, false)
+      ).rejects.toBeInstanceOf(ConfigChangedError);
+      expect(mocks.patch).not.toHaveBeenCalled();
+      expect(mocks.getRaw).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['a backend without the route', 'missing'],
+      ['a scheduler plugin owning routing', 'unsupported'],
+    ])('a key reset writes nothing when its read finds %s', async (_name, fresh) => {
+      mocks.get.mockImplementation(async () => {
+        if (fresh === 'missing') throw Object.assign(new Error('nf'), { status: 404 });
+        return { ...claudeOffResponse(true), supported: false };
+      });
+      // The key's own profile keeps it off Claude; deleted while CPA ignores key
+      // profiles, the key would follow the Default once normal routing resumes.
+      await expect(
+        routingProfilesApi.saveKeyProfile(RAW_KEY, null, options, true, false, true)
+      ).rejects.toBeInstanceOf(ConfigChangedError);
+      expect(mocks.patch).not.toHaveBeenCalled();
+      expect(mocks.getRaw).not.toHaveBeenCalled();
+    });
+
+    it('a key reset needs no config read and no switch match', async () => {
+      mocks.patch.mockResolvedValue({});
+      // A reset sends no profile, so a backend that gained the switch does not matter.
+      mocks.get
+        .mockResolvedValueOnce(claudeOffResponse(true))
+        .mockResolvedValueOnce(providersResponse({ providers: toggleProviders(true, false) }, []));
+      await expect(
+        routingProfilesApi.saveKeyProfile(RAW_KEY, null, options, true, false, false)
+      ).resolves.toMatchObject({ keys: [] });
+      expect(mocks.patch).toHaveBeenCalledExactlyOnceWith('/config', {
+        routing: { 'key-profiles': { [RAW_KEY]: null } },
+      });
+      expect(mocks.get).toHaveBeenCalledTimes(2);
+      expect(mocks.getRaw).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['a backend without the route', 'missing'],
+      ['a scheduler plugin owning routing', 'unsupported'],
+      ['a backend without disabled', 'no-toggle'],
+    ])(
+      'a Default save that sends a flag writes nothing when its read finds %s',
+      async (_name, fresh) => {
+        mocks.get.mockImplementation(async () => {
+          if (fresh === 'missing') throw Object.assign(new Error('nf'), { status: 404 });
+          if (fresh === 'unsupported') return { ...claudeOffResponse(true), supported: false };
+          return claudeOffResponse(false);
+        });
+        // Switched off in an editor opened while key profiles were still used.
+        await expect(
+          routingProfilesApi.saveSharedProfile(
+            claudeOff(),
+            undefined,
+            options,
+            true,
+            false,
+            true,
+            providersProfile()
+          )
+        ).rejects.toBeInstanceOf(ConfigChangedError);
+        // Switched back on: an explicit `false` is a flag as well.
+        await expect(
+          routingProfilesApi.saveSharedProfile(
+            providersProfile(),
+            undefined,
+            options,
+            true,
+            false,
+            true,
+            claudeOff()
+          )
+        ).rejects.toBeInstanceOf(ConfigChangedError);
+        expect(mocks.patch).not.toHaveBeenCalled();
+      }
+    );
+
+    it('a Default save without a flag reads nothing before it writes', async () => {
+      mocks.patch.mockResolvedValue({});
+      // A scheduler plugin owns routing: the shared values stay editable, and a save that
+      // sends no flag leaves the stored ones to the merge.
+      mocks.get.mockResolvedValue({ ...claudeOffResponse(true), supported: false });
+      const on = providersProfile();
+      await routingProfilesApi.saveSharedProfile(on, undefined, options, true, false, true, on);
+      expect(mocks.patch).toHaveBeenCalledTimes(1);
+      // The read-back only.
+      expect(mocks.get).toHaveBeenCalledTimes(1);
+    });
+
+    it('a key write stored after a scheduler takeover is reported as not applied', async () => {
+      mocks.patch.mockResolvedValue({});
+      // The read before the write still finds key profiles used; the plugin takes over
+      // before the read-back, which stores Claude off but reports `supported: false`.
+      routeConfig(false);
+      mocks.get
+        .mockResolvedValueOnce(providersResponse({ providers: toggleProviders(false, false) }, []))
+        .mockResolvedValueOnce({ ...claudeOffResponse(true), supported: false });
+      await expect(
+        routingProfilesApi.saveKeyProfile(
+          RAW_KEY,
+          claudeOff(),
+          options,
+          true,
+          false,
+          true,
+          providersProfile()
+        )
+      ).rejects.toEqual(
+        expect.objectContaining({ name: 'RoutingNotAppliedError', profile: 'key' })
+      );
+      expect(mocks.patch).toHaveBeenCalledTimes(1);
+    });
+
+    it('a key reset stored after a scheduler takeover is reported as not applied', async () => {
+      mocks.patch.mockResolvedValue({});
+      mocks.get.mockResolvedValueOnce(claudeOffResponse(true)).mockResolvedValueOnce({
+        ...providersResponse({ providers: toggleProviders(false, false) }, []),
+        supported: false,
+      });
+      await expect(
+        routingProfilesApi.saveKeyProfile(RAW_KEY, null, options, true, false, true)
+      ).rejects.toEqual(
+        expect.objectContaining({ name: 'RoutingNotAppliedError', profile: 'key' })
+      );
+      expect(mocks.patch).toHaveBeenCalledTimes(1);
+    });
+
+    it('a Default flag stored after a scheduler takeover is reported as not applied', async () => {
+      mocks.patch.mockResolvedValue({});
+      // The check before the write passes; the read-back stores Claude off in the Default
+      // but reports that a scheduler plugin owns routing now.
+      mocks.get
+        .mockResolvedValueOnce(providersResponse({ providers: toggleProviders(false, false) }, []))
+        .mockResolvedValueOnce({ ...claudeOffResponse(true), supported: false });
+      await expect(
+        routingProfilesApi.saveSharedProfile(
+          claudeOff(),
+          undefined,
+          options,
+          true,
+          false,
+          true,
+          providersProfile()
+        )
+      ).rejects.toBeInstanceOf(RoutingNotAppliedError);
+      expect(mocks.patch).toHaveBeenCalledTimes(1);
+    });
+
+    it('a Default flag stored after a takeover names only the parts CPA ignores there', async () => {
+      mocks.patch.mockResolvedValue({});
+      // Claude was already off: a speed-only edit resends `disabled: true`. CPA keeps
+      // applying the Default's speed under the takeover, so the error is scoped to the
+      // Default profile (its provider mode, fallback and switches), not the whole change.
+      const off = claudeOff();
+      const faster = claudeOff();
+      faster.providers.codex.speed = 'fast';
+      const providers = toggleProviders(true, false);
+      const readBack = providersResponse(
+        { providers: { ...providers, codex: { ...providers.codex, speed: 'fast' } } },
+        []
+      );
+      mocks.get
+        .mockResolvedValueOnce(claudeOffResponse(true))
+        .mockResolvedValueOnce({ ...readBack, supported: false });
+      await expect(
+        routingProfilesApi.saveSharedProfile(faster, undefined, options, true, true, true, off)
+      ).rejects.toEqual(
+        expect.objectContaining({ name: 'RoutingNotAppliedError', profile: 'default' })
+      );
+      expect(mocks.patch).toHaveBeenCalledTimes(1);
+    });
+
+    it('a key write stored while an upgrade added the switch is reported, not saved', async () => {
+      mocks.patch.mockResolvedValue({});
+      // The editor and the read before the write both saw a backend without `disabled`,
+      // so the PATCH carries no flag. CPA is upgraded before it lands: the profile it
+      // creates starts with Claude on although the Default has Claude off.
+      mocks.get
+        .mockResolvedValueOnce(providersResponse({}, []))
+        .mockResolvedValueOnce(
+          providersResponse({ providers: toggleProviders(true, false) }, [
+            { key: RAW_KEY, profile: { ...rawShared(), providers: toggleProviders(false, false) } },
+          ])
+        );
+      await expect(
+        routingProfilesApi.saveKeyProfile(RAW_KEY, providersProfile(), options, true, false, false)
+      ).rejects.toBeInstanceOf(ProviderToggleChangedError);
+      expect(mocks.patch).toHaveBeenCalledTimes(1);
+      expect(
+        blocks(mocks.patch.mock.calls[0][1].routing['key-profiles'][RAW_KEY]).claude
+      ).not.toHaveProperty('disabled');
+      expect(mocks.getRaw).not.toHaveBeenCalled();
+    });
+
+    it('a stored write CPA did not retain is reported as such, not as not applied', async () => {
+      mocks.patch.mockResolvedValue({});
+      // The read-back reports a takeover and holds Claude on: nothing of the switch stuck.
+      mocks.get
+        .mockResolvedValueOnce(providersResponse({ providers: toggleProviders(false, false) }, []))
+        .mockResolvedValueOnce({
+          ...providersResponse({ providers: toggleProviders(false, false) }, []),
+          supported: false,
+        });
+      await expect(
+        routingProfilesApi.saveSharedProfile(
+          claudeOff(),
+          undefined,
+          options,
+          true,
+          false,
+          true,
+          providersProfile()
+        )
       ).rejects.toThrow('CPA did not retain the routing profile');
     });
   });
@@ -2166,6 +2789,6 @@ describe('provider toggle', () => {
       'key-profiles'
     ][RAW_KEY];
     expect(blocks(entry).claude.disabled).toBe(true);
-    expect(blocks(entry).codex.disabled).toBe(false);
+    expect(blocks(entry).codex).not.toHaveProperty('disabled');
   });
 });

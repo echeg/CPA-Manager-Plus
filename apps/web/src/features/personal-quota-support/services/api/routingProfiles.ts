@@ -133,12 +133,46 @@ export class InvalidRoutingConfigError extends Error {
  * that is no longer stored, because the config changed after it was read. Also
  * raised when the profiles CPA has loaded do not match the stored config yet (an edit
  * of the file whose hot reload is still pending), before a copy of their Default
- * profile is written. Nothing that changes the config is written.
+ * profile is written, and when the read before a key profile save finds key profiles
+ * no longer served as the editor knew them (`saveKeyProfile`). Nothing that changes
+ * the config is written.
  */
 export class ConfigChangedError extends Error {
   constructor() {
     super('The configuration changed after it was read');
     this.name = 'ConfigChangedError';
+  }
+}
+
+/**
+ * The write landed and CPA retained it, but the read-back finds that CPA does not apply
+ * it now: native routing became inactive (`supported: false`, which Home mode and a
+ * scheduler plugin both report) after the read before the write. Unlike
+ * `ConfigChangedError`, the config was changed; the stored value takes effect once
+ * native routing is active again. Raised for a key profile write or reset
+ * (`profile: 'key'`: CPA ignores the whole key profile then), and for a Default write
+ * that sends a `disabled` (`profile: 'default'`: CPA ignores only the provider mode,
+ * fallback and `disabled` of the Default profile then, and applies the rest, such as
+ * the Codex speed, so a save that changed only those still applies).
+ */
+export class RoutingNotAppliedError extends Error {
+  constructor(readonly profile: 'default' | 'key') {
+    super('CPA stored the routing profile but does not apply it now');
+    this.name = 'RoutingNotAppliedError';
+  }
+}
+
+/**
+ * The write landed and CPA retained it, but the read-back finds that CPA started serving
+ * the per-provider `disabled` (an upgrade) after the read before the write, which still
+ * found a backend without it. The profile was therefore written without the flags: one
+ * the write created starts with both providers on, also where the Default profile has a
+ * provider off. The profiles reload, so the editor starts over with the switch.
+ */
+export class ProviderToggleChangedError extends Error {
+  constructor() {
+    super('CPA started serving the provider switches during the save');
+    this.name = 'ProviderToggleChangedError';
   }
 }
 
@@ -470,6 +504,56 @@ export function mergeKeyRows(apiKeys: string[], keys: KeyProfileEntry[]): KeyPro
 const noSelectionOptions: RoutingSelectionOptions = { narrowing: [], pickers: [] };
 
 /**
+ * Which provider blocks of a profile write carry `disabled`. Only a backend that serves
+ * it in `providers` gets the flag, and then only for a provider that is off, or that
+ * `opened`, the profile the edit started from, had off, so switching it back on writes
+ * an explicit `false` over the stored `true`. The editor also counts a provider off in
+ * `opened` once one of its saves sent it off: a failed save may still have stored that
+ * `true`. An enabled provider the edit did not
+ * switch on is left out of the merge PATCH, so a save from an editor opened before
+ * the provider was switched off elsewhere keeps it off. The merge keeps a left-out flag
+ * only in a profile that exists, so `saveKeyProfile` fills it in for a key that owns none.
+ */
+export function sentDisabled(
+  profile: RoutingProfile,
+  opened: RoutingProfile | null,
+  providersSupported: boolean,
+  providerToggleSupported: boolean
+): Record<ApiProvider, boolean> {
+  const sends = (provider: ApiProvider) =>
+    providersSupported &&
+    providerToggleSupported &&
+    (profile.providers[provider].disabled || opened?.providers[provider].disabled === true);
+  return { claude: sends('claude'), codex: sends('codex') };
+}
+
+/** The `disabled` flags of a profile, or `null` without one. */
+const disabledOf = (profile: RoutingProfile | null): Record<ApiProvider, boolean> | null =>
+  profile && {
+    claude: profile.providers.claude.disabled,
+    codex: profile.providers.codex.disabled,
+  };
+
+/**
+ * `profile` with every `disabled` that `sent` leaves out taken from `source`: the
+ * stored profile's flags, for the value a write expects to read back, or the stored
+ * Default's flags a key without a profile follows, for the value a write that creates
+ * one must carry.
+ */
+function withUnsentDisabledOf(
+  profile: RoutingProfile,
+  source: Record<ApiProvider, boolean> | null,
+  sent: Record<ApiProvider, boolean>
+): RoutingProfile {
+  if (!source) return profile;
+  const kept = (provider: ApiProvider): ProviderRouting =>
+    sent[provider]
+      ? profile.providers[provider]
+      : { ...profile.providers[provider], disabled: source[provider] };
+  return { ...profile, providers: { claude: kept('claude'), codex: kept('codex') } };
+}
+
+/**
  * One complete profile body in kebab-case, normalized against the selection
  * options, so a PATCH merge leaves nothing from the old one: cleared providers,
  * a cleared API credential and an empty or picker-blocked tiebreak are `null`,
@@ -478,17 +562,20 @@ const noSelectionOptions: RoutingSelectionOptions = { narrowing: [], pickers: []
  * target, with mode and mappings cleared); an older one gets the `claude-fallback`
  * block instead. The Codex block carries `speed` and `ignore-client-tier` only when
  * the backend serves them; the Claude block never does, because CPA rejects them there.
- * Both blocks carry `disabled` only when the backend serves it, as an explicit `false`
- * for an enabled provider so switching it back on overwrites a stored `true`.
+ * A block carries `disabled` as `sentDisabled` decides: `true` for a provider that is
+ * off, an explicit `false` for one the edit from `opened` switched back on, and
+ * nothing otherwise, so the merge keeps the stored flag.
  */
 export function profileBody(
   profile: RoutingProfile,
   selectionOptions: RoutingSelectionOptions = noSelectionOptions,
   providersSupported = true,
   speedSupported = false,
-  providerToggleSupported = false
+  providerToggleSupported = false,
+  opened: RoutingProfile | null = null
 ): Record<string, unknown> {
   const normalized = normalizeProfile(profile, selectionOptions);
+  const sent = sentDisabled(normalized, opened, providersSupported, providerToggleSupported);
   const body: Record<string, unknown> = {
     'session-affinity': normalized.sessionAffinity,
     'preferred-accounts': {
@@ -511,7 +598,7 @@ export function profileBody(
           mode: claude.fallback.mode,
           mappings: claude.fallback.mappings,
         },
-        ...(providerToggleSupported ? { disabled: claude.disabled } : {}),
+        ...(sent.claude ? { disabled: claude.disabled } : {}),
       },
       codex: {
         mode: codex.mode,
@@ -522,7 +609,7 @@ export function profileBody(
         ...(speedSupported
           ? { speed: codex.speed, 'ignore-client-tier': codex.ignoreClientTier }
           : {}),
-        ...(providerToggleSupported ? { disabled: codex.disabled } : {}),
+        ...(sent.codex ? { disabled: codex.disabled } : {}),
       },
     };
   } else {
@@ -546,7 +633,8 @@ export function keyProfilePatch(
   selectionOptions: RoutingSelectionOptions = noSelectionOptions,
   providersSupported = true,
   speedSupported = false,
-  providerToggleSupported = false
+  providerToggleSupported = false,
+  opened: RoutingProfile | null = null
 ): Record<string, unknown> {
   const body = profile
     ? profileBody(
@@ -554,7 +642,8 @@ export function keyProfilePatch(
         selectionOptions,
         providersSupported,
         speedSupported,
-        providerToggleSupported
+        providerToggleSupported,
+        opened
       )
     : null;
   return { routing: { 'key-profiles': { [key]: body } } };
@@ -570,14 +659,16 @@ export function sharedProfilePatch(
   selectionOptions: RoutingSelectionOptions = noSelectionOptions,
   providersSupported = true,
   speedSupported = false,
-  providerToggleSupported = false
+  providerToggleSupported = false,
+  opened: RoutingProfile | null = null
 ): Record<string, unknown> {
   const routing = profileBody(
     profile,
     selectionOptions,
     providersSupported,
     speedSupported,
-    providerToggleSupported
+    providerToggleSupported,
+    opened
   );
   if (ttl !== undefined) routing['session-affinity-ttl'] = ttl.trim();
   return { routing };
@@ -627,6 +718,44 @@ export interface ConfigSnapshot {
    * (`dropsLegacyClaudeFallback`): `shared` for the Default profile, and the keys.
    */
   legacyClaudeFallback: { shared: boolean; keys: ReadonlySet<string> };
+  /** The Default profile's `disabled` per provider (`sharedDisabledOf`). */
+  sharedDisabled: Record<ApiProvider, boolean>;
+}
+
+/** The strings CPA's typed YAML decoder (yaml.v3) reads as a `true` bool, quoted or not. */
+const YAML_TRUE_STRINGS: ReadonlySet<string> = new Set([
+  'y',
+  'Y',
+  'yes',
+  'Yes',
+  'YES',
+  'on',
+  'On',
+  'ON',
+]);
+
+/**
+ * Whether CPA reads a raw `GET /config` value as a `true` bool. `GET /config` decodes
+ * the file without types, so a YAML 1.1 spelling such as `yes` or `on`, which CPA's
+ * typed load still reads as `true`, arrives as that string. Any other value that is not
+ * a bool fails CPA's typed load, so CPA refuses a PATCH over it (422) and writes nothing.
+ */
+export const yamlTrue = (value: unknown): boolean =>
+  value === true || (typeof value === 'string' && YAML_TRUE_STRINGS.has(value));
+
+/**
+ * The Default profile's `disabled` per provider in a `GET /config` document:
+ * `routing.providers.<provider>.disabled`, `false` when absent, as CPA reads it
+ * (`yamlTrue`).
+ */
+export function sharedDisabledOf(rawConfig: unknown): Record<ApiProvider, boolean> {
+  const routing = isRecord(rawConfig) ? rawConfig.routing : undefined;
+  const providers = isRecord(routing) ? routing.providers : undefined;
+  const disabled = (provider: ApiProvider) => {
+    const block = isRecord(providers) ? providers[provider] : undefined;
+    return isRecord(block) && yamlTrue(block.disabled);
+  };
+  return { claude: disabled('claude'), codex: disabled('codex') };
 }
 
 const blank = (value: unknown) =>
@@ -727,6 +856,38 @@ function unanswered(error: unknown): boolean {
   return status === undefined || status === 502 || status === 504;
 }
 
+/**
+ * Errors of an editor save (`saveKeyProfile`, `saveSharedProfile`) that stored nothing:
+ * raised before its PATCH was sent, or CPA's answer refused the PATCH (not
+ * `unanswered`). Any other failure may follow a write that landed: the PATCH got no
+ * answer, or the read after it failed or did not confirm it.
+ */
+const unwrittenErrors = new WeakSet<object>();
+
+function unwritten(error: unknown): unknown {
+  if (typeof error === 'object' && error !== null) unwrittenErrors.add(error);
+  return error;
+}
+
+/** Whether a failed editor save stored nothing in CPA (`unwrittenErrors`). */
+export const wroteNothing = (error: unknown): boolean =>
+  typeof error === 'object' && error !== null && unwrittenErrors.has(error);
+
+/** `prepare`, the part of an editor save before its PATCH: its errors stored nothing. */
+async function beforeWrite<T>(prepare: () => Promise<T>): Promise<T> {
+  try {
+    return await prepare();
+  } catch (error) {
+    throw unwritten(error);
+  }
+}
+
+/** A failed editor save PATCH: stored nothing only when CPA's answer refused it. */
+function failedWrite(error: unknown, key: string): unknown {
+  const translated = translateWriteError(error, key);
+  return unanswered(error) ? translated : unwritten(translated);
+}
+
 export const routingProfilesApi = {
   async get(): Promise<RoutingProfilesState> {
     try {
@@ -750,42 +911,114 @@ export const routingProfilesApi = {
       clientKeys: new Set(clientApiKeys(response.data)),
       profiledKeys: profiledKeysOf(response.data),
       legacyClaudeFallback: legacyClaudeFallbackOf(response.data),
+      sharedDisabled: sharedDisabledOf(response.data),
     };
   },
-  /** Write one key profile, or delete it with `null`, then verify the stored value. */
+  /**
+   * Write one key profile, or delete it with `null`, then verify the stored value.
+   * `opened` is the profile the edit started from: only a provider it had off gets an
+   * explicit `disabled: false` (`sentDisabled`); a flag left out keeps the stored one,
+   * also in the read-back check. The merge keeps it only in a profile that exists, and
+   * one the PATCH creates starts with the provider on, so the stored config is read
+   * first (`configSnapshot`), the file the PATCH merges into: `/routing/profiles` serves
+   * the config CPA has loaded, which follows an edit of the file only after the hot
+   * reload. When the key owns no profile there (it never had one, or it was reset after
+   * the editor opened), it follows the Default profile, and a left-out flag is sent as
+   * that Default holds it. The PATCH is then conditional on that read's version, so a
+   * change landing in between fails with `ConfigChangedError` instead; a stale editor
+   * therefore cannot switch on a provider the Default switched off after it opened.
+   * Without a version (no strong ETag) the PATCH is sent unconditionally, as every
+   * other editor save is. Every save, also a reset or one that needs no snapshot, reads
+   * `/routing/profiles` first and writes nothing (`ConfigChangedError`) when CPA no
+   * longer uses key profiles (a backend without the route, or Home mode or a scheduler
+   * plugin owning routing): a write CPA would not apply now waits unseen and takes effect later. A
+   * takeover after that read is found by the read-back, which then reports the stored
+   * write as not applied (`RoutingNotAppliedError`) rather than as saved. A
+   * profile write also writes nothing when the backend's switch differs from the one
+   * `providerToggleSupported` says the editor saw: a backend that gained `disabled`
+   * after the editor opened would create a profile without the Default's flags, and one
+   * that lost it would be sent flags it does not enforce. An upgrade that adds the
+   * switch after that read is found by the read-back too: a profile written without the
+   * flags is reported as `ProviderToggleChangedError` rather than as saved. A failure
+   * that stored nothing is marked for `wroteNothing`.
+   */
   async saveKeyProfile(
     key: string,
     profile: RoutingProfile | null,
     selectionOptions: RoutingSelectionOptions = noSelectionOptions,
     providersSupported = true,
     speedSupported = false,
-    providerToggleSupported = false
+    providerToggleSupported = false,
+    opened: RoutingProfile | null = null
   ): Promise<RoutingProfilesState> {
     const assertCurrent = guardConfigConnection();
-    if (profile && !validClaudeMappings(profile.providers.claude, providersSupported))
-      throw new Error('Invalid Claude fallback mappings');
+    // Whether this write carries `disabled`, as the editor's capabilities decide.
+    const toggles = providersSupported && providerToggleSupported;
+    const { written, ifMatch } = await beforeWrite(async () => {
+      if (profile && !validClaudeMappings(profile.providers.claude, providersSupported))
+        throw new Error('Invalid Claude fallback mappings');
+      const sent =
+        profile && sentDisabled(profile, opened, providersSupported, providerToggleSupported);
+      // Only a block without the flag follows what the file holds.
+      const leavesFlagOut = toggles && sent !== null && !(sent.claude && sent.codex);
+      const [loaded, file] = await Promise.all([
+        routingProfilesApi.get(),
+        leavesFlagOut ? routingProfilesApi.configSnapshot() : null,
+      ]);
+      assertCurrent();
+      // Key profiles must still be used, also by a reset. A profile is built for the
+      // switch as the editor saw it: one built without it would start a new profile with
+      // both providers on, and one built with it would store flags CPA no longer serves.
+      if (
+        loaded.unsupportedBackend ||
+        !loaded.supported ||
+        (profile !== null && loaded.providerToggleSupported !== toggles)
+      )
+        throw new ConfigChangedError();
+      if (!profile || !sent || !file) return { written: profile, ifMatch: '' };
+      return {
+        written: file.profiledKeys.has(key)
+          ? profile
+          : withUnsentDisabledOf(profile, file.sharedDisabled, sent),
+        ifMatch: file.version,
+      };
+    });
+    const body = keyProfilePatch(
+      key,
+      written,
+      selectionOptions,
+      providersSupported,
+      speedSupported,
+      providerToggleSupported,
+      opened
+    );
     try {
-      await apiClient.patch(
-        '/config',
-        keyProfilePatch(
-          key,
-          profile,
-          selectionOptions,
-          providersSupported,
-          speedSupported,
-          providerToggleSupported
-        )
-      );
+      await (ifMatch
+        ? apiClient.patch('/config', body, { headers: { 'If-Match': ifMatch } })
+        : apiClient.patch('/config', body));
     } catch (error) {
       assertCurrent();
-      throw translateWriteError(error, key);
+      throw failedWrite(error, key);
     }
     assertCurrent();
     const saved = await routingProfilesApi.get();
     assertCurrent();
     const stored = saved.keys.find((entry) => entry.key === key)?.profile ?? null;
-    if (saved.unsupportedBackend || !sameProfile(stored, profile, saved.selectionOptions))
+    const expected =
+      written &&
+      withUnsentDisabledOf(
+        written,
+        disabledOf(stored),
+        sentDisabled(written, opened, providersSupported, providerToggleSupported)
+      );
+    if (saved.unsupportedBackend || !sameProfile(stored, expected, saved.selectionOptions))
       throw new Error('CPA did not retain the routing profile');
+    // Stored, but native routing became inactive after the check before the write.
+    if (!saved.supported) throw new RoutingNotAppliedError('key');
+    // Stored without the flags, but CPA serves them now: a profile the write created
+    // starts with both providers on, whatever the Default holds.
+    if (profile !== null && !toggles && saved.providerToggleSupported)
+      throw new ProviderToggleChangedError();
     return saved;
   },
   /**
@@ -894,6 +1127,13 @@ export const routingProfilesApi = {
    * Write the shared profile, and the global TTL when passed, in one PATCH, then
    * verify both by reading them back. The toolbar no longer writes these fields on
    * a backend that serves `/routing/profiles`, so this is their single writer.
+   * `opened` decides which `disabled` flags are sent, as in `saveKeyProfile`. A save
+   * that sends a flag reads `/routing/profiles` first and writes nothing
+   * (`ConfigChangedError`) when CPA no longer enforces it: a backend without the route
+   * or the field, or Home mode or a scheduler plugin owning routing. Its read-back
+   * reports a flag stored after a takeover that followed that read as not applied
+   * (`RoutingNotAppliedError`). A save without a flag needs no check: the merge keeps
+   * the stored flags. A failure that stored nothing is marked for `wroteNothing`.
    */
   async saveSharedProfile(
     profile: RoutingProfile,
@@ -901,12 +1141,24 @@ export const routingProfilesApi = {
     selectionOptions: RoutingSelectionOptions = noSelectionOptions,
     providersSupported = true,
     speedSupported = false,
-    providerToggleSupported = false
+    providerToggleSupported = false,
+    opened: RoutingProfile | null = null
   ): Promise<RoutingProfilesState> {
     const assertCurrent = guardConfigConnection();
-    if (!validClaudeMappings(profile.providers.claude, providersSupported))
-      throw new Error('Invalid Claude fallback mappings');
-    if (ttl !== undefined && invalidTTL(ttl)) throw new Error('Invalid session affinity TTL');
+    const sent = sentDisabled(profile, opened, providersSupported, providerToggleSupported);
+    await beforeWrite(async () => {
+      if (!validClaudeMappings(profile.providers.claude, providersSupported))
+        throw new Error('Invalid Claude fallback mappings');
+      if (ttl !== undefined && invalidTTL(ttl)) throw new Error('Invalid session affinity TTL');
+      // A flag is stored only where CPA enforces it now: after a scheduler plugin took
+      // over routing, or on a backend that dropped the field, nothing is written.
+      if (sent.claude || sent.codex) {
+        const loaded = await routingProfilesApi.get();
+        assertCurrent();
+        if (loaded.unsupportedBackend || !loaded.supported || !loaded.providerToggleSupported)
+          throw new ConfigChangedError();
+      }
+    });
     try {
       await apiClient.patch(
         '/config',
@@ -916,17 +1168,19 @@ export const routingProfilesApi = {
           selectionOptions,
           providersSupported,
           speedSupported,
-          providerToggleSupported
+          providerToggleSupported,
+          opened
         )
       );
     } catch (error) {
       assertCurrent();
-      throw translateWriteError(error, '');
+      throw failedWrite(error, '');
     }
     assertCurrent();
     const saved = await routingProfilesApi.get();
     assertCurrent();
-    if (saved.unsupportedBackend || !sameProfile(saved.shared, profile, saved.selectionOptions))
+    const expected = withUnsentDisabledOf(profile, disabledOf(saved.shared), sent);
+    if (saved.unsupportedBackend || !sameProfile(saved.shared, expected, saved.selectionOptions))
       throw new Error('CPA did not retain the routing profile');
     if (ttl !== undefined) {
       const config = await configApi.getConfig();
@@ -938,6 +1192,9 @@ export const routingProfilesApi = {
       )
         throw new Error('CPA did not retain the routing profile');
     }
+    // A flag stored after native routing became inactive, once the check above passed.
+    if ((sent.claude || sent.codex) && !saved.supported)
+      throw new RoutingNotAppliedError('default');
     return saved;
   },
   /**

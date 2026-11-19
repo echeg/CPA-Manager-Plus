@@ -18,6 +18,8 @@ import {
   DefaultCopyUnconfirmedError,
   providersFromClaudeFallback,
   InvalidRoutingConfigError,
+  ProviderToggleChangedError,
+  RoutingNotAppliedError,
   UnknownApiKeyError,
   routingProfilesApi,
   unsupportedRoutingProfiles,
@@ -30,7 +32,11 @@ import { providersApi } from '@/services/api/providers';
 import type { ApiKeyAlias } from '@/services/api/usageService';
 import { sha256Hex } from '@/utils/apiKeyHash';
 import { withCodexSpeed } from './codexSpeedModel';
-import { useKeyProfiles, type KeyProfilesState } from './hooks/useKeyProfiles';
+import {
+  useKeyProfiles,
+  type KeyProfilesState,
+  type ProfileSaveOutcome,
+} from './hooks/useKeyProfiles';
 import { copyOfShared } from './keyProfilesModel';
 
 const aliasState = vi.hoisted(() => ({
@@ -157,6 +163,7 @@ const snapshot = (
   clientKeys: new Set(clientKeys),
   profiledKeys: new Set(profiledKeys),
   legacyClaudeFallback: { shared: false, keys: new Set<string>() },
+  sharedDisabled: { claude: false, codex: false },
 });
 
 beforeAll(async () => {
@@ -281,18 +288,19 @@ describe('useKeyProfiles', () => {
     const clearCache = vi.fn();
     useConfigStore.setState({ clearCache });
     await mount();
-    let result = false;
+    let result: ProfileSaveOutcome | undefined;
     await act(async () => {
       result = await hook.saveKeyProfile(KEY_A, ownProfile());
     });
-    expect(result).toBe(true);
+    expect(result).toBe('saved');
     expect(save).toHaveBeenCalledExactlyOnceWith(
       KEY_A,
       ownProfile(),
       profilesState().selectionOptions,
       true,
       true,
-      false
+      false,
+      null
     );
     expect(hook.state).toBe(saved);
     expect(ownProfiles()).toBe(2);
@@ -315,7 +323,8 @@ describe('useKeyProfiles', () => {
       profilesState().selectionOptions,
       true,
       true,
-      false
+      false,
+      null
     );
     expect(ownProfiles()).toBe(0);
     expect(hook.rows[1].profile).toBeNull();
@@ -325,13 +334,13 @@ describe('useKeyProfiles', () => {
     const pending = deferred<RoutingProfilesState>();
     const save = vi.spyOn(routingProfilesApi, 'saveKeyProfile').mockReturnValue(pending.promise);
     await mount();
-    let first!: Promise<boolean>;
-    let second = true;
+    let first!: Promise<ProfileSaveOutcome>;
+    let second: ProfileSaveOutcome | undefined;
     await act(async () => {
       first = hook.saveKeyProfile(KEY_A, ownProfile());
       second = await hook.saveKeyProfile(KEY_B, null);
     });
-    expect(second).toBe(false);
+    expect(second).toBe('unwritten');
     expect(hook.saving).toBe(true);
     await act(async () => {
       pending.resolve(profilesState());
@@ -359,7 +368,7 @@ describe('useKeyProfiles', () => {
       results.push(await hook.addKey(KEY_C));
       results.push(await hook.removeKey(KEY_A));
     });
-    expect(results).toEqual([false, false, { ok: false }, { ok: false }]);
+    expect(results).toEqual(['unwritten', 'unwritten', { ok: false }, { ok: false }]);
     for (const spy of [saveKey, saveShared, add, remove]) expect(spy).not.toHaveBeenCalled();
     expect(hook.saving).toBe(false);
 
@@ -373,7 +382,7 @@ describe('useKeyProfiles', () => {
     const add = vi.spyOn(clientKeysApi, 'addClientKey').mockResolvedValue({});
     const remove = vi.spyOn(clientKeysApi, 'removeClientKey');
     await mount();
-    let first!: Promise<boolean>;
+    let first!: Promise<ProfileSaveOutcome>;
     const blocked: unknown[] = [];
     await act(async () => {
       first = hook.saveShared(sharedProfile());
@@ -402,11 +411,11 @@ describe('useKeyProfiles errors', () => {
     expect(hook.error).toBe('');
     expect(ownProfiles()).toBe(0);
     expect(hook.total).toBe(2);
-    let result = true;
+    let result: ProfileSaveOutcome | undefined;
     await act(async () => {
       result = await hook.saveKeyProfile(KEY_A, ownProfile());
     });
-    expect(result).toBe(false);
+    expect(result).toBe('unwritten');
     expect(save).not.toHaveBeenCalled();
   });
 
@@ -463,11 +472,11 @@ describe('useKeyProfiles errors', () => {
       .mockResolvedValueOnce(config());
     useConfigStore.setState({ fetchConfig });
     await mount();
-    let result = true;
+    let result: ProfileSaveOutcome | undefined;
     await act(async () => {
       result = await hook.saveKeyProfile(KEY_A, ownProfile());
     });
-    expect(result).toBe(false);
+    expect(result).not.toBe('saved');
     expect(routingProfilesApi.get).toHaveBeenCalledTimes(2);
     expect(fetchConfig).toHaveBeenLastCalledWith(true);
     expect(hook.error).toBe(unknownKeyMessage);
@@ -476,6 +485,58 @@ describe('useKeyProfiles errors', () => {
     // An explicit reload, such as reopening the modal, clears the message.
     await act(async () => hook.reload());
     expect(hook.error).toBe('');
+  });
+
+  test.each([
+    [
+      'key',
+      'CPA stored the change, but native CPA routing is not active now, so it is not applied. It takes effect once native routing is active again.',
+    ],
+    [
+      'default',
+      // CPA keeps applying the rest of the Default profile, such as the Codex speed.
+      'CPA stored the change, but native CPA routing is not active now: until it is, CPA ignores the provider mode, fallback and Enabled switches of the Default profile. Its other settings, such as the Codex speed, apply.',
+    ],
+  ] as const)(
+    'a %s write CPA stored but does not apply says so and reloads',
+    async (target, message) => {
+      vi.spyOn(routingProfilesApi, 'saveKeyProfile').mockRejectedValue(
+        new RoutingNotAppliedError('key')
+      );
+      vi.spyOn(routingProfilesApi, 'saveSharedProfile').mockRejectedValue(
+        new RoutingNotAppliedError('default')
+      );
+      await mount();
+      let result: ProfileSaveOutcome | undefined;
+      await act(async () => {
+        result =
+          target === 'key'
+            ? await hook.saveKeyProfile(KEY_A, ownProfile())
+            : await hook.saveShared(sharedProfile());
+      });
+      // Stored, so an editor left open must count what it sent as possibly held.
+      expect(result).toBe('unconfirmed');
+      expect(hook.error).toBe(message);
+      // Mount, then the reload of the stored state.
+      expect(routingProfilesApi.get).toHaveBeenCalledTimes(2);
+    }
+  );
+
+  test('a key write stored without the switch an upgrade added says so and reloads', async () => {
+    vi.spyOn(routingProfilesApi, 'saveKeyProfile').mockRejectedValue(
+      new ProviderToggleChangedError()
+    );
+    await mount();
+    let result: ProfileSaveOutcome | undefined;
+    await act(async () => {
+      result = await hook.saveKeyProfile(KEY_A, ownProfile());
+    });
+    expect(result).toBe('unconfirmed');
+    expect(hook.error).toBe(
+      'CPA started offering the Enabled switches while this profile was being saved, so it was stored without them: a provider the Default profile switches off may be on in it. Check the reloaded profile and save it again.'
+    );
+    // Mount, then the reload, which brings the switch to the editor.
+    expect(routingProfilesApi.get).toHaveBeenCalledTimes(2);
   });
 
   test('a 422 shows the backend message and keeps the loaded state', async () => {
@@ -503,6 +564,31 @@ describe('useKeyProfiles errors', () => {
     });
     expect(hook.error).toBe('CPA did not retain the routing profile');
     expect(routingProfilesApi.get).toHaveBeenCalledTimes(2);
+  });
+
+  test('a failed save says whether CPA may hold it', async () => {
+    // The API method itself, so its errors carry what they stored.
+    const patch = vi.spyOn(apiClient, 'patch');
+    await mount();
+    let result: ProfileSaveOutcome | undefined;
+    // CPA's 422 refuses the write: nothing was stored.
+    patch.mockRejectedValueOnce({ status: 422, apiCode: 'invalid_config', message: 'bad' });
+    await act(async () => {
+      result = await hook.saveKeyProfile(KEY_A, ownProfile());
+    });
+    expect(result).toBe('unwritten');
+    expect(hook.error).toBe('bad');
+    // The write landed, but the read-back failed: CPA may hold it.
+    patch.mockResolvedValueOnce({});
+    vi.mocked(routingProfilesApi.get)
+      .mockResolvedValueOnce(profilesState([{ key: KEY_A, profile: ownProfile() }]))
+      .mockRejectedValueOnce(new Error('offline'));
+    await act(async () => {
+      result = await hook.saveKeyProfile(KEY_A, ownProfile());
+    });
+    expect(result).toBe('unconfirmed');
+    expect(hook.error).toContain('offline');
+    expect(patch).toHaveBeenCalledTimes(2);
   });
 
   test('a connection change discards a stale load and loads again', async () => {
@@ -540,7 +626,7 @@ describe('useKeyProfiles errors', () => {
     const clearCache = vi.fn();
     useConfigStore.setState({ clearCache });
     await mount();
-    let result!: Promise<boolean>;
+    let result!: Promise<ProfileSaveOutcome>;
     await act(async () => {
       result = hook.saveKeyProfile(KEY_A, ownProfile());
     });
@@ -552,7 +638,8 @@ describe('useKeyProfiles errors', () => {
     await act(async () => {
       pending.resolve(stale);
     });
-    await expect(result).resolves.toBe(false);
+    // CPA stored it, but the panel drops the result of the old connection.
+    await expect(result).resolves.toBe('unconfirmed');
     expect(hook.state).not.toBe(stale);
     expect(ownProfiles()).toBe(1);
     expect(clearCache).not.toHaveBeenCalled();
@@ -581,18 +668,19 @@ describe('useKeyProfiles shared profile', () => {
     useConfigStore.setState({ fetchConfig });
     await mount();
     expect(hook.ttl).toBe('30m');
-    let result = false;
+    let result: ProfileSaveOutcome | undefined;
     await act(async () => {
       result = await hook.saveShared(ownProfile(), '24h');
     });
-    expect(result).toBe(true);
+    expect(result).toBe('saved');
     expect(save).toHaveBeenCalledExactlyOnceWith(
       ownProfile(),
       '24h',
       profilesState().selectionOptions,
       true,
       true,
-      false
+      false,
+      null
     );
     expect(routingProfilesApi.get).toHaveBeenCalledTimes(2);
     expect(fetchConfig).toHaveBeenLastCalledWith(true);
@@ -607,18 +695,42 @@ describe('useKeyProfiles shared profile', () => {
       .spyOn(routingProfilesApi, 'saveSharedProfile')
       .mockResolvedValue({ ...profilesState(), supported: false });
     await mount();
-    let result = false;
+    let result: ProfileSaveOutcome | undefined;
     await act(async () => {
       result = await hook.saveShared(sharedProfile());
     });
-    expect(result).toBe(true);
+    expect(result).toBe('saved');
     expect(save).toHaveBeenCalledExactlyOnceWith(
       sharedProfile(),
       undefined,
       profilesState().selectionOptions,
       true,
       true,
-      false
+      false,
+      null
+    );
+  });
+
+  test('a shared save while per-key profiles are inert sends no disabled flag', async () => {
+    // The editor locks the Enabled switches there and CPA ignores the flag, so a save
+    // must not write back the flags the editor opened with.
+    const inert = { ...profilesState(), supported: false, providerToggleSupported: true };
+    vi.mocked(routingProfilesApi.get).mockResolvedValue(inert);
+    const save = vi.spyOn(routingProfilesApi, 'saveSharedProfile').mockResolvedValue(inert);
+    const opened = sharedProfile();
+    opened.providers.claude.disabled = true;
+    await mount();
+    await act(async () => {
+      await hook.saveShared(sharedProfile(), '24h', opened);
+    });
+    expect(save).toHaveBeenCalledExactlyOnceWith(
+      sharedProfile(),
+      '24h',
+      inert.selectionOptions,
+      true,
+      true,
+      false,
+      opened
     );
   });
 
@@ -640,7 +752,8 @@ describe('useKeyProfiles shared profile', () => {
       legacy.selectionOptions,
       false,
       false,
-      false
+      false,
+      null
     );
     expect(saveShared).toHaveBeenCalledExactlyOnceWith(
       sharedProfile(),
@@ -648,7 +761,8 @@ describe('useKeyProfiles shared profile', () => {
       legacy.selectionOptions,
       false,
       false,
-      false
+      false,
+      null
     );
   });
 
@@ -670,7 +784,8 @@ describe('useKeyProfiles shared profile', () => {
       noSpeed.selectionOptions,
       true,
       false,
-      false
+      false,
+      null
     );
     expect(saveShared).toHaveBeenCalledExactlyOnceWith(
       sharedProfile(),
@@ -678,7 +793,8 @@ describe('useKeyProfiles shared profile', () => {
       noSpeed.selectionOptions,
       true,
       false,
-      false
+      false,
+      null
     );
   });
 
@@ -704,7 +820,8 @@ describe('useKeyProfiles shared profile', () => {
         loaded.selectionOptions,
         true,
         true,
-        toggleSupported
+        toggleSupported,
+        null
       );
       expect(saveShared).toHaveBeenCalledExactlyOnceWith(
         sharedProfile(),
@@ -712,20 +829,39 @@ describe('useKeyProfiles shared profile', () => {
         loaded.selectionOptions,
         true,
         true,
-        toggleSupported
+        toggleSupported,
+        null
       );
     }
   );
+
+  test('saves forward the profile the editor opened with to both save calls', async () => {
+    const loaded = { ...profilesState(), providerToggleSupported: true };
+    vi.mocked(routingProfilesApi.get).mockResolvedValue(loaded);
+    const saveKey = vi.spyOn(routingProfilesApi, 'saveKeyProfile').mockResolvedValue(loaded);
+    const saveShared = vi.spyOn(routingProfilesApi, 'saveSharedProfile').mockResolvedValue(loaded);
+    const opened = ownProfile();
+    opened.providers.claude.disabled = true;
+    await mount();
+    await act(async () => {
+      await hook.saveKeyProfile(KEY_A, ownProfile(), opened);
+    });
+    await act(async () => {
+      await hook.saveShared(sharedProfile(), undefined, opened);
+    });
+    expect(saveKey.mock.calls[0][6]).toBe(opened);
+    expect(saveShared.mock.calls[0][6]).toBe(opened);
+  });
 
   test('a shared save is refused on a backend without /routing/profiles', async () => {
     vi.mocked(routingProfilesApi.get).mockResolvedValue(unsupportedRoutingProfiles());
     const save = vi.spyOn(routingProfilesApi, 'saveSharedProfile');
     await mount();
-    let result = true;
+    let result: ProfileSaveOutcome | undefined;
     await act(async () => {
       result = await hook.saveShared(sharedProfile());
     });
-    expect(result).toBe(false);
+    expect(result).toBe('unwritten');
     expect(save).not.toHaveBeenCalled();
   });
 
@@ -1574,13 +1710,13 @@ describe('useKeyProfiles client keys', () => {
     revision += 1;
     await act(async () => hook.reload());
     let removed!: Awaited<ReturnType<KeyProfilesState['removeKey']>>;
-    let saved = true;
+    let saved: ProfileSaveOutcome | undefined;
     await act(async () => {
       removed = await removeKey(KEY_A);
       saved = await saveKeyProfile(KEY_B, null);
     });
     expect(removed).toEqual({ ok: false });
-    expect(saved).toBe(false);
+    expect(saved).toBe('unwritten');
     expect(remove).not.toHaveBeenCalled();
     expect(save).not.toHaveBeenCalled();
   });

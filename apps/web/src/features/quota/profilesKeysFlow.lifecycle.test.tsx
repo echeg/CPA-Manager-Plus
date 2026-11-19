@@ -370,6 +370,25 @@ describe('provider routing saves with the real key profiles hook', () => {
     ...state,
     keys: [{ key: KEY_B, profile: bProfile }],
   });
+  const FILE_VERSION = '"flow-file-1"';
+  /**
+   * `GET /config`, the file a key save on a toggle-capable backend reads before it
+   * writes: KEY_B owns a profile there, and the Default holds Claude off when
+   * `claudeOff`.
+   */
+  const storedFile = (claudeOff = false) =>
+    vi.spyOn(apiClient, 'getRaw').mockResolvedValue({
+      headers: { etag: FILE_VERSION },
+      data: {
+        ...storedConfig(),
+        routing: {
+          providers: { claude: { disabled: claudeOff }, codex: { disabled: false } },
+          'key-profiles': { [KEY_B]: { 'session-affinity': false } },
+        },
+      },
+    } as never);
+  const ifMatchOf = (call: unknown[]) =>
+    (call[2] as { headers?: Record<string, string> } | undefined)?.headers?.['If-Match'];
 
   test('a Codex speed edited in the Default profile is saved and shown again after a reload', async () => {
     const state = withProviders(profilesState(profile('priority')));
@@ -468,6 +487,7 @@ describe('provider routing saves with the real key profiles hook', () => {
       vi.mocked(routingProfilesApi.get).mockResolvedValue(withKeyBProfile(state, after));
       return {};
     });
+    storedFile();
     await mount();
     await openProfileEditor('data-profile-row');
     const claudeToggle = () => claudeBlock().findByType(ToggleSwitch);
@@ -482,8 +502,11 @@ describe('provider routing saves with the real key profiles hook', () => {
     };
     expect(body.routing['key-profiles'][KEY_B].providers).toMatchObject({
       claude: { mode: 'subscription', disabled: true },
-      codex: { disabled: false },
     });
+    // Codex was on when the editor opened and stays on, so its stored flag is left alone,
+    // and the write is conditional on the file the save read.
+    expect(body.routing['key-profiles'][KEY_B].providers.codex).not.toHaveProperty('disabled');
+    expect(ifMatchOf(patch.mock.calls[0])).toBe(FILE_VERSION);
     expect(editors()).toHaveLength(0);
 
     // A fresh panel load shows the stored off state in the editor and its summary.
@@ -494,6 +517,233 @@ describe('provider routing saves with the real key profiles hook', () => {
     expect(text(root().find((node) => node.props['data-key-profile-summary']))).toContain(
       i18n.t('quota_management.key_profiles.summary.provider_off', { provider: 'Claude' })
     );
+  });
+
+  test('a save from an editor opened before Claude was switched off elsewhere keeps it off', async () => {
+    const before = profile('priority');
+    const state = { ...withProviders(profilesState(before)), providerToggleSupported: true };
+    vi.mocked(routingProfilesApi.get).mockResolvedValue(state);
+    await mount();
+    await openProfileEditor('data-profile-row');
+    expect(claudeBlock().findByType(ToggleSwitch).props.checked).toBe(true);
+    await editBlock('codex', (value) => ({ ...value, speed: 'fast' }));
+
+    // Another admin switched Claude off after the editor opened; CPA's merge keeps that
+    // flag when the PATCH leaves it out.
+    const merged = (sent: Record<string, unknown>): RoutingProfile => {
+      const claude = sent.claude as Record<string, unknown>;
+      const edited = withSuggested(before);
+      return {
+        ...edited,
+        providers: {
+          claude: {
+            ...edited.providers.claude,
+            disabled: 'disabled' in claude ? claude.disabled === true : true,
+          },
+          codex: { ...edited.providers.codex, speed: 'fast' },
+        },
+      };
+    };
+    const patch = vi.spyOn(apiClient, 'patch').mockImplementation(async (_url, body) => {
+      const providers = (
+        body as {
+          routing: { 'key-profiles': Record<string, { providers: Record<string, unknown> }> };
+        }
+      ).routing['key-profiles'][KEY_B].providers;
+      vi.mocked(routingProfilesApi.get).mockResolvedValue(
+        withKeyBProfile(state, merged(providers))
+      );
+      return {};
+    });
+    storedFile(true);
+    await click(buttonWith('data-key-profile-save'));
+
+    expect(patch).toHaveBeenCalledTimes(1);
+    const body = patch.mock.calls[0][1] as {
+      routing: { 'key-profiles': Record<string, { providers: Record<string, unknown> }> };
+    };
+    // Neither provider was switched in this editor, so neither flag is sent.
+    expect(body.routing['key-profiles'][KEY_B].providers.claude).not.toHaveProperty('disabled');
+    expect(body.routing['key-profiles'][KEY_B].providers.codex).not.toHaveProperty('disabled');
+    // The read-back keeps the stored flag, so the save succeeds and the row shows Claude off.
+    expect(editors()).toHaveLength(0);
+    expect(root().findAll((node) => node.props.role === 'alert')).toHaveLength(0);
+    await openProfileEditor('data-profile-row');
+    expect(claudeBlock().findByType(ToggleSwitch).props.checked).toBe(false);
+  });
+
+  test('a new key profile saved after the Default switched Claude off keeps it off', async () => {
+    const state = {
+      ...withProviders(profilesState(profile('priority'))),
+      providerToggleSupported: true,
+    };
+    vi.mocked(routingProfilesApi.get).mockResolvedValue(state);
+    await mount();
+    await click(buttonWith('data-open-profiles'));
+    // KEY_A has no profile of its own, so the draft is a copy of the Default, Claude on.
+    const add = root()
+      .find((node) => node.props['data-profile-add'])
+      .findByType(Select);
+    await act(async () => add.props.onChange(add.props.options[0].value));
+    expect(editors()[0].props.isNew).toBe(true);
+    expect(claudeBlock().findByType(ToggleSwitch).props.checked).toBe(true);
+    await editBlock('codex', (value) => ({ ...value, speed: 'fast' }));
+
+    // Another admin switches Claude off in the Default by editing the file while the
+    // draft is open, and CPA has not reloaded it yet: its profiles still show Claude on.
+    // The PATCH merges into the file, and CPA loads what it wrote.
+    const offShared: RoutingProfile = {
+      ...state.shared,
+      providers: {
+        ...state.shared.providers,
+        claude: { ...state.shared.providers.claude, disabled: true },
+      },
+    };
+    const elsewhere = { ...state, shared: offShared };
+    storedFile(true);
+    const patch = vi.spyOn(apiClient, 'patch').mockImplementation(async (_url, body) => {
+      const sent = (
+        body as {
+          routing: { 'key-profiles': Record<string, { providers: Record<string, unknown> }> };
+        }
+      ).routing['key-profiles'][KEY_A].providers.claude as Record<string, unknown>;
+      // A profile the PATCH creates holds only what it sent: no flag means Claude on.
+      const created = withSuggested({
+        ...state.shared,
+        providers: {
+          claude: { ...state.shared.providers.claude, disabled: sent.disabled === true },
+          codex: { ...state.shared.providers.codex, speed: 'fast' },
+        },
+      });
+      vi.mocked(routingProfilesApi.get).mockResolvedValue({
+        ...elsewhere,
+        keys: [...elsewhere.keys, { key: KEY_A, profile: created }],
+      });
+      return {};
+    });
+    await click(buttonWith('data-key-profile-save'));
+
+    expect(patch).toHaveBeenCalledTimes(1);
+    const body = patch.mock.calls[0][1] as {
+      routing: { 'key-profiles': Record<string, { providers: Record<string, unknown> }> };
+    };
+    expect(body.routing['key-profiles'][KEY_A].providers.claude).toHaveProperty('disabled', true);
+    expect(body.routing['key-profiles'][KEY_A].providers.codex).not.toHaveProperty('disabled');
+    expect(ifMatchOf(patch.mock.calls[0])).toBe(FILE_VERSION);
+    expect(editors()).toHaveLength(0);
+    expect(root().findAll((node) => node.props.role === 'alert')).toHaveLength(0);
+  });
+
+  test('a key save is refused without a write once a scheduler plugin owns routing', async () => {
+    const state = {
+      ...withProviders(profilesState(profile('priority'))),
+      providerToggleSupported: true,
+    };
+    vi.mocked(routingProfilesApi.get).mockResolvedValue(state);
+    await mount();
+    await openProfileEditor('data-profile-row');
+    await editBlock('codex', (value) => ({ ...value, speed: 'fast' }));
+    // A scheduler plugin took over routing after the editor opened.
+    vi.mocked(routingProfilesApi.get).mockResolvedValue({ ...state, supported: false });
+    storedFile();
+    const patch = vi.spyOn(apiClient, 'patch').mockResolvedValue({});
+    await click(buttonWith('data-key-profile-save'));
+
+    expect(patch).not.toHaveBeenCalled();
+    expect(text(root().find((node) => node.props.role === 'alert'))).toContain(
+      i18n.t('quota_management.key_profiles.errors.config_changed')
+    );
+  });
+
+  test('switching Claude back on sends an explicit disabled: false', async () => {
+    const before = withSuggested(profile('priority'));
+    before.providers.claude.disabled = true;
+    const state = { ...withProviders(profilesState(before)), providerToggleSupported: true };
+    vi.mocked(routingProfilesApi.get).mockResolvedValue(state);
+    const after: RoutingProfile = {
+      ...before,
+      providers: {
+        ...before.providers,
+        claude: { ...before.providers.claude, disabled: false },
+      },
+    };
+    const patch = vi.spyOn(apiClient, 'patch').mockImplementation(async () => {
+      vi.mocked(routingProfilesApi.get).mockResolvedValue(withKeyBProfile(state, after));
+      return {};
+    });
+    storedFile();
+    await mount();
+    await openProfileEditor('data-profile-row');
+    const claudeToggle = () => claudeBlock().findByType(ToggleSwitch);
+    expect(claudeToggle().props.checked).toBe(false);
+    await act(async () => claudeToggle().props.onChange(true));
+    await click(buttonWith('data-key-profile-save'));
+
+    expect(patch).toHaveBeenCalledTimes(1);
+    const body = patch.mock.calls[0][1] as {
+      routing: { 'key-profiles': Record<string, { providers: Record<string, unknown> }> };
+    };
+    expect(body.routing['key-profiles'][KEY_B].providers.claude).toHaveProperty('disabled', false);
+    expect(body.routing['key-profiles'][KEY_B].providers.codex).not.toHaveProperty('disabled');
+    expect(editors()).toHaveLength(0);
+  });
+
+  test('a retry that switches Claude back on after a stored off whose read-back failed saves it on', async () => {
+    const before = withSuggested(profile('priority'));
+    const state = { ...withProviders(profilesState(before)), providerToggleSupported: true };
+    vi.mocked(routingProfilesApi.get).mockResolvedValue(state);
+    // CPA's merge: a flag the PATCH leaves out keeps the stored one.
+    let storedClaudeOff = false;
+    const providersOf = (body: unknown) =>
+      (
+        body as {
+          routing: { 'key-profiles': Record<string, { providers: Record<string, unknown> }> };
+        }
+      ).routing['key-profiles'][KEY_B].providers;
+    const stored = (): RoutingProfile => ({
+      ...before,
+      providers: {
+        ...before.providers,
+        claude: { ...before.providers.claude, disabled: storedClaudeOff },
+      },
+    });
+    const patch = vi.spyOn(apiClient, 'patch').mockImplementation(async (_url, body) => {
+      const claude = providersOf(body).claude as Record<string, unknown>;
+      if ('disabled' in claude) storedClaudeOff = claude.disabled === true;
+      vi.mocked(routingProfilesApi.get).mockResolvedValue(withKeyBProfile(state, stored()));
+      return {};
+    });
+    storedFile();
+    await mount();
+    await openProfileEditor('data-profile-row');
+    const claudeToggle = () => claudeBlock().findByType(ToggleSwitch);
+
+    // The first save stores Claude off, but its read-back fails, so the editor stays
+    // open; the reload after the error finds Claude off.
+    await act(async () => claudeToggle().props.onChange(false));
+    patch.mockImplementationOnce(async (_url, body) => {
+      const claude = providersOf(body).claude as Record<string, unknown>;
+      if ('disabled' in claude) storedClaudeOff = claude.disabled === true;
+      vi.mocked(routingProfilesApi.get)
+        .mockResolvedValue(withKeyBProfile(state, stored()))
+        .mockRejectedValueOnce(new Error('read-back lost'));
+      return {};
+    });
+    await click(buttonWith('data-key-profile-save'));
+    expect(patch).toHaveBeenCalledTimes(1);
+    expect(storedClaudeOff).toBe(true);
+    expect(root().findAll((node) => node.props.role === 'alert')).toHaveLength(1);
+    expect(editors()).toHaveLength(1);
+    expect(editors()[0].props.initial.providers.claude.disabled).toBe(true);
+
+    // Claude back on: the retry writes it as on, so the stored off does not survive.
+    await act(async () => claudeToggle().props.onChange(true));
+    await click(buttonWith('data-key-profile-save'));
+    expect(patch).toHaveBeenCalledTimes(2);
+    expect(providersOf(patch.mock.calls[1][1]).claude).toHaveProperty('disabled', false);
+    expect(providersOf(patch.mock.calls[1][1]).codex).not.toHaveProperty('disabled');
+    expect(storedClaudeOff).toBe(false);
+    expect(editors()).toHaveLength(0);
   });
 });
 
@@ -681,8 +931,9 @@ describe('Codex speed button and table with the real key profiles hook', () => {
     };
     expect(body.routing['key-profiles'][KEY_A].providers).toMatchObject({
       claude: { disabled: true },
-      codex: { speed: 'ultrafast', disabled: false },
+      codex: { speed: 'ultrafast' },
     });
+    expect(body.routing['key-profiles'][KEY_A].providers.codex).not.toHaveProperty('disabled');
     expect(root().findAll((node) => node.props['data-codex-speed-error'])).toHaveLength(0);
   });
 
