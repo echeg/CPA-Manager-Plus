@@ -147,10 +147,10 @@
 - [x] run `npm test` - must pass before task 6
 
 ### Task 6: Verify acceptance criteria
-- [ ] confirm each Success Criterion maps to a test from Tasks 1-5; add any missing one
-- [ ] run `npm test` in `apps/web`
-- [ ] run `npm run type-check` in `apps/web`
-- [ ] run `npm run lint` in `apps/web` - no new errors or warnings in touched files
+- [x] confirm each Success Criterion maps to a test from Tasks 1-5; add any missing one (all mapped; an existing-profile speed write is a partial merge PATCH whose exact body, `sharedCodexSpeedPatch` / `keyCodexSpeedPatch` tests, never carries `disabled`)
+- [x] run `npm test` in `apps/web`
+- [x] run `npm run type-check` in `apps/web`
+- [x] run `npm run lint` in `apps/web` - no new errors or warnings in touched files
 
 ### Task 7: [Final] Update documentation
 - [ ] `docs/personal-quota.md`: describe the Enabled toggle per provider, what CPA does with a disabled provider (403, no fallback into a disabled Codex, open Codex websockets run until closed), the summary label, the speed table reason, behavior under a scheduler plugin, and the older-backend behavior
