@@ -1298,8 +1298,17 @@ export function calculateCost(
     !contextTier && !longContextOverridesServiceTier
       ? selectServiceTierPrice(basePrice, serviceTier)
       : undefined;
+  const contextServiceTierPrice = contextTier
+    ? selectServiceTierPrice(basePrice, serviceTier)
+    : undefined;
   const price = contextTier
-    ? applyContextTierPrice(basePrice, contextTier)
+    ? contextServiceTierPrice
+      ? scaleContextTierPriceForServiceTier(
+          ratioBasePrice(behaviorModel, basePrice),
+          contextTier,
+          contextServiceTierPrice
+        )
+      : applyContextTierPrice(basePrice, contextTier)
     : serviceTierPrice
       ? applyServiceTierPrice(basePrice, serviceTierPrice)
       : basePrice;
@@ -1392,6 +1401,65 @@ function applyServiceTierPrice(price: ModelPrice, tier: ModelPriceServiceTier): 
     completionConfigured: tier.completionConfigured ? true : price.completionConfigured,
     cacheReadConfigured: tier.cacheReadConfigured ? true : price.cacheReadConfigured,
     cacheCreationConfigured: tier.cacheCreationConfigured ? true : price.cacheCreationConfigured,
+  };
+}
+
+// Mirrors the server's GPT-5.6 base enrichment so the ratio of a service-tier
+// rule is taken against the same cache rates the server divides by.
+function ratioBasePrice(modelName: string, price: ModelPrice): ModelPrice {
+  if (!isGpt56Model(modelName)) return price;
+  const prompt = Number(price.prompt) || 0;
+  const cacheReadConfigured = isConfiguredPriceValue(price.cacheRead, price.cacheReadConfigured);
+  const cacheCreationConfigured = isConfiguredPriceValue(
+    price.cacheCreation,
+    price.cacheCreationConfigured
+  );
+  return {
+    ...price,
+    cacheRead: cacheReadConfigured ? price.cacheRead : prompt * 0.1,
+    cacheCreation: cacheCreationConfigured ? price.cacheCreation : prompt * 1.25,
+    cacheReadConfigured: true,
+    cacheCreationConfigured: true,
+  };
+}
+
+function scaleModelPriceRate(contextRate: unknown, baseRate: unknown, ruleRate: unknown): number {
+  const base = Number(baseRate) || 0;
+  const rule = Number(ruleRate) || 0;
+  return base > 0 ? (Number(contextRate) || 0) * (rule / base) : rule;
+}
+
+// A service-tier rule inside an active context tier scales each rate it
+// configures by rule rate / base rate (the rule rate itself when the base is 0),
+// so the tier surcharge stacks on top of the long-context premium. Mirrors
+// ScaleModelPriceContextTierForServiceTier on the server.
+function scaleContextTierPriceForServiceTier(
+  base: ModelPrice,
+  contextTier: ModelPriceContextTier,
+  rule: ModelPriceServiceTier
+): ModelPrice {
+  const context = applyContextTierPrice(base, contextTier);
+  return {
+    ...context,
+    prompt: rule.promptConfigured
+      ? scaleModelPriceRate(context.prompt, base.prompt, rule.prompt)
+      : context.prompt,
+    completion: rule.completionConfigured
+      ? scaleModelPriceRate(context.completion, base.completion, rule.completion)
+      : context.completion,
+    cache: rule.cacheConfigured
+      ? scaleModelPriceRate(context.cache, base.cache, rule.cache)
+      : context.cache,
+    cacheRead: rule.cacheReadConfigured
+      ? scaleModelPriceRate(context.cacheRead, base.cacheRead, rule.cacheRead)
+      : context.cacheRead,
+    cacheCreation: rule.cacheCreationConfigured
+      ? scaleModelPriceRate(context.cacheCreation, base.cacheCreation, rule.cacheCreation)
+      : context.cacheCreation,
+    promptConfigured: rule.promptConfigured ? true : context.promptConfigured,
+    completionConfigured: rule.completionConfigured ? true : context.completionConfigured,
+    cacheReadConfigured: rule.cacheReadConfigured ? true : context.cacheReadConfigured,
+    cacheCreationConfigured: rule.cacheCreationConfigured ? true : context.cacheCreationConfigured,
   };
 }
 

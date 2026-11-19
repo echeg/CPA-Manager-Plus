@@ -19,6 +19,7 @@ import {
   normalizeAnalyticsModel,
   normalizeCacheAccounting,
   normalizeUsageSourceId,
+  type ModelPriceServiceTier,
 } from './usage';
 import { sha256Hex } from './apiKeyHash';
 import { maskSensitiveText } from './format';
@@ -1540,47 +1541,160 @@ describe('calculateCost model price preference', () => {
     ).toBeCloseTo(1.000005);
   });
 
-  it('does not stack priority pricing with active context-tier pricing', () => {
-    const modelPrices = {
-      'gpt-5.6-sol': {
-        prompt: 5,
-        completion: 30,
-        cache: 0.5,
-        contextTiers: [
-          {
-            thresholdTokens: 272_000,
-            prompt: 10,
-            completion: 40,
-            cache: 0,
-            promptConfigured: true,
-            completionConfigured: true,
-          },
-        ],
-        serviceTiers: [
-          {
-            mode: 'fast',
-            serviceTier: 'priority',
-            prompt: 12.5,
-            completion: 75,
-            cache: 0,
-            promptConfigured: true,
-            completionConfigured: true,
-          },
-        ],
-      },
-    };
-    const tokens = { input_tokens: 1_000_000 };
+  const gpt56SolFastContextPrices = () => ({
+    'gpt-5.6-sol': {
+      prompt: 5,
+      completion: 30,
+      cache: 0.5,
+      contextTiers: [
+        {
+          thresholdTokens: 272_000,
+          prompt: 10,
+          completion: 40,
+          cache: 0,
+          promptConfigured: true,
+          completionConfigured: true,
+        },
+      ],
+      serviceTiers: [
+        {
+          mode: 'fast',
+          serviceTier: 'priority',
+          prompt: 12.5,
+          completion: 75,
+          cache: 0,
+          promptConfigured: true,
+          completionConfigured: true,
+        },
+      ],
+    },
+  });
 
-    const standard = calculateCost(
-      { tokens, __modelName: 'gpt-5.6-sol', service_tier: 'default' },
-      modelPrices
-    );
-    const priority = calculateCost(
-      { tokens, __modelName: 'gpt-5.6-sol', service_tier: 'priority' },
-      modelPrices
+  it('scales an explicit service-tier rule inside an active context tier', () => {
+    const modelPrices = gpt56SolFastContextPrices();
+    const tokens = { input_tokens: 1_000_000, output_tokens: 1_000_000 };
+
+    // Fast ratio 2.5 on input and output: 10 x 2.5 = 25, 40 x 2.5 = 100.
+    for (const serviceTier of ['priority', 'fast']) {
+      expect(
+        calculateCost({ tokens, __modelName: 'gpt-5.6-sol', service_tier: serviceTier }, modelPrices)
+      ).toBeCloseTo(125);
+    }
+    expect(
+      calculateCost({ tokens, __modelName: 'gpt-5.6-sol', service_tier: 'default' }, modelPrices)
+    ).toBeCloseTo(50);
+  });
+
+  const gpt62SolUltrafastPrices = (rule: Partial<ModelPriceServiceTier>) => ({
+    'gpt-6.2-sol': {
+      prompt: 2,
+      completion: 10,
+      cache: 0.2,
+      cacheRead: 0.2,
+      cacheCreation: 2.5,
+      promptConfigured: true,
+      completionConfigured: true,
+      cacheReadConfigured: true,
+      cacheCreationConfigured: true,
+      contextTiers: [
+        {
+          thresholdTokens: 272_000,
+          prompt: 4,
+          completion: 15,
+          cache: 0.4,
+          cacheRead: 0.4,
+          promptConfigured: true,
+          completionConfigured: true,
+          cacheConfigured: true,
+          cacheReadConfigured: true,
+        },
+      ],
+      serviceTiers: [
+        {
+          mode: 'ultrafast',
+          serviceTier: 'ultrafast',
+          prompt: 6,
+          completion: 30,
+          cache: 0,
+          promptConfigured: true,
+          completionConfigured: true,
+          ...rule,
+        },
+      ],
+    },
+  });
+  const gpt62LongContextTokens = {
+    input_tokens: 1_000_000,
+    output_tokens: 1_000_000,
+    cached_tokens: 500_000,
+  };
+
+  it('prices gpt-6.2-sol Ultrafast above 272k at the scaled long-context rates', () => {
+    const modelPrices = gpt62SolUltrafastPrices({
+      cache: 0.6,
+      cacheRead: 0.6,
+      cacheConfigured: true,
+      cacheReadConfigured: true,
+    });
+
+    // 500k prompt at 12 = 6, 500k cached at 0.4 x 3 = 0.6, 1M output at 45 = 45.
+    expect(
+      calculateCost(
+        { tokens: gpt62LongContextTokens, __modelName: 'gpt-6.2-sol', service_tier: 'ultrafast' },
+        modelPrices
+      )
+    ).toBeCloseTo(51.6);
+    // The same request on the standard tier stays at the plain context rates.
+    expect(
+      calculateCost(
+        { tokens: gpt62LongContextTokens, __modelName: 'gpt-6.2-sol', service_tier: 'default' },
+        modelPrices
+      )
+    ).toBeCloseTo(17.2);
+  });
+
+  it('keeps context-tier cache rates when the rule configures only input and output', () => {
+    // 500k prompt at 12 = 6, 500k cached at the unscaled 0.4 = 0.2, 1M output at 45 = 45.
+    expect(
+      calculateCost(
+        { tokens: gpt62LongContextTokens, __modelName: 'gpt-6.2-sol', service_tier: 'ultrafast' },
+        gpt62SolUltrafastPrices({})
+      )
+    ).toBeCloseTo(51.2);
+  });
+
+  it('does not stack the built-in priority multiplier inside a context tier', () => {
+    const cost = calculateCost(
+      { tokens: { input_tokens: 1_000_000 }, __modelName: 'gpt-5.5', service_tier: 'priority' },
+      {
+        'gpt-5.5': {
+          prompt: 5,
+          completion: 30,
+          cache: 0,
+          contextTiers: [
+            {
+              thresholdTokens: 272_000,
+              prompt: 10,
+              completion: 45,
+              cache: 0,
+              promptConfigured: true,
+              completionConfigured: true,
+            },
+          ],
+        },
+      }
     );
 
-    expect(priority).toBeCloseTo(standard);
+    expect(cost).toBeCloseTo(10);
+  });
+
+  it('ignores the flex discount inside a context tier without a flex rule', () => {
+    const cost = calculateCost(
+      { tokens: { input_tokens: 1_000_000 }, __modelName: 'gpt-5.6-sol', service_tier: 'flex' },
+      gpt56SolFastContextPrices()
+    );
+
+    expect(cost).toBeCloseTo(10);
   });
 
   it('inherits missing tier cache rates and preserves explicit zero overrides', () => {

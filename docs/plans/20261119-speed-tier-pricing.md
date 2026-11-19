@@ -86,11 +86,11 @@
 - [x] run `npm run manager-server:test` - must pass before task 3
 
 ### Task 3: Mirror the rule in the web cost calculation
-- [ ] in `calculateCost` (`apps/web/src/utils/usage.ts:1202`), when a context tier applies and the price has a rule for the service tier, use the context-tier price scaled as in Task 1, with a multiplier of 1; keep the other branches
-- [ ] replace `'does not stack priority pricing with active context-tier pricing'` in `usage.test.ts` with a test expecting the scaled cost for the same fixture as the Go test
-- [ ] write a test for the `gpt-6.2-sol` Ultrafast example with the same numbers as the Go test, and one for a rule that configures only input and output
-- [ ] write tests that stay unchanged in result: multiplier-only tier inside a context tier, `flex` inside a context tier, and the legacy long-context path
-- [ ] run `npm run test:web` and `npm run type-check` - must pass before task 4
+- [x] in `calculateCost` (`apps/web/src/utils/usage.ts:1202`), when a context tier applies and the price has a rule for the service tier, use the context-tier price scaled as in Task 1, with a multiplier of 1; keep the other branches
+- [x] replace `'does not stack priority pricing with active context-tier pricing'` in `usage.test.ts` with a test expecting the scaled cost for the same fixture as the Go test
+- [x] write a test for the `gpt-6.2-sol` Ultrafast example with the same numbers as the Go test, and one for a rule that configures only input and output
+- [x] write tests that stay unchanged in result: multiplier-only tier inside a context tier, `flex` inside a context tier, and the legacy long-context path (legacy path covered by the existing 'uses long-context pricing instead of an explicit Fast Mode price' test)
+- [x] run `npm run test:web` and `npm run type-check` - must pass before task 4
 
 ### Task 4: Import every models.dev mode that carries a cost
 - [ ] in `readModelsDevServiceTiers` (`apps/manager-server/internal/service/modelprice/service.go:949`), read every entry of `experimental.modes` that has a `cost` block, in sorted mode order: `fast` keeps the rule `fast` / `priority`, any other mode `m` becomes the rule `m` / `m`
