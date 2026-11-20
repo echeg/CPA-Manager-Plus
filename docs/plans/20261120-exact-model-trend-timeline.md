@@ -163,9 +163,9 @@
 - [x] run `npm run test` and `npm run type-check`. Both must pass before task 4.
 
 ### Task 4: Show the "estimated" hint only on the fallback
-- [ ] in `UsageAnalyticsPage.tsx`, render `usage_analytics.entity_trend_hint` in the models tab header (`:3181`) only when `usage.modelTrendEstimated` is true. Also show it in the trends tab model comparison panel (`:3110-3142`) under the same condition, because that panel draws the same estimated model lines today. Keep the existing hint text and i18n keys, so the four locales and `usageAnalyticsWiring.test.ts:142` stay valid.
-- [ ] write page tests in `UsageAnalyticsPage.test.tsx`: with `modelTrendEstimated: false` no hint is rendered on either tab, and with `true` the hint appears on both
-- [ ] run `npm run test`, `npm run type-check` and `npm run lint`. All must pass before task 5.
+- [x] in `UsageAnalyticsPage.tsx`, render `usage_analytics.entity_trend_hint` in the models tab header (`:3181`) only when `usage.modelTrendEstimated` is true. Also show it in the trends tab model comparison panel (`:3110-3142`) under the same condition, because that panel draws the same estimated model lines today. Keep the existing hint text and i18n keys, so the four locales and `usageAnalyticsWiring.test.ts:142` stay valid.
+- [x] write page tests in `UsageAnalyticsPage.test.tsx`: with `modelTrendEstimated: false` no hint is rendered on either tab, and with `true` the hint appears on both
+- [x] run `npm run test`, `npm run type-check` and `npm run lint`. All must pass before task 5.
 
 ### Task 5: Demo fixtures return the exact model timeline
 - [ ] in `apps/web/src/features/demo/demoFixtures.ts`, emit `model_timeline` when `include.model_timeline` is set and `filters.models` is non-empty:

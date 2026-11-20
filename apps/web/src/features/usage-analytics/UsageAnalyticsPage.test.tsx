@@ -404,6 +404,7 @@ const createUsageState = (overrides: Record<string, unknown> = {}) => {
     setMatrixMetric: vi.fn(),
     trendMetric: 'requestCount',
     setTrendMetric: vi.fn(),
+    modelTrendEstimated: false,
     modelTrendSeries: [
       {
         id: 'gpt-4o',
@@ -642,6 +643,21 @@ describe('UsageAnalyticsPage', () => {
     expect(text).not.toContain('usage_analytics.api_key_overview_title');
     expect(text).not.toContain('usage_analytics.drilldown_preview_title');
   });
+
+  it.each(['trends', 'models'] as const)(
+    'shows the estimated model trend hint on the %s tab only for the fallback',
+    (tab) => {
+      mocks.usageState = createUsageState({ activeTab: tab, modelTrendEstimated: false });
+      const exactText = getText(renderPage().root);
+      expect(exactText).toContain('usage_analytics.model_compare_title');
+      expect(exactText).not.toContain('usage_analytics.entity_trend_hint');
+
+      mocks.usageState = createUsageState({ activeTab: tab, modelTrendEstimated: true });
+      const estimatedText = getText(renderPage().root);
+      expect(estimatedText).toContain('usage_analytics.model_compare_title');
+      expect(estimatedText.split('usage_analytics.entity_trend_hint')).toHaveLength(2);
+    }
+  );
 
   it('renders fine-grained cache buckets in token charts', () => {
     const point = createTimelinePoint({

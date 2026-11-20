@@ -3131,7 +3131,10 @@ function UsageAnalyticsPageInner() {
             </div>
             <div className={styles.trendEntityGrid}>
               <div className={styles.trendEntityChart}>
-                <h3>{t('usage_analytics.model_compare_title')}</h3>
+                <div>
+                  <h3>{t('usage_analytics.model_compare_title')}</h3>
+                  {usage.modelTrendEstimated ? <p>{t('usage_analytics.entity_trend_hint')}</p> : null}
+                </div>
                 <EntityTrendChart series={usage.modelTrendSeries} metric={usage.trendMetric} />
               </div>
               <div className={styles.trendEntityChart}>
@@ -3178,7 +3181,7 @@ function UsageAnalyticsPageInner() {
               <div className={`${styles.panelHeader} ${styles.trendEntityHeader}`}>
                 <div>
                   <h2>{t('usage_analytics.model_compare_title')}</h2>
-                  <p>{t('usage_analytics.entity_trend_hint')}</p>
+                  {usage.modelTrendEstimated ? <p>{t('usage_analytics.entity_trend_hint')}</p> : null}
                 </div>
                 <div
                   className={`${styles.segmentedControl} ${styles.trendMetricTabs}`}
