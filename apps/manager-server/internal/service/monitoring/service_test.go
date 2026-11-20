@@ -533,17 +533,31 @@ func TestAnalyticsOmitsModelTimelineUnlessRequested(t *testing.T) {
 		t.Fatalf("response without include.model_timeline has the field: %s", encoded)
 	}
 
-	modelOnly, err := New(db).Analytics(ctx, Request{
-		FromMS:  fromMS,
-		ToMS:    toMS,
-		Include: Include{ModelTimeline: true, Granularity: "hour"},
-	})
+	// The web sends include.model_timeline as JSON and reads model_timeline from the JSON response.
+	var modelOnlyReq Request
+	if err := json.Unmarshal([]byte(fmt.Sprintf(
+		`{"from_ms":%d,"to_ms":%d,"include":{"model_timeline":true,"granularity":"hour"}}`,
+		fromMS, toMS,
+	)), &modelOnlyReq); err != nil {
+		t.Fatalf("decode model-only request: %v", err)
+	}
+	if !modelOnlyReq.Include.ModelTimeline {
+		t.Fatalf("include.model_timeline was not decoded: %#v", modelOnlyReq.Include)
+	}
+	modelOnly, err := New(db).Analytics(ctx, modelOnlyReq)
 	if err != nil {
 		t.Fatalf("model-only analytics: %v", err)
 	}
 	if modelOnly.Timeline != nil || modelOnly.AnomalyPoints != nil || len(modelOnly.ModelTimeline) != 1 ||
 		modelOnly.ModelTimeline[0].Model != "gpt-a" || modelOnly.ModelTimeline[0].Calls != 1 {
 		t.Fatalf("model-only response timeline=%#v anomaly=%#v model=%#v", modelOnly.Timeline, modelOnly.AnomalyPoints, modelOnly.ModelTimeline)
+	}
+	encodedModelOnly, err := json.Marshal(modelOnly)
+	if err != nil {
+		t.Fatalf("marshal model-only response: %v", err)
+	}
+	if !strings.Contains(string(encodedModelOnly), `"model_timeline":[{"model":"gpt-a",`) {
+		t.Fatalf("model-only response JSON has no model_timeline: %s", encodedModelOnly)
 	}
 }
 
@@ -792,6 +806,21 @@ func TestBuildTimelineIsIndependentOfPointOrder(t *testing.T) {
 	if !reflect.DeepEqual(forward, reverse) {
 		t.Fatalf("timeline changed with point order\nforward=%#v\nreverse=%#v", forward, reverse)
 	}
+
+	// Points that differ only in the pricing band must also be summed in a fixed order.
+	tied := []store.TimelinePoint{
+		{BucketMS: 2_000, Model: "z-big", BillingModel: "z-big", PricingBand: usage.PricingBand{ContextThresholdTokens: 1},
+			Calls: 1, Success: 1, InputTokens: 10_000_000_000_000_000},
+		{BucketMS: 2_000, Model: "z-big", BillingModel: "z-big", PricingBand: usage.PricingBand{ContextThresholdTokens: 0},
+			Calls: 1, Success: 1, InputTokens: 1},
+		{BucketMS: 2_000, Model: "z-big", BillingModel: "z-big", PricingBand: usage.PricingBand{ContextThresholdTokens: 2},
+			Calls: 1, Success: 1, InputTokens: 1},
+	}
+	tiedForward := buildTimeline(tied, nil, "hour", time.UTC, prices)
+	tiedReverse := buildTimeline([]store.TimelinePoint{tied[2], tied[1], tied[0]}, nil, "hour", time.UTC, prices)
+	if !reflect.DeepEqual(tiedForward, tiedReverse) {
+		t.Fatalf("timeline changed with the order of tied points\nforward=%#v\nreverse=%#v", tiedForward, tiedReverse)
+	}
 }
 
 func TestBuildModelTimelineIsIndependentOfPointOrderAndSkipsEmptyModels(t *testing.T) {
@@ -805,11 +834,25 @@ func TestBuildModelTimelineIsIndependentOfPointOrderAndSkipsEmptyModels(t *testi
 		{BucketMS: 1_000, Model: "a-small", BillingModel: "a-small", Calls: 1, Success: 1, InputTokens: 1},
 		{BucketMS: 1_000, Model: "", Calls: 5, Success: 5, InputTokens: 5},
 		{BucketMS: 2_000, Model: "   ", Calls: 3, Success: 3, InputTokens: 3},
+		// Points that tie on model, billing model and service tier and differ only in the
+		// pricing band. Their float cost sum depends on the order they are added in.
+		{BucketMS: 3_000, Model: "tied", BillingModel: "tied", PricingBand: usage.PricingBand{ContextThresholdTokens: 1},
+			Calls: 1, Success: 1, InputTokens: 10_000_000_000_000_000},
+		{BucketMS: 3_000, Model: "tied", BillingModel: "tied", PricingBand: usage.PricingBand{ContextThresholdTokens: 0},
+			Calls: 1, Success: 1, InputTokens: 1},
+		{BucketMS: 3_000, Model: "tied", BillingModel: "tied", PricingBand: usage.PricingBand{ContextThresholdTokens: 2},
+			Calls: 1, Success: 1, InputTokens: 1},
+		// Distinct values per token field catch a field summed into the wrong counter.
+		{BucketMS: 4_000, Model: "tokens", Calls: 1, Success: 1, Tokens: 21, InputTokens: 1, OutputTokens: 2,
+			CachedTokens: 3, CacheReadTokens: 4, CacheCreationTokens: 5, ReasoningTokens: 6},
+		{BucketMS: 4_000, Model: "tokens", ServiceTier: "priority", Calls: 1, Success: 1, Tokens: 210, InputTokens: 10,
+			OutputTokens: 20, CachedTokens: 30, CacheReadTokens: 40, CacheCreationTokens: 50, ReasoningTokens: 60},
 	}
 	prices := map[string]store.ModelPrice{
 		"z-big":   {Prompt: 1_000_000},
 		"a-small": {Prompt: 1_000_000},
 		"b-model": {Prompt: 1_000_000},
+		"tied":    {Prompt: 1_000_000},
 	}
 
 	forward := buildModelTimeline(points, "hour", time.UTC, prices)
@@ -826,9 +869,18 @@ func TestBuildModelTimelineIsIndependentOfPointOrderAndSkipsEmptyModels(t *testi
 	for _, point := range forward {
 		gotKeys = append(gotKeys, fmt.Sprintf("%d/%s", point.BucketMS, point.Model))
 	}
-	wantKeys := []string{"1000/a-small", "1000/z-big", "2000/b-model"}
+	wantKeys := []string{"1000/a-small", "1000/z-big", "2000/b-model", "3000/tied", "4000/tokens"}
 	if !reflect.DeepEqual(gotKeys, wantKeys) {
 		t.Fatalf("model timeline keys = %#v, want %#v", gotKeys, wantKeys)
+	}
+	if tied := forward[3]; tied.Calls != 3 || tied.InputTokens != 10_000_000_000_000_002 {
+		t.Fatalf("tied counters = %#v", tied)
+	}
+	tokens := forward[4]
+	if tokens.Calls != 2 || tokens.Tokens != 231 || tokens.TotalTokens != 231 || tokens.InputTokens != 11 ||
+		tokens.OutputTokens != 22 || tokens.CachedTokens != 33 || tokens.CacheReadTokens != 44 ||
+		tokens.CacheCreationTokens != 55 || tokens.ReasoningTokens != 66 {
+		t.Fatalf("token sums = %#v", tokens)
 	}
 	big := forward[1]
 	if big.Calls != 4 || big.Success != 3 || big.Failure != 1 || big.SuccessRate != 0.75 || big.FailureRate != 0.25 {

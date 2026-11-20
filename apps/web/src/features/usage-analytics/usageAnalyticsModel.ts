@@ -1985,7 +1985,6 @@ export const buildEntityTrendSeries = (
   shareRows = rows
 ): UsageEntityTrendSeries[] => {
   const total = sumUsageRows(shareRows, metric);
-  const colors = ENTITY_TREND_COLORS;
   return rows
     .filter((row) => usageRankMetricValue(row, metric) > 0)
     .slice(0, limit)
@@ -1994,7 +1993,7 @@ export const buildEntityTrendSeries = (
       return {
         id: row.id,
         label: row.label,
-        color: colors[index % colors.length],
+        color: ENTITY_TREND_COLORS[index % ENTITY_TREND_COLORS.length],
         points: timeline.map((point) => ({
           bucketMs: point.bucketMs,
           label: point.label,
@@ -2030,7 +2029,6 @@ export const buildApiKeyTrendSeries = (
     }
     valuesByBucket.set(point.bucketMs, point);
   });
-  const colors = ENTITY_TREND_COLORS;
   return rows
     .filter((row) => {
       const apiKeyHash = normalizeApiKeyHash(row.apiKeyHash || row.id);
@@ -2043,7 +2041,7 @@ export const buildApiKeyTrendSeries = (
       return {
         id: apiKeyHash,
         label: row.label,
-        color: colors[index % colors.length],
+        color: ENTITY_TREND_COLORS[index % ENTITY_TREND_COLORS.length],
         points: timeline.map((timelinePoint) => {
           const value = valuesByBucket?.get(timelinePoint.bucketMs);
           return {
@@ -2056,14 +2054,21 @@ export const buildApiKeyTrendSeries = (
     });
 };
 
-const usageModelTimelineMetricValue = (
-  point: UsageModelTimelinePoint,
-  metric: UsageTrendMetricKey
-) => {
-  if (metric === 'estimatedCost') return point.estimatedCost;
-  if (metric === 'totalTokens') return point.totalTokens;
-  return point.requestCount;
-};
+const isModelTrendRow = (row: UsageRankRow) => normalizeModelTrendId(row.id) !== '';
+
+/**
+ * The overall-share estimate for the model chart, used until the exact model timeline
+ * arrives or when the backend does not return it. The row without a model ('-') cannot be
+ * drawn exactly, so it is left out here as well: the series and their colours then stay
+ * the same when the exact data replaces the estimate. Shares still count every row.
+ */
+export const buildEstimatedModelTrendSeries = (
+  rows: UsageRankRow[],
+  timeline: UsageTimelinePoint[],
+  metric: UsageTrendMetricKey,
+  limit = 4
+): UsageEntityTrendSeries[] =>
+  buildEntityTrendSeries(rows.filter(isModelTrendRow), timeline, metric, limit, rows);
 
 /**
  * Draws each top model from its own exact buckets (include.model_timeline).
@@ -2087,7 +2092,7 @@ export const buildModelTrendSeries = (
     valuesByBucket.set(point.bucketMs, point);
   });
   return rows
-    .filter((row) => normalizeModelTrendId(row.id) !== '' && usageRankMetricValue(row, metric) > 0)
+    .filter((row) => isModelTrendRow(row) && usageRankMetricValue(row, metric) > 0)
     .slice(0, limit)
     .map((row, index) => {
       const valuesByBucket = valuesByModel.get(normalizeModelTrendId(row.id));
@@ -2100,7 +2105,7 @@ export const buildModelTrendSeries = (
           return {
             bucketMs: timelinePoint.bucketMs,
             label: timelinePoint.label,
-            value: value ? usageModelTimelineMetricValue(value, metric) : 0,
+            value: value ? value[metric] : 0,
           };
         }),
       };
@@ -2114,7 +2119,7 @@ const MODEL_TREND_METRICS: UsageTrendMetricKey[] = ['requestCount', 'totalTokens
  * the union, in row order, of the top `limit` rows for each trend metric.
  */
 export const selectModelTrendIds = (rows: UsageRankRow[], limit = 4): string[] => {
-  const eligible = rows.filter((row) => normalizeModelTrendId(row.id) !== '');
+  const eligible = rows.filter(isModelTrendRow);
   const selected = new Set<UsageRankRow>();
   MODEL_TREND_METRICS.forEach((metric) => {
     eligible

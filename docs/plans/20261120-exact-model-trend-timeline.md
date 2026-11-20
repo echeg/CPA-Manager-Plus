@@ -202,7 +202,7 @@
   1. The main response gives `model_stats`.
   2. `selectModelTrendIds` picks up to 12 ids, usually 4.
   3. The follow-up request returns `model_timeline`.
-  4. `buildModelTrendSeries` builds the exact series. Until it arrives, or when the field is missing, `buildEntityTrendSeries` and the hint are used.
+  4. `buildModelTrendSeries` builds the exact series. Until it arrives, or when the field is missing, `buildEstimatedModelTrendSeries` and the hint are used. That is `buildEntityTrendSeries` without the `'-'` row (shares still count it), so the series and colours do not change when the exact data arrives. (➕ added in code review: the plain estimate drew `'-'`, which the exact builder skips, and shifted the colours.)
 - **Model identity**: the ids are `analytics_model_value` on both sides. The server normalizes filter values with `usageidentity.AnalyticsModel`, which is idempotent.
 
 ## Post-Completion

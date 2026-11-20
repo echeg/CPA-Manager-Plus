@@ -19,6 +19,7 @@ import {
   buildEntityTrendSeries,
   buildKeyAnomalies,
   buildModelKeyDistribution,
+  buildEstimatedModelTrendSeries,
   buildModelTrendSeries,
   buildMonitoringDetailUrl,
   buildProviderRows,
@@ -2125,6 +2126,8 @@ describe('exact model trends', () => {
   it('keeps the same ids, labels, colours and order as the estimated series', () => {
     const rows = [
       modelRow('model-a', 40, 4000, 4),
+      // The row without a model ranks in the top 4 but is never drawn exactly.
+      modelRow('-', 35, 3500, 3.5),
       modelRow('model-b', 0, 0, 0),
       modelRow('model-c', 30, 3000, 3),
       modelRow('model-d', 20, 2000, 2),
@@ -2132,7 +2135,7 @@ describe('exact model trends', () => {
       modelRow('model-f', 5, 500, 0.5),
     ];
 
-    const estimated = buildEntityTrendSeries(rows, timeline, 'requestCount');
+    const estimated = buildEstimatedModelTrendSeries(rows, timeline, 'requestCount');
     const exact = buildModelTrendSeries(rows, timeline, [], 'requestCount');
 
     const identity = (series: { id: string; label: string; color: string }) => ({
@@ -2142,6 +2145,17 @@ describe('exact model trends', () => {
     });
     expect(exact.map(identity)).toEqual(estimated.map(identity));
     expect(exact.map((series) => series.id)).toEqual(['model-a', 'model-c', 'model-d', 'model-e']);
+  });
+
+  it('estimates model lines from shares of every row, the row without a model included', () => {
+    const rows = [modelRow('-', 60, 6000, 6), modelRow('model-a', 40, 4000, 4)];
+
+    const estimated = buildEstimatedModelTrendSeries(rows, timeline, 'requestCount');
+
+    expect(estimated.map((series) => series.id)).toEqual(['model-a']);
+    // model-a has 40 of 100 requests, so it gets 40% of each 10-request bucket.
+    expect(estimated[0].points.map((point) => point.value)).toEqual([4, 4, 4, 4]);
+    expect(estimated[0].color).toBe(buildEntityTrendSeries(rows, timeline, 'requestCount')[0].color);
   });
 
   it('gives all-zero series for an empty model timeline', () => {

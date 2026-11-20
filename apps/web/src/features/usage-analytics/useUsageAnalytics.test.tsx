@@ -120,6 +120,7 @@ describe('useUsageAnalytics request orchestration', () => {
   const mainRefresh = vi.fn();
   const selectorRefresh = vi.fn();
   const auxiliaryRefresh = vi.fn();
+  const modelTimelineRefresh = vi.fn();
 
   // model-a runs in both buckets, model-b only in the later one. Their sums match the
   // main timeline buckets (5 and 5 calls), while the estimate smears model-b into both.
@@ -243,13 +244,16 @@ describe('useUsageAnalytics request orchestration', () => {
                   },
                 ],
               }
-            : modelTimeline && modelTimelineAvailable
-              ? {
-                  ...emptyAnalyticsResponse,
-                  model_timeline: modelTimelinePoints(mainTimelineStartMs).filter((point) =>
-                    (params.filters?.models ?? []).includes(point.model)
-                  ),
-                }
+            : modelTimeline
+              ? modelTimelineAvailable
+                ? {
+                    ...emptyAnalyticsResponse,
+                    model_timeline: modelTimelinePoints(mainTimelineStartMs).filter((point) =>
+                      (params.filters?.models ?? []).includes(point.model)
+                    ),
+                  }
+                : // An older backend answers the request but has no model_timeline field.
+                  { ...emptyAnalyticsResponse }
             : credentialTimeline && !credentialTimelineError && !credentialTimelineLoading
               ? {
                   ...emptyAnalyticsResponse,
@@ -270,7 +274,13 @@ describe('useUsageAnalytics request orchestration', () => {
       lastRefreshedAt: null,
       serviceBase: 'http://manager.local',
       unavailableReason: '',
-      refresh: selectors ? selectorRefresh : main ? mainRefresh : auxiliaryRefresh,
+      refresh: selectors
+        ? selectorRefresh
+        : main
+          ? mainRefresh
+          : modelTimeline
+            ? modelTimelineRefresh
+            : auxiliaryRefresh,
     };
   };
 
@@ -302,6 +312,7 @@ describe('useUsageAnalytics request orchestration', () => {
     mainRefresh.mockReset();
     selectorRefresh.mockReset();
     auxiliaryRefresh.mockReset();
+    modelTimelineRefresh.mockReset();
     monitoringMetaMocks.load.mockReset().mockResolvedValue({
       authFiles: [],
       authFilesLoaded: true,
@@ -816,6 +827,15 @@ describe('useUsageAnalytics request orchestration', () => {
       });
 
       expect(typeof lastParams(isModelTimelineRequest)?.fromMs).toBe('number');
+      // The response arrived, it just has no model_timeline field.
+      expect(
+        useMonitoringAnalyticsMock.mock.results.some(
+          ({ value }) =>
+            value?.data !== null &&
+            value?.data?.model_timeline === undefined &&
+            value?.refresh === modelTimelineRefresh
+        )
+      ).toBe(true);
       expect(latestResult?.modelTrendEstimated).toBe(true);
       expect(latestResult?.modelTrendSeries.map((series) => series.id)).toEqual([
         'model-a',
@@ -866,14 +886,56 @@ describe('useUsageAnalytics request orchestration', () => {
         latestResult?.setActiveTab('trends');
         await Promise.resolve();
       });
-      auxiliaryRefresh.mockClear();
+      modelTimelineRefresh.mockClear();
 
       act(() => {
         latestResult?.refresh();
       });
 
-      // The API key and the model timeline requests share the auxiliary refresh mock.
-      expect(auxiliaryRefresh).toHaveBeenCalledTimes(2);
+      expect(modelTimelineRefresh).toHaveBeenCalledTimes(1);
+      expect(modelTimelineRefresh).toHaveBeenCalledWith({ force: true });
+    });
+
+    it('keeps the page filters on the model timeline request', async () => {
+      modelStats = twoModels();
+      await renderHook('/usage-analytics?tab=trends&provider=codex&status=failed');
+
+      const request = lastParams(
+        (params) => isModelTimelineRequest(params) && params.fromMs !== undefined
+      );
+      expect(request?.filters).toEqual({
+        providers: ['codex'],
+        failed_only: true,
+        models: ['model-a', 'model-b'],
+      });
+    });
+
+    it('keeps the series and colours when the exact data replaces the estimate', async () => {
+      modelStats = [
+        createModelStat({ model: '', calls: 9, total_tokens: 900, cost: 9 }),
+        ...twoModels(),
+      ];
+      modelTimelineAvailable = false;
+      await renderHook();
+      await act(async () => {
+        latestResult?.setActiveTab('trends');
+        await Promise.resolve();
+      });
+      expect(latestResult?.modelTrendEstimated).toBe(true);
+      const identity = () =>
+        latestResult?.modelTrendSeries.map((series) => ({ id: series.id, color: series.color }));
+      const estimated = identity();
+
+      modelTimelineAvailable = true;
+      await act(async () => {
+        latestResult?.refresh();
+        await Promise.resolve();
+      });
+
+      expect(latestResult?.modelTrendEstimated).toBe(false);
+      expect(identity()).toEqual(estimated);
+      // The row without a model cannot be drawn exactly, so neither series includes it.
+      expect(estimated?.map((series) => series.id)).toEqual(['model-a', 'model-b']);
     });
   });
 });

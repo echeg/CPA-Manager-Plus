@@ -918,7 +918,7 @@ describe('DemoPage', () => {
     const request = {
       from_ms: 1,
       to_ms: Date.now(),
-      filters: { models: ['claude-sonnet-4-5', ' GPT-4.1 '] },
+      filters: { models: ['claude-sonnet-4-5', ' gpt-4.1 '] },
       include: { model_timeline: true },
     };
     const page = getDemoMonitoringAnalytics(request);
@@ -976,6 +976,10 @@ describe('DemoPage', () => {
     expect(getDemoMonitoringAnalytics({ ...request, filters: {} })).not.toHaveProperty(
       'model_timeline'
     );
+    // Like the server, the model filter is case-sensitive.
+    expect(
+      getDemoMonitoringAnalytics({ ...request, filters: { models: ['GPT-4.1'] } }).model_timeline
+    ).toEqual([]);
   });
 
   it('provides xAI quota exhaustion, successful rate-limit, and cooldown fixtures for UI acceptance', () => {

@@ -1050,7 +1050,10 @@ export interface MonitoringAnalyticsInclude {
   credential_timeline?: boolean;
   api_key_timeline?: boolean;
   api_key_stats?: boolean;
-  /** Exact per-model buckets for the models in filters.models. */
+  /**
+   * Exact per-model buckets. The web sends it with filters.models set to the top models;
+   * without filters.models the server returns every model's buckets.
+   */
   model_timeline?: boolean;
   filter_options?: boolean;
   filter_selectors?: boolean;

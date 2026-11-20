@@ -3775,8 +3775,9 @@ const buildMonitoringAnalytics = (
         requestedAPIKeyTimelineHashes.has(point.api_key_hash)
     );
 
+  // Matches the server's model filter: values are trimmed, and the match is case-sensitive.
   const requestedModelTimelineModels = new Set(
-    (request?.filters?.models ?? []).map((model) => model.trim().toLowerCase()).filter(Boolean)
+    (request?.filters?.models ?? []).map((model) => model.trim()).filter(Boolean)
   );
   // Each bucket is split across every demo model, so per-bucket model values add up to the
   // timeline bucket. Sonnet only starts mid-range and gpt-4.1 stops early, which shows the
@@ -3832,7 +3833,7 @@ const buildMonitoringAnalytics = (
         ];
       });
     })
-    .filter((point) => requestedModelTimelineModels.has(point.model.toLowerCase()));
+    .filter((point) => requestedModelTimelineModels.has(point.model));
 
   const channelShare = accountStats.map((row) => ({
     auth_index: row.auth_indices?.[0] ?? row.id,

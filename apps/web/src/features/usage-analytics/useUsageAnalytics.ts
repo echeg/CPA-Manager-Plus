@@ -20,6 +20,7 @@ import {
   buildSelectedCredentialTrendSeries,
   buildCredentialQuotaRows,
   buildEntityTrendSeries,
+  buildEstimatedModelTrendSeries,
   buildKeyAnomalies,
   buildModelTrendSeries,
   buildUsageInsights,
@@ -458,7 +459,8 @@ export function useUsageAnalytics() {
         : [],
     [activeTabState, adapted.modelRows]
   );
-  const modelTrendRequestEnabled = isModelTrendTab(activeTabState) && modelTrendIds.length > 0;
+  // modelTrendIds is empty outside the trends and models tabs.
+  const modelTrendRequestEnabled = modelTrendIds.length > 0;
   const modelTrendFilters = useMemo(
     () =>
       modelTrendIds.length > 0 ? { ...analyticsFilters, models: modelTrendIds } : analyticsFilters,
@@ -563,7 +565,7 @@ export function useUsageAnalytics() {
             trendMetric,
             MODEL_TREND_SERIES_LIMIT
           )
-        : buildEntityTrendSeries(
+        : buildEstimatedModelTrendSeries(
             adapted.modelRows,
             adapted.timeline,
             trendMetric,

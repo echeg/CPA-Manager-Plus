@@ -2736,7 +2736,13 @@ func buildTimeline(points []store.TimelinePoint, percentiles []store.LatencyPerc
 		if orderedPoints[i].BillingModel != orderedPoints[j].BillingModel {
 			return orderedPoints[i].BillingModel < orderedPoints[j].BillingModel
 		}
-		return orderedPoints[i].ServiceTier < orderedPoints[j].ServiceTier
+		if orderedPoints[i].PricingModel != orderedPoints[j].PricingModel {
+			return orderedPoints[i].PricingModel < orderedPoints[j].PricingModel
+		}
+		if orderedPoints[i].ServiceTier != orderedPoints[j].ServiceTier {
+			return orderedPoints[i].ServiceTier < orderedPoints[j].ServiceTier
+		}
+		return orderedPoints[i].ContextThresholdTokens < orderedPoints[j].ContextThresholdTokens
 	})
 
 	buckets := make(map[int64]*bucketAccumulator, len(orderedPoints))
@@ -3523,7 +3529,13 @@ func buildModelTimeline(points []store.TimelinePoint, granularity string, locati
 		if left.BillingModel != right.BillingModel {
 			return left.BillingModel < right.BillingModel
 		}
-		return left.ServiceTier < right.ServiceTier
+		if left.PricingModel != right.PricingModel {
+			return left.PricingModel < right.PricingModel
+		}
+		if left.ServiceTier != right.ServiceTier {
+			return left.ServiceTier < right.ServiceTier
+		}
+		return left.ContextThresholdTokens < right.ContextThresholdTokens
 	})
 
 	grouped := map[key]*modelTimelineAccumulator{}

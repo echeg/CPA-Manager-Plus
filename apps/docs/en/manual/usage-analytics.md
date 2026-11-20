@@ -50,6 +50,7 @@ The complete JSONL export in Usage Maintenance is a stable, ordered snapshot of 
 - Each tab requests only the data it needs; stable filter selectors load separately from main analytics.
 - Strictly unfiltered long-range statistics can use incremental hourly rollups, while search, provider, account, latency, cache, and other complex filters continue to read raw events.
 - Credential timelines load only after a credential is selected.
+- Model comparison charts on Trends and Models load each top model's own time buckets in a separate request. While that request loads, or when an older Manager Server does not return the data, the lines are estimated from each model's share of the whole range and an "estimated" hint is shown.
 - When a rollup checkpoint is pending, a timezone cannot be represented losslessly, or a rollup read fails, the query falls back to raw events to preserve correctness.
 - Historical cost may be recalculated with current model prices.
 
