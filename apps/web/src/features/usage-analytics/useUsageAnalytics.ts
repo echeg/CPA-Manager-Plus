@@ -21,6 +21,7 @@ import {
   buildCredentialQuotaRows,
   buildEntityTrendSeries,
   buildKeyAnomalies,
+  buildModelTrendSeries,
   buildUsageInsights,
   buildUsageHeatmap,
   buildUsageHeatmapCellDetail,
@@ -31,6 +32,7 @@ import {
   buildUsageSummaryDelta,
   buildUsageCredentialTimeline,
   buildUsageApiKeyTimeline,
+  buildUsageModelTimeline,
   buildUsageAnalyticsFilters,
   buildUsageAnalyticsFilterSelectorsInclude,
   buildUsageAnalyticsInclude,
@@ -39,6 +41,7 @@ import {
   getUsagePresentationRangeScopeKey,
   getUsageRangeBounds,
   resolveUsageGranularity,
+  selectModelTrendIds,
   USAGE_ANALYTICS_DEFAULT_FILTERS,
   type UsageMatrixDimension,
   type UsageMatrixMetricKey,
@@ -65,6 +68,9 @@ import {
 const USAGE_SEARCH_DEBOUNCE_MS = 350;
 const USAGE_HEATMAP_ALL_DATES_KEY = 'all';
 const API_KEY_TREND_SERIES_LIMIT = 4;
+const MODEL_TREND_SERIES_LIMIT = 4;
+
+const isModelTrendTab = (tab: UsageAnalyticsTab) => tab === 'trends' || tab === 'models';
 
 type UsageAnalyticsMonitoringMeta = {
   authFiles: AuthFileItem[];
@@ -445,6 +451,62 @@ export function useUsageAnalytics() {
     [apiKeyTrendData, resolvedGranularity]
   );
   const hasExactAPIKeyTimeline = Array.isArray(apiKeyTrendData?.api_key_timeline);
+  const modelTrendIds = useMemo(
+    () =>
+      isModelTrendTab(activeTabState)
+        ? selectModelTrendIds(adapted.modelRows, MODEL_TREND_SERIES_LIMIT)
+        : [],
+    [activeTabState, adapted.modelRows]
+  );
+  const modelTrendRequestEnabled = isModelTrendTab(activeTabState) && modelTrendIds.length > 0;
+  const modelTrendFilters = useMemo(
+    () =>
+      modelTrendIds.length > 0 ? { ...analyticsFilters, models: modelTrendIds } : analyticsFilters,
+    [analyticsFilters, modelTrendIds]
+  );
+  const modelTrendInclude = useMemo(
+    () => ({
+      granularity: resolvedGranularity,
+      model_timeline: true,
+    }),
+    [resolvedGranularity]
+  );
+  const modelTrendDataScopeKey = useMemo(
+    () =>
+      JSON.stringify({
+        activeTab: activeTabState,
+        modelIds: modelTrendIds,
+        presentationRangeScopeKey,
+        filters: modelTrendFilters,
+        granularity: resolvedGranularity,
+        searchQuery: debouncedSearchQuery,
+      }),
+    [
+      activeTabState,
+      modelTrendFilters,
+      modelTrendIds,
+      presentationRangeScopeKey,
+      debouncedSearchQuery,
+      resolvedGranularity,
+    ]
+  );
+  const modelTrendAnalytics = useMonitoringAnalytics({
+    fromMs: modelTrendRequestEnabled ? bounds?.fromMs : undefined,
+    toMs: modelTrendRequestEnabled ? bounds?.toMs : undefined,
+    nowMs,
+    dataScopeKey: modelTrendDataScopeKey,
+    searchQuery: debouncedSearchQuery,
+    filters: modelTrendFilters,
+    include: modelTrendInclude,
+    throttleMs: 0,
+  });
+  const modelTrendData = modelTrendAnalytics.dataStale ? null : modelTrendAnalytics.data;
+  const modelTimeline = useMemo(
+    () => buildUsageModelTimeline(modelTrendData?.model_timeline ?? [], resolvedGranularity),
+    [modelTrendData, resolvedGranularity]
+  );
+  const hasExactModelTimeline =
+    modelTrendRequestEnabled && Array.isArray(modelTrendData?.model_timeline);
   const heatmapDateData = heatmapDateAnalytics.dataStale ? null : heatmapDateAnalytics.data;
   const heatmapDateRows = useMemo(
     () => buildUsageHeatmap(heatmapDateData?.heatmap ?? [], apiKeyDisplayMap),
@@ -492,8 +554,22 @@ export function useUsageAnalytics() {
     null;
 
   const modelTrendSeries = useMemo(
-    () => buildEntityTrendSeries(adapted.modelRows, adapted.timeline, trendMetric, 4),
-    [adapted.modelRows, adapted.timeline, trendMetric]
+    () =>
+      hasExactModelTimeline
+        ? buildModelTrendSeries(
+            adapted.modelRows,
+            adapted.timeline,
+            modelTimeline,
+            trendMetric,
+            MODEL_TREND_SERIES_LIMIT
+          )
+        : buildEntityTrendSeries(
+            adapted.modelRows,
+            adapted.timeline,
+            trendMetric,
+            MODEL_TREND_SERIES_LIMIT
+          ),
+    [adapted.modelRows, adapted.timeline, hasExactModelTimeline, modelTimeline, trendMetric]
   );
   const apiKeyTrendSeries = useMemo(
     () =>
@@ -765,6 +841,9 @@ export function useUsageAnalytics() {
     if (apiKeyTrendAnalytics.enabled) {
       void apiKeyTrendAnalytics.refresh({ force: true });
     }
+    if (modelTrendAnalytics.enabled) {
+      void modelTrendAnalytics.refresh({ force: true });
+    }
     if (selectedCredentialTimelineAnalytics.enabled) {
       void selectedCredentialTimelineAnalytics.refresh({ force: true });
     }
@@ -778,6 +857,7 @@ export function useUsageAnalytics() {
     heatmapDateAnalytics,
     loadApiKeyAliases,
     loadMonitoringMeta,
+    modelTrendAnalytics,
     selectedApiKeyTimelineAnalytics,
     selectedCredentialTimelineAnalytics,
     selectedHeatmapDate,
@@ -832,6 +912,7 @@ export function useUsageAnalytics() {
     trendMetric,
     setTrendMetric,
     modelTrendSeries,
+    modelTrendEstimated: !hasExactModelTimeline,
     apiKeyTrendSeries,
     selectedApiKeyTrendSeries,
     credentialTrendSeries,

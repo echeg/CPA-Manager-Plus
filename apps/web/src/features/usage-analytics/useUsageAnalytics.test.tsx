@@ -10,6 +10,8 @@ import {
 import type {
   MonitoringAnalyticsApiKeyStatRow,
   MonitoringAnalyticsCoverage,
+  MonitoringAnalyticsModelStat,
+  MonitoringAnalyticsModelTimelinePoint,
   MonitoringAnalyticsResponse,
 } from '@/services/api/usageService';
 import { useUsageAnalytics } from './useUsageAnalytics';
@@ -78,6 +80,24 @@ const createApiKeyStatRow = (
   ...overrides,
 });
 
+const createModelStat = (
+  overrides: Partial<MonitoringAnalyticsModelStat> = {}
+): MonitoringAnalyticsModelStat => ({
+  model: 'model-a',
+  calls: 6,
+  success_calls: 6,
+  failure_calls: 0,
+  success_rate: 1,
+  input_tokens: 600,
+  output_tokens: 0,
+  cached_tokens: 0,
+  cache_read_tokens: 0,
+  cache_creation_tokens: 0,
+  total_tokens: 600,
+  cost: 6,
+  ...overrides,
+});
+
 const localHourStartMs = (timestampMs: number) => {
   const date = new Date(timestampMs);
   date.setMinutes(0, 0, 0);
@@ -93,17 +113,43 @@ describe('useUsageAnalytics request orchestration', () => {
   let emptyAuxiliarySnapshot = false;
   let auxiliaryScopeStale = false;
   let apiKeyTimelineAvailable = true;
+  let modelTimelineAvailable = true;
+  let modelStats: MonitoringAnalyticsModelStat[] = [];
   let mainTimelineBucketCalls = 5;
   let apiKeyStats: MonitoringAnalyticsApiKeyStatRow[] = [createApiKeyStatRow()];
   const mainRefresh = vi.fn();
   const selectorRefresh = vi.fn();
   const auxiliaryRefresh = vi.fn();
 
+  // model-a runs in both buckets, model-b only in the later one. Their sums match the
+  // main timeline buckets (5 and 5 calls), while the estimate smears model-b into both.
+  const modelTimelinePoints = (startMs: number): MonitoringAnalyticsModelTimelinePoint[] => [
+    { model: 'model-a', bucket_ms: startMs, calls: 5, tokens: 500, success: 5, failure: 0 },
+    {
+      model: 'model-a',
+      bucket_ms: startMs + 2 * HOUR_MS,
+      calls: 1,
+      tokens: 100,
+      success: 1,
+      failure: 0,
+    },
+    {
+      model: 'model-b',
+      bucket_ms: startMs + 2 * HOUR_MS,
+      calls: 4,
+      tokens: 400,
+      success: 4,
+      failure: 0,
+    },
+    { model: 'model-c', bucket_ms: startMs, calls: 9, tokens: 900, success: 9, failure: 0 },
+  ];
+
   const resultFor = (params: UseMonitoringAnalyticsParams): UseMonitoringAnalyticsReturn => {
     const selectors = Boolean(params.include?.filter_selectors);
     const main = Boolean(params.include?.summary);
     const credentialTimeline = Boolean(params.include?.credential_timeline);
     const apiKeyTimeline = Boolean(params.include?.api_key_timeline);
+    const modelTimeline = Boolean(params.include?.model_timeline);
     const mainTimelineStartMs =
       typeof params.fromMs === 'number' ? localHourStartMs(params.fromMs) : 0;
     const mainData = params.include?.credential_stats
@@ -152,6 +198,7 @@ describe('useUsageAnalytics request orchestration', () => {
               },
             ],
             api_key_stats: apiKeyStats,
+            ...(modelStats.length > 0 ? { model_stats: modelStats } : {}),
           }
         : emptyAnalyticsResponse;
     return {
@@ -196,6 +243,13 @@ describe('useUsageAnalytics request orchestration', () => {
                   },
                 ],
               }
+            : modelTimeline && modelTimelineAvailable
+              ? {
+                  ...emptyAnalyticsResponse,
+                  model_timeline: modelTimelinePoints(mainTimelineStartMs).filter((point) =>
+                    (params.filters?.models ?? []).includes(point.model)
+                  ),
+                }
             : credentialTimeline && !credentialTimelineError && !credentialTimelineLoading
               ? {
                   ...emptyAnalyticsResponse,
@@ -240,6 +294,8 @@ describe('useUsageAnalytics request orchestration', () => {
     emptyAuxiliarySnapshot = false;
     auxiliaryScopeStale = false;
     apiKeyTimelineAvailable = true;
+    modelTimelineAvailable = true;
+    modelStats = [];
     mainTimelineBucketCalls = 5;
     apiKeyStats = [createApiKeyStatRow()];
     latestResult = null;
@@ -649,5 +705,175 @@ describe('useUsageAnalytics request orchestration', () => {
     await act(async () => { latestResult!.setSelectedCredentialId('credential-b.json'); });
     expect(latestResult!.credentialTrendLoaded).toBe(false);
     expect(latestResult!.heatmapDateLoaded).toBe(false);
+  });
+  describe('exact model trend timeline', () => {
+    const twoModels = () => [
+      createModelStat({ model: 'model-a', calls: 6, total_tokens: 600, cost: 6 }),
+      createModelStat({ model: 'model-b', calls: 4, total_tokens: 400, cost: 4 }),
+    ];
+    const isModelTimelineRequest = (params: UseMonitoringAnalyticsParams) =>
+      Boolean(params.include?.model_timeline);
+    const enabledModelTimelineScopes = () =>
+      new Set(
+        useMonitoringAnalyticsMock.mock.calls
+          .map(([params]) => params)
+          .filter((params) => isModelTimelineRequest(params) && params.fromMs !== undefined)
+          .map((params) => params.dataScopeKey)
+      );
+    const seriesValues = (id: string) =>
+      latestResult?.modelTrendSeries
+        .find((series) => series.id === id)
+        ?.points.slice(0, 3)
+        .map((point) => point.value);
+
+    it.each(['trends', 'models'] as const)(
+      'requests exact buckets for the top models on the %s tab',
+      async (tab) => {
+        modelStats = twoModels();
+        await renderHook();
+        useMonitoringAnalyticsMock.mockClear();
+
+        await act(async () => {
+          latestResult?.setActiveTab(tab);
+          await Promise.resolve();
+        });
+
+        const request = lastParams(isModelTimelineRequest);
+        expect(request?.include).toEqual({ granularity: 'hour', model_timeline: true });
+        expect(request?.filters).toMatchObject({ models: ['model-a', 'model-b'] });
+        expect(typeof request?.fromMs).toBe('number');
+        expect(typeof request?.toMs).toBe('number');
+        expect(request?.throttleMs).toBe(0);
+        expect(JSON.parse(request?.dataScopeKey ?? '{}')).toMatchObject({
+          activeTab: tab,
+          modelIds: ['model-a', 'model-b'],
+          granularity: 'hour',
+        });
+        expect(enabledModelTimelineScopes().size).toBe(1);
+
+        expect(latestResult?.modelTrendEstimated).toBe(false);
+        expect(latestResult?.modelTrendSeries.map((series) => series.id)).toEqual([
+          'model-a',
+          'model-b',
+        ]);
+        expect(seriesValues('model-a')).toEqual([5, 0, 1]);
+        expect(seriesValues('model-b')).toEqual([0, 0, 4]);
+      }
+    );
+
+    it.each(['overview', 'apiKeys', 'credentials', 'heatmap'] as const)(
+      'does not request the model timeline on the %s tab',
+      async (tab) => {
+        modelStats = twoModels();
+        await renderHook();
+        await act(async () => {
+          latestResult?.setActiveTab('trends');
+          await Promise.resolve();
+        });
+        useMonitoringAnalyticsMock.mockClear();
+
+        await act(async () => {
+          latestResult?.setActiveTab(tab);
+          await Promise.resolve();
+        });
+
+        const request = lastParams(isModelTimelineRequest);
+        expect(request?.fromMs).toBeUndefined();
+        expect(request?.toMs).toBeUndefined();
+        expect(enabledModelTimelineScopes().size).toBe(0);
+        expect(latestResult?.modelTrendEstimated).toBe(true);
+      }
+    );
+
+    it('switches the metric without a new model timeline request', async () => {
+      modelStats = twoModels();
+      await renderHook();
+      await act(async () => {
+        latestResult?.setActiveTab('trends');
+        await Promise.resolve();
+      });
+      const scopeBefore = lastParams(isModelTimelineRequest)?.dataScopeKey;
+      useMonitoringAnalyticsMock.mockClear();
+
+      await act(async () => {
+        latestResult?.setTrendMetric('totalTokens');
+        await Promise.resolve();
+      });
+
+      expect(enabledModelTimelineScopes()).toEqual(new Set([scopeBefore]));
+      expect(latestResult?.modelTrendEstimated).toBe(false);
+      expect(seriesValues('model-a')).toEqual([500, 0, 100]);
+      expect(seriesValues('model-b')).toEqual([0, 0, 400]);
+    });
+
+    it('keeps the estimate when the backend omits model_timeline', async () => {
+      modelStats = twoModels();
+      modelTimelineAvailable = false;
+      await renderHook();
+      await act(async () => {
+        latestResult?.setActiveTab('trends');
+        await Promise.resolve();
+      });
+
+      expect(typeof lastParams(isModelTimelineRequest)?.fromMs).toBe('number');
+      expect(latestResult?.modelTrendEstimated).toBe(true);
+      expect(latestResult?.modelTrendSeries.map((series) => series.id)).toEqual([
+        'model-a',
+        'model-b',
+      ]);
+      // The estimate spreads model-b over every bucket by its share of the period.
+      expect(seriesValues('model-b')?.[0]).toBeGreaterThan(0);
+    });
+
+    it('ignores a stale model timeline response', async () => {
+      modelStats = twoModels();
+      auxiliaryScopeStale = true;
+      await renderHook();
+      await act(async () => {
+        latestResult?.setActiveTab('trends');
+        await Promise.resolve();
+      });
+
+      expect(latestResult?.modelTrendEstimated).toBe(true);
+      expect(seriesValues('model-b')?.[0]).toBeGreaterThan(0);
+    });
+
+    it('does not request the model timeline without model rows', async () => {
+      modelStats = [];
+      await renderHook();
+      await act(async () => {
+        latestResult?.setActiveTab('trends');
+        await Promise.resolve();
+      });
+      expect(lastParams(isModelTimelineRequest)?.fromMs).toBeUndefined();
+      expect(enabledModelTimelineScopes().size).toBe(0);
+      expect(latestResult?.modelTrendEstimated).toBe(true);
+
+      modelStats = [createModelStat({ model: '' })];
+      await act(async () => {
+        latestResult?.setActiveTab('models');
+        await Promise.resolve();
+      });
+      expect(lastParams(isModelTimelineRequest)?.fromMs).toBeUndefined();
+      expect(enabledModelTimelineScopes().size).toBe(0);
+      expect(latestResult?.modelTrendEstimated).toBe(true);
+    });
+
+    it('refreshes the model timeline request with the page', async () => {
+      modelStats = twoModels();
+      await renderHook();
+      await act(async () => {
+        latestResult?.setActiveTab('trends');
+        await Promise.resolve();
+      });
+      auxiliaryRefresh.mockClear();
+
+      act(() => {
+        latestResult?.refresh();
+      });
+
+      // The API key and the model timeline requests share the auxiliary refresh mock.
+      expect(auxiliaryRefresh).toHaveBeenCalledTimes(2);
+    });
   });
 });

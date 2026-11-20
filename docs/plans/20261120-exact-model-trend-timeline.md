@@ -144,23 +144,23 @@
 - [x] run `npm run test` and `npm run type-check`. Both must pass before task 3.
 
 ### Task 3: Hook requests the exact model timeline and falls back to the estimate
-- [ ] in `useUsageAnalytics.ts`, add `MODEL_TREND_SERIES_LIMIT = 4` and use it in place of the hard-coded `4` at `:495`
-- [ ] add a model trend request, modelled on the API key block (`:383-447`):
+- [x] in `useUsageAnalytics.ts`, add `MODEL_TREND_SERIES_LIMIT = 4` and use it in place of the hard-coded `4` at `:495`
+- [x] add a model trend request, modelled on the API key block (`:383-447`):
   - get the ids from `selectModelTrendIds(adapted.modelRows, MODEL_TREND_SERIES_LIMIT)`
   - send it only when the active tab is `trends` or `models` and there is at least one id
   - use `filters: { ...analyticsFilters, models: ids }` and `include: { granularity: resolvedGranularity, model_timeline: true }`
   - build a `dataScopeKey` from tab, ids, `presentationRangeScopeKey`, filters, granularity and search, and use `throttleMs: 0`
-- [ ] compute `modelTimeline` and `hasExactModelTimeline = Array.isArray(modelTrendData?.model_timeline)`, ignoring stale data the same way `apiKeyTrendData` does. `modelTrendSeries` uses `buildModelTrendSeries` when the timeline is exact, and otherwise falls back to `buildEntityTrendSeries`. Expose `modelTrendEstimated = !hasExactModelTimeline` from the hook.
-- [ ] extend the mock in `useUsageAnalytics.test.tsx` (`:95-242`) with a `modelTimelineAvailable` toggle and an `include.model_timeline` branch. Write tests:
+- [x] compute `modelTimeline` and `hasExactModelTimeline = Array.isArray(modelTrendData?.model_timeline)`, ignoring stale data the same way `apiKeyTrendData` does. `modelTrendSeries` uses `buildModelTrendSeries` when the timeline is exact, and otherwise falls back to `buildEntityTrendSeries`. Expose `modelTrendEstimated = !hasExactModelTimeline` from the hook.
+- [x] extend the mock in `useUsageAnalytics.test.tsx` (`:95-242`) with a `modelTimelineAvailable` toggle and an `include.model_timeline` branch. Write tests:
   - the trends and models tabs send one request with `filters.models` equal to the selected ids and `include.model_timeline`
   - the series come from the exact buckets
   - the overview tab and the other tabs do not send it
   - changing the metric does not send a new request when the ids are unchanged
-- [ ] write fallback tests:
+- [x] write fallback tests:
   - a backend that omits `model_timeline` keeps the estimate and `modelTrendEstimated === true`
   - a stale response is ignored
   - when there are no model rows, no request is sent
-- [ ] run `npm run test` and `npm run type-check`. Both must pass before task 4.
+- [x] run `npm run test` and `npm run type-check`. Both must pass before task 4.
 
 ### Task 4: Show the "estimated" hint only on the fallback
 - [ ] in `UsageAnalyticsPage.tsx`, render `usage_analytics.entity_trend_hint` in the models tab header (`:3181`) only when `usage.modelTrendEstimated` is true. Also show it in the trends tab model comparison panel (`:3110-3142`) under the same condition, because that panel draws the same estimated model lines today. Keep the existing hint text and i18n keys, so the four locales and `usageAnalyticsWiring.test.ts:142` stay valid.
