@@ -11,6 +11,7 @@ import type {
   MonitoringAnalyticsHeatmapPoint,
   MonitoringAnalyticsInclude,
   MonitoringAnalyticsModelStat,
+  MonitoringAnalyticsModelTimelinePoint,
   MonitoringAnalyticsResponse,
   MonitoringAnalyticsSummary,
   MonitoringAnalyticsSummaryComparison,
@@ -249,6 +250,15 @@ export type UsageCredentialTimelinePoint = {
 
 export type UsageApiKeyTimelinePoint = {
   apiKeyHash: string;
+  bucketMs: number;
+  bucketLabel: string;
+  requestCount: number;
+  totalTokens: number;
+  estimatedCost: number;
+};
+
+export type UsageModelTimelinePoint = {
+  model: string;
   bucketMs: number;
   bucketLabel: string;
   requestCount: number;
@@ -1087,6 +1097,28 @@ export const buildUsageApiKeyTimeline = (
     const bucketMs = toNumber(point.bucket_ms);
     return {
       apiKeyHash: normalizeApiKeyHash(point.api_key_hash),
+      bucketMs,
+      bucketLabel: point.bucket_label || formatLocalBucketLabel(bucketMs, granularity),
+      requestCount: toNumber(point.calls),
+      totalTokens: toNumber(point.total_tokens ?? point.tokens),
+      estimatedCost: toNumber(point.cost),
+    };
+  });
+
+// Model ids match the server's analytics model value; '-' marks a row without a model.
+const normalizeModelTrendId = (value: string | null | undefined) => {
+  const normalized = String(value ?? '').trim();
+  return normalized === '-' ? '' : normalized;
+};
+
+export const buildUsageModelTimeline = (
+  timeline: MonitoringAnalyticsModelTimelinePoint[] = [],
+  granularity: UsageAnalyticsResolvedGranularity
+): UsageModelTimelinePoint[] =>
+  timeline.map((point) => {
+    const bucketMs = toNumber(point.bucket_ms);
+    return {
+      model: normalizeModelTrendId(point.model),
       bucketMs,
       bucketLabel: point.bucket_label || formatLocalBucketLabel(bucketMs, granularity),
       requestCount: toNumber(point.calls),
@@ -1943,6 +1975,8 @@ export const buildUsageMatrix = ({
   };
 };
 
+const ENTITY_TREND_COLORS = ['#2563eb', '#0ea5a7', '#f59e0b', '#ef4444', '#64748b'];
+
 export const buildEntityTrendSeries = (
   rows: UsageRankRow[],
   timeline: UsageTimelinePoint[],
@@ -1951,7 +1985,7 @@ export const buildEntityTrendSeries = (
   shareRows = rows
 ): UsageEntityTrendSeries[] => {
   const total = sumUsageRows(shareRows, metric);
-  const colors = ['#2563eb', '#0ea5a7', '#f59e0b', '#ef4444', '#64748b'];
+  const colors = ENTITY_TREND_COLORS;
   return rows
     .filter((row) => usageRankMetricValue(row, metric) > 0)
     .slice(0, limit)
@@ -1996,7 +2030,7 @@ export const buildApiKeyTrendSeries = (
     }
     valuesByBucket.set(point.bucketMs, point);
   });
-  const colors = ['#2563eb', '#0ea5a7', '#f59e0b', '#ef4444', '#64748b'];
+  const colors = ENTITY_TREND_COLORS;
   return rows
     .filter((row) => {
       const apiKeyHash = normalizeApiKeyHash(row.apiKeyHash || row.id);
@@ -2020,6 +2054,80 @@ export const buildApiKeyTrendSeries = (
         }),
       };
     });
+};
+
+const usageModelTimelineMetricValue = (
+  point: UsageModelTimelinePoint,
+  metric: UsageTrendMetricKey
+) => {
+  if (metric === 'estimatedCost') return point.estimatedCost;
+  if (metric === 'totalTokens') return point.totalTokens;
+  return point.requestCount;
+};
+
+/**
+ * Draws each top model from its own exact buckets (include.model_timeline).
+ * A bucket the model has no point for is 0, not a share of the total.
+ */
+export const buildModelTrendSeries = (
+  rows: UsageRankRow[],
+  timeline: UsageTimelinePoint[],
+  modelTimeline: UsageModelTimelinePoint[],
+  metric: UsageTrendMetricKey,
+  limit = 4
+): UsageEntityTrendSeries[] => {
+  const valuesByModel = new Map<string, Map<number, UsageModelTimelinePoint>>();
+  modelTimeline.forEach((point) => {
+    if (!point.model) return;
+    let valuesByBucket = valuesByModel.get(point.model);
+    if (!valuesByBucket) {
+      valuesByBucket = new Map();
+      valuesByModel.set(point.model, valuesByBucket);
+    }
+    valuesByBucket.set(point.bucketMs, point);
+  });
+  return rows
+    .filter((row) => normalizeModelTrendId(row.id) !== '' && usageRankMetricValue(row, metric) > 0)
+    .slice(0, limit)
+    .map((row, index) => {
+      const valuesByBucket = valuesByModel.get(normalizeModelTrendId(row.id));
+      return {
+        id: row.id,
+        label: row.label,
+        color: ENTITY_TREND_COLORS[index % ENTITY_TREND_COLORS.length],
+        points: timeline.map((timelinePoint) => {
+          const value = valuesByBucket?.get(timelinePoint.bucketMs);
+          return {
+            bucketMs: timelinePoint.bucketMs,
+            label: timelinePoint.label,
+            value: value ? usageModelTimelineMetricValue(value, metric) : 0,
+          };
+        }),
+      };
+    });
+};
+
+const MODEL_TREND_METRICS: UsageTrendMetricKey[] = ['requestCount', 'totalTokens', 'estimatedCost'];
+
+/**
+ * Model ids for one exact model_timeline request that covers every metric switch:
+ * the union, in row order, of the top `limit` rows for each trend metric.
+ */
+export const selectModelTrendIds = (rows: UsageRankRow[], limit = 4): string[] => {
+  const eligible = rows.filter((row) => normalizeModelTrendId(row.id) !== '');
+  const selected = new Set<UsageRankRow>();
+  MODEL_TREND_METRICS.forEach((metric) => {
+    eligible
+      .filter((row) => usageRankMetricValue(row, metric) > 0)
+      .slice(0, limit)
+      .forEach((row) => selected.add(row));
+  });
+  const ids: string[] = [];
+  eligible.forEach((row) => {
+    const id = normalizeModelTrendId(row.id);
+    if (selected.has(row) && !ids.includes(id)) ids.push(id);
+  });
+  return ids;
 };
 
 const usageCredentialTimelineMetricValue = (

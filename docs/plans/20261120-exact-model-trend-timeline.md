@@ -127,21 +127,21 @@
 - [x] run `npm run manager-server:test` and `cd apps/manager-server && go test -race ./internal/service/monitoring/...`. Both must pass before task 2.
 
 ### Task 2: Web API types and exact model trend builder
-- [ ] in `apps/web/src/services/api/usageService.ts`, add `model_timeline?: boolean` to `MonitoringAnalyticsInclude`, a `MonitoringAnalyticsModelTimelinePoint` type that mirrors `MonitoringAnalyticsApiKeyTimelinePoint` with `model` in place of `api_key_hash`, and `model_timeline?: MonitoringAnalyticsModelTimelinePoint[]` to `MonitoringAnalyticsResponse`. If the response is normalized, the new field must pass through.
-- [ ] in `usageAnalyticsModel.ts`, add a `UsageModelTimelinePoint` type and `buildUsageModelTimeline(points, granularity)`, modelled on `buildUsageApiKeyTimeline` (`:1082`)
-- [ ] add `buildModelTrendSeries(rows, timeline, modelTimeline, metric, limit)`, modelled on `buildApiKeyTrendSeries`:
+- [x] in `apps/web/src/services/api/usageService.ts`, add `model_timeline?: boolean` to `MonitoringAnalyticsInclude`, a `MonitoringAnalyticsModelTimelinePoint` type that mirrors `MonitoringAnalyticsApiKeyTimelinePoint` with `model` in place of `api_key_hash`, and `model_timeline?: MonitoringAnalyticsModelTimelinePoint[]` to `MonitoringAnalyticsResponse`. If the response is normalized, the new field must pass through.
+- [x] in `usageAnalyticsModel.ts`, add a `UsageModelTimelinePoint` type and `buildUsageModelTimeline(points, granularity)`, modelled on `buildUsageApiKeyTimeline` (`:1082`)
+- [x] add `buildModelTrendSeries(rows, timeline, modelTimeline, metric, limit)`, modelled on `buildApiKeyTrendSeries`:
   - key rows by `row.id`, skipping `'-'` and empty ids
   - take the first `limit` rows whose metric is above 0
   - read each point from that model's buckets, with 0 for a missing bucket
   - keep the same colour order as `buildEntityTrendSeries`, so the colours do not change when the exact data arrives
-- [ ] add `selectModelTrendIds(rows, limit)`. It returns the union, in row order, of the first `limit` rows with a value above 0 for each of `requestCount`, `totalTokens` and `estimatedCost`, and skips `'-'` and empty ids. One exact request then covers every metric switch.
-- [ ] write tests in `usageAnalyticsModel.test.ts`, next to the API key test at `:914`:
+- [x] add `selectModelTrendIds(rows, limit)`. It returns the union, in row order, of the first `limit` rows with a value above 0 for each of `requestCount`, `totalTokens` and `estimatedCost`, and skips `'-'` and empty ids. One exact request then covers every metric switch.
+- [x] write tests in `usageAnalyticsModel.test.ts`, next to the API key test at `:914`:
   - a model that only has afternoon buckets gives 0 in the morning
   - missing buckets give 0
   - the colour and order match `buildEntityTrendSeries`
   - `selectModelTrendIds` returns the union across metrics and skips `'-'` and empty ids
-- [ ] write edge-case tests: an empty `modelTimeline` gives all-zero series, rows with the metric at 0 are skipped, and the limit is respected
-- [ ] run `npm run test` and `npm run type-check`. Both must pass before task 3.
+- [x] write edge-case tests: an empty `modelTimeline` gives all-zero series, rows with the metric at 0 are skipped, and the limit is respected
+- [x] run `npm run test` and `npm run type-check`. Both must pass before task 3.
 
 ### Task 3: Hook requests the exact model timeline and falls back to the estimate
 - [ ] in `useUsageAnalytics.ts`, add `MODEL_TREND_SERIES_LIMIT = 4` and use it in place of the hard-coded `4` at `:495`

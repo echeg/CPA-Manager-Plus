@@ -16,8 +16,10 @@ import {
   buildSelectedApiKeyTrendSeries,
   buildSelectedCredentialTrendSeries,
   buildDrilldownPreview,
+  buildEntityTrendSeries,
   buildKeyAnomalies,
   buildModelKeyDistribution,
+  buildModelTrendSeries,
   buildMonitoringDetailUrl,
   buildProviderRows,
   buildUsageMatrix,
@@ -33,11 +35,13 @@ import {
   buildUsageHeatmap,
   buildUsageCredentialTimeline,
   buildUsageApiKeyTimeline,
+  buildUsageModelTimeline,
   buildUsageTimeline,
   fillUsageTimelineBuckets,
   computeCacheHitRate,
   computeRowAverageCostPerCall,
   computeRowCacheHitRate,
+  selectModelTrendIds,
   getUsageCacheTokens,
   getUsagePresentationRangeScopeKey,
   getUsageRangeBounds,
@@ -1988,5 +1992,205 @@ describe('resolveUsageApiKeyLabel', () => {
 
     expect(firstLabel).toBe('ecwowk (sk******45)');
     expect(secondLabel).toBe('ecwowk (sk******5Q)');
+  });
+});
+
+describe('exact model trends', () => {
+  const modelRow = (
+    id: string,
+    requestCount: number,
+    totalTokens: number,
+    estimatedCost: number
+  ): UsageRankRow => ({
+    id,
+    label: id,
+    model: id,
+    requestCount,
+    successCount: requestCount,
+    failureCount: 0,
+    successRate: 1,
+    totalTokens,
+    inputTokens: totalTokens,
+    outputTokens: 0,
+    cachedTokens: 0,
+    cacheReadTokens: 0,
+    cacheCreationTokens: 0,
+    estimatedCost,
+    averageLatencyMs: null,
+    share: 0,
+  });
+
+  const timeline = buildUsageTimeline(
+    [0, 1, 2, 3].map((index) => ({
+      bucket_ms: NOW_MS + index * HOUR_MS,
+      label: `${12 + index}:00`,
+      calls: 10,
+      tokens: 1000,
+      success: 10,
+      failure: 0,
+      cost: 1,
+    })),
+    'hour'
+  );
+
+  it('draws a model that only ran in the afternoon as 0 in the morning', () => {
+    const rows = [modelRow('gpt-6.2-sol', 20, 2000, 2), modelRow('claude-sonnet-5-5', 20, 2000, 2)];
+    const modelTimeline = buildUsageModelTimeline(
+      [
+        {
+          model: 'gpt-6.2-sol',
+          bucket_ms: NOW_MS,
+          calls: 10,
+          tokens: 1000,
+          success: 10,
+          failure: 0,
+          cost: 1,
+        },
+        {
+          model: 'gpt-6.2-sol',
+          bucket_ms: NOW_MS + HOUR_MS,
+          calls: 10,
+          tokens: 1000,
+          total_tokens: 1000,
+          success: 10,
+          failure: 0,
+          cost: 1,
+        },
+        {
+          model: ' claude-sonnet-5-5 ',
+          bucket_ms: NOW_MS + 2 * HOUR_MS,
+          calls: 10,
+          tokens: 1000,
+          success: 10,
+          failure: 0,
+          cost: 1,
+        },
+        {
+          model: 'claude-sonnet-5-5',
+          bucket_ms: NOW_MS + 3 * HOUR_MS,
+          calls: 10,
+          tokens: 1000,
+          success: 10,
+          failure: 0,
+          cost: 1,
+        },
+      ],
+      'hour'
+    );
+
+    const requests = buildModelTrendSeries(rows, timeline, modelTimeline, 'requestCount');
+    expect(requests.map((series) => series.id)).toEqual(['gpt-6.2-sol', 'claude-sonnet-5-5']);
+    expect(requests[0].points.map((point) => point.value)).toEqual([10, 10, 0, 0]);
+    expect(requests[1].points.map((point) => point.value)).toEqual([0, 0, 10, 10]);
+
+    const tokens = buildModelTrendSeries(rows, timeline, modelTimeline, 'totalTokens');
+    expect(tokens[1].points.map((point) => point.value)).toEqual([0, 0, 1000, 1000]);
+    const cost = buildModelTrendSeries(rows, timeline, modelTimeline, 'estimatedCost');
+    expect(cost[0].points.map((point) => point.value)).toEqual([1, 1, 0, 0]);
+  });
+
+  it('uses 0 for buckets missing from the model timeline', () => {
+    const rows = [modelRow('gpt-6.2-sol', 5, 500, 0.5)];
+    const modelTimeline = buildUsageModelTimeline(
+      [
+        {
+          model: 'gpt-6.2-sol',
+          bucket_ms: NOW_MS + HOUR_MS,
+          calls: 5,
+          tokens: 500,
+          success: 5,
+          failure: 0,
+        },
+        // A bucket outside the chart timeline is ignored.
+        {
+          model: 'gpt-6.2-sol',
+          bucket_ms: NOW_MS + 10 * HOUR_MS,
+          calls: 99,
+          tokens: 9900,
+          success: 99,
+          failure: 0,
+        },
+      ],
+      'hour'
+    );
+
+    const result = buildModelTrendSeries(rows, timeline, modelTimeline, 'requestCount');
+
+    expect(result[0].points.map((point) => point.value)).toEqual([0, 5, 0, 0]);
+    expect(result[0].points.map((point) => point.bucketMs)).toEqual(
+      timeline.map((point) => point.bucketMs)
+    );
+  });
+
+  it('keeps the same ids, labels, colours and order as the estimated series', () => {
+    const rows = [
+      modelRow('model-a', 40, 4000, 4),
+      modelRow('model-b', 0, 0, 0),
+      modelRow('model-c', 30, 3000, 3),
+      modelRow('model-d', 20, 2000, 2),
+      modelRow('model-e', 10, 1000, 1),
+      modelRow('model-f', 5, 500, 0.5),
+    ];
+
+    const estimated = buildEntityTrendSeries(rows, timeline, 'requestCount');
+    const exact = buildModelTrendSeries(rows, timeline, [], 'requestCount');
+
+    const identity = (series: { id: string; label: string; color: string }) => ({
+      id: series.id,
+      label: series.label,
+      color: series.color,
+    });
+    expect(exact.map(identity)).toEqual(estimated.map(identity));
+    expect(exact.map((series) => series.id)).toEqual(['model-a', 'model-c', 'model-d', 'model-e']);
+  });
+
+  it('gives all-zero series for an empty model timeline', () => {
+    const rows = [modelRow('model-a', 10, 1000, 1)];
+
+    const result = buildModelTrendSeries(rows, timeline, [], 'estimatedCost');
+
+    expect(result).toHaveLength(1);
+    expect(result[0].points.map((point) => point.value)).toEqual([0, 0, 0, 0]);
+  });
+
+  it('skips rows with the metric at 0, rows without a model, and respects the limit', () => {
+    const rows = [
+      modelRow('-', 50, 5000, 5),
+      modelRow('model-a', 40, 0, 4),
+      modelRow('model-b', 30, 3000, 3),
+      modelRow('', 25, 2500, 2.5),
+      modelRow('model-c', 20, 2000, 2),
+      modelRow('model-d', 10, 1000, 1),
+    ];
+
+    expect(
+      buildModelTrendSeries(rows, timeline, [], 'totalTokens', 2).map((series) => series.id)
+    ).toEqual(['model-b', 'model-c']);
+    expect(
+      buildModelTrendSeries(rows, timeline, [], 'requestCount', 3).map((series) => series.id)
+    ).toEqual(['model-a', 'model-b', 'model-c']);
+    expect(buildModelTrendSeries([], timeline, [], 'requestCount')).toEqual([]);
+  });
+
+  it('selects the union of the top models across every trend metric', () => {
+    const rows = [
+      // Rows arrive sorted by cost, then requests. Each metric takes the first rows
+      // above 0 in that order, the same rule buildEntityTrendSeries uses.
+      modelRow('expensive', 2, 0, 9),
+      modelRow('-', 50, 50000, 8),
+      modelRow('balanced', 20, 0, 5),
+      modelRow('chatty', 90, 300, 1),
+      modelRow('bulky', 0, 90000, 0.5),
+      modelRow('', 70, 70000, 0.4),
+      modelRow('idle', 0, 0, 0),
+    ];
+
+    // requests: expensive, balanced / tokens: chatty, bulky / cost: expensive, balanced
+    expect(selectModelTrendIds(rows, 2)).toEqual(['expensive', 'balanced', 'chatty', 'bulky']);
+    // requests: expensive / tokens: chatty / cost: expensive
+    expect(selectModelTrendIds(rows, 1)).toEqual(['expensive', 'chatty']);
+    expect(selectModelTrendIds(rows)).toEqual(['expensive', 'balanced', 'chatty', 'bulky']);
+    expect(selectModelTrendIds([modelRow('-', 5, 5, 5), modelRow('idle', 0, 0, 0)])).toEqual([]);
+    expect(selectModelTrendIds([])).toEqual([]);
   });
 });

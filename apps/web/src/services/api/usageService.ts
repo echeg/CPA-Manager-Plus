@@ -1050,6 +1050,8 @@ export interface MonitoringAnalyticsInclude {
   credential_timeline?: boolean;
   api_key_timeline?: boolean;
   api_key_stats?: boolean;
+  /** Exact per-model buckets for the models in filters.models. */
+  model_timeline?: boolean;
   filter_options?: boolean;
   filter_selectors?: boolean;
   heatmap?: boolean;
@@ -1774,6 +1776,27 @@ export interface MonitoringAnalyticsApiKeyTimelinePoint {
   failure_rate?: number;
 }
 
+export interface MonitoringAnalyticsModelTimelinePoint {
+  model: string;
+  bucket_ms: number;
+  bucket_label?: string;
+  calls: number;
+  tokens: number;
+  success: number;
+  failure: number;
+  input_tokens?: number;
+  output_tokens?: number;
+  cached_tokens?: number;
+  cache_read_tokens?: number;
+  cache_creation_tokens?: number;
+  reasoning_tokens?: number;
+  total_tokens?: number;
+  cost?: number;
+  average_latency_ms?: number | null;
+  success_rate?: number;
+  failure_rate?: number;
+}
+
 export interface MonitoringAnalyticsApiKeyStatRow {
   id: string;
   api_key_hash: string;
@@ -2149,6 +2172,7 @@ export interface MonitoringAnalyticsResponse {
   credential_timeline?: MonitoringAnalyticsCredentialTimelinePoint[];
   api_key_timeline?: MonitoringAnalyticsApiKeyTimelinePoint[];
   api_key_stats?: MonitoringAnalyticsApiKeyStatRow[];
+  model_timeline?: MonitoringAnalyticsModelTimelinePoint[];
   filter_options?: MonitoringAnalyticsFilterOptions;
   task_buckets?: MonitoringAnalyticsTaskBucketRow[];
   recent_failures?: MonitoringAnalyticsRecentFailure[];
