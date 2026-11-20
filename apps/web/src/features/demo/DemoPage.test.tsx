@@ -914,6 +914,70 @@ describe('DemoPage', () => {
     ).toBe(false);
   });
 
+  it('returns exact model trend fixtures for the requested models only', () => {
+    const request = {
+      from_ms: 1,
+      to_ms: Date.now(),
+      filters: { models: ['claude-sonnet-4-5', ' GPT-4.1 '] },
+      include: { model_timeline: true },
+    };
+    const page = getDemoMonitoringAnalytics(request);
+    const timeline = page.timeline;
+    const modelTimeline = page.model_timeline;
+    if (!timeline || !modelTimeline) throw new Error('missing demo model timeline');
+
+    expect([...new Set(modelTimeline.map((point) => point.model))].sort()).toEqual([
+      'claude-sonnet-4-5',
+      'gpt-4.1',
+    ]);
+
+    const sonnetBuckets = modelTimeline
+      .filter((point) => point.model === 'claude-sonnet-4-5')
+      .map((point) => point.bucket_ms);
+    const gptBuckets = modelTimeline
+      .filter((point) => point.model === 'gpt-4.1')
+      .map((point) => point.bucket_ms);
+    expect(sonnetBuckets).toEqual(timeline.slice(7).map((point) => point.bucket_ms));
+    expect(gptBuckets).toEqual(timeline.slice(0, 10).map((point) => point.bucket_ms));
+
+    for (const point of timeline) {
+      const bucketPoints = modelTimeline.filter((entry) => entry.bucket_ms === point.bucket_ms);
+      const sum = (pick: (entry: (typeof bucketPoints)[number]) => number) =>
+        bucketPoints.reduce((total, entry) => total + pick(entry), 0);
+      expect(sum((entry) => entry.calls)).toBeLessThanOrEqual(point.calls);
+      expect(sum((entry) => entry.tokens)).toBeLessThanOrEqual(point.tokens);
+      expect(sum((entry) => entry.cost ?? 0)).toBeLessThanOrEqual((point.cost ?? 0) + 1e-9);
+    }
+    for (const point of modelTimeline) {
+      expect(point.calls).toBeGreaterThan(0);
+      expect(point.success + point.failure).toBe(point.calls);
+    }
+
+    // Every demo model together adds up exactly to the timeline buckets.
+    const allModels = getDemoMonitoringAnalytics({
+      ...request,
+      filters: { models: (page.model_stats ?? []).map((row) => row.model) },
+    });
+    for (const point of allModels.timeline ?? []) {
+      const bucketPoints = (allModels.model_timeline ?? []).filter(
+        (entry) => entry.bucket_ms === point.bucket_ms
+      );
+      expect(bucketPoints.reduce((total, entry) => total + entry.calls, 0)).toBe(point.calls);
+      expect(bucketPoints.reduce((total, entry) => total + entry.tokens, 0)).toBe(point.tokens);
+      expect(
+        Math.round(bucketPoints.reduce((total, entry) => total + (entry.cost ?? 0), 0) * 100)
+      ).toBe(Math.round((point.cost ?? 0) * 100));
+    }
+
+    expect(getDemoMonitoringAnalytics(request).model_timeline).toEqual(modelTimeline);
+    expect(getDemoMonitoringAnalytics({ ...request, include: {} })).not.toHaveProperty(
+      'model_timeline'
+    );
+    expect(getDemoMonitoringAnalytics({ ...request, filters: {} })).not.toHaveProperty(
+      'model_timeline'
+    );
+  });
+
   it('provides xAI quota exhaustion, successful rate-limit, and cooldown fixtures for UI acceptance', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-07-21T10:25:05.000+08:00'));

@@ -168,13 +168,13 @@
 - [x] run `npm run test`, `npm run type-check` and `npm run lint`. All must pass before task 5.
 
 ### Task 5: Demo fixtures return the exact model timeline
-- [ ] in `apps/web/src/features/demo/demoFixtures.ts`, emit `model_timeline` when `include.model_timeline` is set and `filters.models` is non-empty:
+- [x] in `apps/web/src/features/demo/demoFixtures.ts`, emit `model_timeline` when `include.model_timeline` is set and `filters.models` is non-empty:
   - build one series per requested demo model from the demo timeline, so that each bucket's model values add up to the timeline bucket
   - give at least one model a visibly different time shape, for example active only in the second half of the range, so the demo shows the improvement
   - keep the output deterministic, like the existing `apiKeyTimeline` fixture (`:3725`)
   - do not change the response when `include.model_timeline` is absent
-- [ ] write tests in `features/demo/DemoPage.test.tsx`, next to `:874`: the requested models get exact buckets, unrequested models are absent, and the per-bucket sums do not exceed the timeline
-- [ ] run `npm run test` and `npm run check:demo-isolation`. Both must pass before task 6.
+- [x] write tests in `features/demo/DemoPage.test.tsx`, next to `:874`: the requested models get exact buckets, unrequested models are absent, and the per-bucket sums do not exceed the timeline
+- [x] run `npm run test` and `npm run check:demo-isolation`. Both must pass before task 6.
 
 ### Task 6: Verify acceptance criteria
 - [ ] verify that a model active only in part of the range is drawn as 0 outside its active buckets on both the trends and models tabs (hook-level test with exact data)

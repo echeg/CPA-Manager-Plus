@@ -619,6 +619,26 @@ const splitTokens = (totalTokens: number) => {
   };
 };
 
+// Splits an integer total by weights with the largest-remainder method, so the parts are
+// deterministic and always add up to the total. All-zero weights give all-zero parts.
+const allocateDemoInteger = (total: number, weights: number[]): number[] => {
+  const weightSum = weights.reduce((sum, weight) => sum + Math.max(0, weight), 0);
+  if (weightSum <= 0 || total <= 0) return weights.map(() => 0);
+  const exact = weights.map((weight) => (total * Math.max(0, weight)) / weightSum);
+  const parts = exact.map((value) => Math.floor(value));
+  let remainder = total - parts.reduce((sum, part) => sum + part, 0);
+  const order = exact
+    .map((value, index) => ({ index, fraction: value - Math.floor(value) }))
+    .filter((entry) => weights[entry.index] > 0)
+    .sort((left, right) => right.fraction - left.fraction || left.index - right.index);
+  for (const entry of order) {
+    if (remainder <= 0) break;
+    parts[entry.index] += 1;
+    remainder -= 1;
+  }
+  return parts;
+};
+
 const buildNestedModelRow = (
   model: string,
   calls: number,
@@ -3755,6 +3775,65 @@ const buildMonitoringAnalytics = (
         requestedAPIKeyTimelineHashes.has(point.api_key_hash)
     );
 
+  const requestedModelTimelineModels = new Set(
+    (request?.filters?.models ?? []).map((model) => model.trim().toLowerCase()).filter(Boolean)
+  );
+  // Each bucket is split across every demo model, so per-bucket model values add up to the
+  // timeline bucket. Sonnet only starts mid-range and gpt-4.1 stops early, which shows the
+  // difference between exact model buckets and an overall-share estimate.
+  const modelTimelineActiveFrom: Record<string, number> = { 'claude-sonnet-4-5': 7 };
+  const modelTimelineActiveUntil: Record<string, number> = { 'gpt-4.1': 9 };
+  const modelTimelineWobble = [1, 0.82, 1.18, 0.94, 1.26, 0.88, 1.08];
+  const modelTimelineWeight = (
+    model: string,
+    modelIndex: number,
+    bucketIndex: number,
+    base: number
+  ) => {
+    if (bucketIndex < (modelTimelineActiveFrom[model] ?? 0)) return 0;
+    if (bucketIndex > (modelTimelineActiveUntil[model] ?? Number.POSITIVE_INFINITY)) return 0;
+    return base * modelTimelineWobble[(bucketIndex + modelIndex * 3) % modelTimelineWobble.length];
+  };
+  const modelTimeline = timeline
+    .flatMap((point, bucketIndex) => {
+      const callWeights = modelStats.map((row, modelIndex) =>
+        modelTimelineWeight(row.model, modelIndex, bucketIndex, row.calls)
+      );
+      const tokenWeights = modelStats.map((row, modelIndex) =>
+        modelTimelineWeight(row.model, modelIndex, bucketIndex, row.total_tokens)
+      );
+      const costWeights = modelStats.map((row, modelIndex) =>
+        modelTimelineWeight(row.model, modelIndex, bucketIndex, row.cost)
+      );
+      const calls = allocateDemoInteger(point.calls, callWeights);
+      const failures = allocateDemoInteger(point.failure, callWeights);
+      const tokens = allocateDemoInteger(point.tokens, tokenWeights);
+      const costCents = allocateDemoInteger(Math.round(point.cost * 100), costWeights);
+      return modelStats.flatMap((row, modelIndex) => {
+        const modelCalls = calls[modelIndex] ?? 0;
+        if (modelCalls <= 0) return [];
+        const failure = Math.min(modelCalls, failures[modelIndex] ?? 0);
+        const modelTokens = tokens[modelIndex] ?? 0;
+        return [
+          {
+            model: row.model,
+            bucket_ms: point.bucket_ms,
+            bucket_label: point.label,
+            calls: modelCalls,
+            tokens: modelTokens,
+            success: modelCalls - failure,
+            failure,
+            ...splitTokens(modelTokens),
+            cost: (costCents[modelIndex] ?? 0) / 100,
+            average_latency_ms: point.average_latency_ms + modelIndex * 40,
+            success_rate: safeRate(modelCalls - failure, modelCalls),
+            failure_rate: safeRate(failure, modelCalls),
+          },
+        ];
+      });
+    })
+    .filter((point) => requestedModelTimelineModels.has(point.model.toLowerCase()));
+
   const channelShare = accountStats.map((row) => ({
     auth_index: row.auth_indices?.[0] ?? row.id,
     source: row.sources?.[0],
@@ -4827,6 +4906,9 @@ const buildMonitoringAnalytics = (
     api_key_stats: apiKeyStats,
     ...(request?.include?.api_key_timeline && requestedAPIKeyTimelineHashes.size > 0
       ? { api_key_timeline: apiKeyTimeline }
+      : {}),
+    ...(request?.include?.model_timeline && requestedModelTimelineModels.size > 0
+      ? { model_timeline: modelTimeline }
       : {}),
     filter_options: {
       account_stats: accountStats,
