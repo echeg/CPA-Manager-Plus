@@ -2058,7 +2058,7 @@ describe('exact model trends', () => {
           cost: 1,
         },
         {
-          model: ' claude-sonnet-5-5 ',
+          model: 'claude-sonnet-5-5',
           bucket_ms: NOW_MS + 2 * HOUR_MS,
           calls: 10,
           tokens: 1000,
@@ -2208,7 +2208,7 @@ describe('exact model trends', () => {
     expect(selectModelTrendIds([])).toEqual([]);
   });
 
-  it('ignores model timeline points without a model and dedupes padded ids', () => {
+  it('ignores model timeline points without a model and keeps model ids verbatim', () => {
     const modelTimeline = buildUsageModelTimeline(
       [
         { model: '-', bucket_ms: NOW_MS, calls: 7, tokens: 70, success: 7, failure: 0 },
@@ -2226,8 +2226,22 @@ describe('exact model trends', () => {
     expect(result.map((series) => series.id)).toEqual(['model-a']);
     expect(result[0].points.map((point) => point.value)).toEqual([0, 3, 0, 0]);
 
-    expect(
-      selectModelTrendIds([modelRow(' model-a ', 10, 0, 0), modelRow('model-a', 0, 100, 1)])
-    ).toEqual(['model-a']);
+    // "custom (high)" has the server identity "custom ", a different model from "custom".
+    // The request ids, the model_timeline points and the rows must all keep the whitespace.
+    const spacedRows = [modelRow('custom ', 10, 0, 0), modelRow('custom', 0, 100, 1)];
+    expect(selectModelTrendIds(spacedRows)).toEqual(['custom ', 'custom']);
+    const spacedTimeline = buildUsageModelTimeline(
+      [
+        { model: 'custom ', bucket_ms: NOW_MS, calls: 4, tokens: 40, success: 4, failure: 0 },
+        { model: 'custom', bucket_ms: NOW_MS + HOUR_MS, calls: 6, tokens: 60, success: 6, failure: 0 },
+      ],
+      'hour'
+    );
+    const spaced = buildModelTrendSeries(spacedRows, timeline, spacedTimeline, 'requestCount');
+    expect(spaced.map((series) => series.id)).toEqual(['custom ']);
+    expect(spaced[0].points.map((point) => point.value)).toEqual([4, 0, 0, 0]);
+    const spacedTokens = buildModelTrendSeries(spacedRows, timeline, spacedTimeline, 'totalTokens');
+    expect(spacedTokens.map((series) => series.id)).toEqual(['custom']);
+    expect(spacedTokens[0].points.map((point) => point.value)).toEqual([0, 60, 0, 0]);
   });
 });

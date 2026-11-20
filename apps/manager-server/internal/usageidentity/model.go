@@ -74,6 +74,40 @@ func AnalyticsModel(model string) string {
 	return base
 }
 
+// ModelFilterValues returns the analytics model identities that model filter
+// values select. Blank values are skipped and duplicates removed.
+//
+// By default each value is a model name, as model filters have always been: it
+// is trimmed and reduced to the identity AnalyticsModel derives from it, so
+// "gpt-5(high)" selects "gpt-5".
+//
+// With exact set, each value is already an analytics model identity, such as
+// the model of a model_stats row, and is used verbatim. Normalizing it again
+// could select a different model: AnalyticsModel is not idempotent
+// ("custom(high)" is the identity of "custom(high)(low)", while
+// AnalyticsModel("custom(high)") is "custom"), and an identity keeps the raw
+// name's whitespace ("custom (high)" has the identity "custom ").
+func ModelFilterValues(values []string, exact bool) []string {
+	seen := make(map[string]struct{}, len(values))
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		model := value
+		if !exact {
+			model = strings.TrimSpace(AnalyticsModel(trimmed))
+		}
+		if _, ok := seen[model]; ok {
+			continue
+		}
+		seen[model] = struct{}{}
+		result = append(result, model)
+	}
+	return result
+}
+
 func isReasoningSuffix(value string) bool {
 	switch strings.ToLower(value) {
 	case "none", "auto", "-1", "minimal", "low", "medium", "high", "xhigh", "max":

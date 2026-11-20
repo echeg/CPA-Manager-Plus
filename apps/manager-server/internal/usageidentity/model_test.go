@@ -3,6 +3,7 @@ package usageidentity
 import (
 	"context"
 	"database/sql"
+	"slices"
 	"testing"
 
 	_ "modernc.org/sqlite"
@@ -54,6 +55,52 @@ func TestAnalyticsModelForRequestPrefersExplicitRequestedModel(t *testing.T) {
 	for _, test := range tests {
 		if got := AnalyticsModelForRequest(test.model, test.requestedModel); got != test.want {
 			t.Errorf("AnalyticsModelForRequest(%q, %q) = %q, want %q", test.model, test.requestedModel, got, test.want)
+		}
+	}
+}
+
+func TestModelFilterValuesNormalizesModelNamesUnlessExact(t *testing.T) {
+	values := []string{
+		"custom(high)",
+		"deepseek-v4-flash(max)",
+		"gpt-5",
+		"",
+		"   ",
+		" custom(high) ",
+		"deepseek-v4-flash",
+		"spaced ",
+		"spaced (high)",
+	}
+
+	// Model names, the long-standing meaning: trimmed, reduced to their identity and
+	// deduplicated, so "custom(high)" selects "custom" exactly as before.
+	legacy := ModelFilterValues(values, false)
+	if want := []string{"custom", "deepseek-v4-flash", "gpt-5", "spaced"}; !slices.Equal(legacy, want) {
+		t.Fatalf("ModelFilterValues(names) = %#v, want %#v", legacy, want)
+	}
+
+	// Identities are used verbatim: "custom(high)" is the identity of
+	// "custom(high)(low)", and "spaced " is the identity of "spaced (high)".
+	exact := ModelFilterValues(values, true)
+	want := []string{
+		"custom(high)",
+		"deepseek-v4-flash(max)",
+		"gpt-5",
+		" custom(high) ",
+		"deepseek-v4-flash",
+		"spaced ",
+		"spaced (high)",
+	}
+	if !slices.Equal(exact, want) {
+		t.Fatalf("ModelFilterValues(identities) = %#v, want %#v", exact, want)
+	}
+	if duplicates := ModelFilterValues([]string{"a", "a", " a"}, true); !slices.Equal(duplicates, []string{"a", " a"}) {
+		t.Fatalf("ModelFilterValues(duplicate identities) = %#v", duplicates)
+	}
+
+	for _, exact := range []bool{false, true} {
+		if empty := ModelFilterValues(nil, exact); len(empty) != 0 {
+			t.Fatalf("ModelFilterValues(nil, %v) = %#v", exact, empty)
 		}
 	}
 }

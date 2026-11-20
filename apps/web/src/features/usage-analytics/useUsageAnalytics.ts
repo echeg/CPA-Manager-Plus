@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useMonitoringAnalytics } from '@/features/monitoring/hooks/useMonitoringAnalytics';
 import { useUsageData } from '@/features/monitoring/hooks/useUsageData';
@@ -7,6 +7,7 @@ import { buildMonitoringAuthMetaMap } from '@/features/monitoring/model/authMeta
 import { readString } from '@/features/monitoring/model/base';
 import type { MonitoringChannelMeta } from '@/features/monitoring/model/types';
 import { loadMonitoringMetaPayload } from '@/features/monitoring/services/monitoringMetaService';
+import type { MonitoringAnalyticsRequest } from '@/services/api/usageService';
 import { useConfigStore } from '@/stores';
 import type { AuthFileItem } from '@/types/authFile';
 import type { CredentialInfo } from '@/types/sourceInfo';
@@ -73,6 +74,17 @@ const MODEL_TREND_SERIES_LIMIT = 4;
 
 const isModelTrendTab = (tab: UsageAnalyticsTab) => tab === 'trends' || tab === 'models';
 
+// Two responses cover the same range when they were requested with the same range and
+// "now". A refresh moves both, and the responses can arrive in either order.
+const isSameAnalyticsRange = (
+  left: MonitoringAnalyticsRequest | null,
+  right: MonitoringAnalyticsRequest | null
+) =>
+  Boolean(left && right) &&
+  left?.from_ms === right?.from_ms &&
+  left?.to_ms === right?.to_ms &&
+  left?.now_ms === right?.now_ms;
+
 type UsageAnalyticsMonitoringMeta = {
   authFiles: AuthFileItem[];
   channels: MonitoringChannelMeta[];
@@ -118,6 +130,8 @@ export function useUsageAnalytics() {
     () => initialUiState.activeTab
   );
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [refreshGeneration, setRefreshGeneration] = useState(0);
+  const handledRefreshGenerationRef = useRef(0);
   const [selectedBucketMs, setSelectedBucketMs] = useState<number | null>(null);
   const [selectedModelId, setSelectedModelId] = useState('');
   const [selectedApiKeyHash, setSelectedApiKeyHash] = useState('');
@@ -367,7 +381,18 @@ export function useUsageAnalytics() {
   const filterSelectorsData = filterSelectorsAnalytics.dataStale
     ? null
     : filterSelectorsAnalytics.data;
-  const timelineBounds = include.timeline ? bounds : null;
+  // Fill the timeline over the range the displayed response was requested for. A refresh of
+  // a rolling range keeps that response until the new one arrives; filled over the new bounds,
+  // it would draw the hours it never queried as zeros, and the exact trend series that follow
+  // its buckets would too.
+  const analyticsDataRequest = analyticsData ? analytics.dataRequest : null;
+  const timelineBounds = useMemo(
+    () =>
+      include.timeline && analyticsDataRequest
+        ? { fromMs: analyticsDataRequest.from_ms, toMs: analyticsDataRequest.to_ms }
+        : null,
+    [analyticsDataRequest, include.timeline]
+  );
   const adapted = useMemo(
     () =>
       adaptUsageAnalyticsData(
@@ -461,9 +486,12 @@ export function useUsageAnalytics() {
   );
   // modelTrendIds is empty outside the trends and models tabs.
   const modelTrendRequestEnabled = modelTrendIds.length > 0;
+  // The ids are model_stats identities, so the server must match them verbatim.
   const modelTrendFilters = useMemo(
     () =>
-      modelTrendIds.length > 0 ? { ...analyticsFilters, models: modelTrendIds } : analyticsFilters,
+      modelTrendIds.length > 0
+        ? { ...analyticsFilters, models: modelTrendIds, exact_models: true }
+        : analyticsFilters,
     [analyticsFilters, modelTrendIds]
   );
   const modelTrendInclude = useMemo(
@@ -507,8 +535,16 @@ export function useUsageAnalytics() {
     () => buildUsageModelTimeline(modelTrendData?.model_timeline ?? [], resolvedGranularity),
     [modelTrendData, resolvedGranularity]
   );
+  // A failed follow-up keeps the last good response, which can predate the main response
+  // (for example after a price change or an import). Use the estimate and its hint then,
+  // instead of drawing the old buckets as exact. The same holds while a refresh is pending:
+  // until the follow-up covers the range of the displayed main response, its buckets can end
+  // before the new timeline does, and the new hours would be drawn as exact zeros.
   const hasExactModelTimeline =
-    modelTrendRequestEnabled && Array.isArray(modelTrendData?.model_timeline);
+    modelTrendRequestEnabled &&
+    !modelTrendAnalytics.error &&
+    isSameAnalyticsRange(modelTrendAnalytics.dataRequest, analytics.dataRequest) &&
+    Array.isArray(modelTrendData?.model_timeline);
   const heatmapDateData = heatmapDateAnalytics.dataStale ? null : heatmapDateAnalytics.data;
   const heatmapDateRows = useMemo(
     () => buildUsageHeatmap(heatmapDateData?.heatmap ?? [], apiKeyDisplayMap),
@@ -831,39 +867,50 @@ export function useUsageAnalytics() {
     setSelectedApiKeyHash(getSelectableApiKeyHash(hash));
   }, []);
 
-  const refresh = useCallback(() => {
-    setNowMs(Date.now());
-    void loadApiKeyAliases();
-    void loadMonitoringMeta();
-    void analytics.refresh({ force: true });
-    void filterSelectorsAnalytics.refresh({ force: true });
+  // The forced fetches run after the render that applies the new nowMs. Started from
+  // refresh() itself, they would still carry the previous range end, and on a rolling range
+  // the in-flight dedupe would then drop the request for the new range. A request still in
+  // flight for an older range end (a follow-up started after the previous refresh, say) is
+  // superseded too: otherwise its response would be kept as if it covered the new range.
+  useEffect(() => {
+    if (refreshGeneration === handledRefreshGenerationRef.current) return;
+    handledRefreshGenerationRef.current = refreshGeneration;
+    const options = { force: true, supersedeInFlight: true };
+    void analytics.refresh(options);
+    void filterSelectorsAnalytics.refresh(options);
     if (selectedApiKeyTimelineAnalytics.enabled) {
-      void selectedApiKeyTimelineAnalytics.refresh({ force: true });
+      void selectedApiKeyTimelineAnalytics.refresh(options);
     }
     if (apiKeyTrendAnalytics.enabled) {
-      void apiKeyTrendAnalytics.refresh({ force: true });
+      void apiKeyTrendAnalytics.refresh(options);
     }
     if (modelTrendAnalytics.enabled) {
-      void modelTrendAnalytics.refresh({ force: true });
+      void modelTrendAnalytics.refresh(options);
     }
     if (selectedCredentialTimelineAnalytics.enabled) {
-      void selectedCredentialTimelineAnalytics.refresh({ force: true });
+      void selectedCredentialTimelineAnalytics.refresh(options);
     }
     if (selectedHeatmapDate) {
-      void heatmapDateAnalytics.refresh({ force: true });
+      void heatmapDateAnalytics.refresh(options);
     }
   }, [
     analytics,
     apiKeyTrendAnalytics,
     filterSelectorsAnalytics,
     heatmapDateAnalytics,
-    loadApiKeyAliases,
-    loadMonitoringMeta,
     modelTrendAnalytics,
+    refreshGeneration,
     selectedApiKeyTimelineAnalytics,
     selectedCredentialTimelineAnalytics,
     selectedHeatmapDate,
   ]);
+
+  const refresh = useCallback(() => {
+    setNowMs(Date.now());
+    setRefreshGeneration((current) => current + 1);
+    void loadApiKeyAliases();
+    void loadMonitoringMeta();
+  }, [loadApiKeyAliases, loadMonitoringMeta]);
 
   return {
     filters,

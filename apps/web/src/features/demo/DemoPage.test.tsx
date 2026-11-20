@@ -34,6 +34,16 @@ import {
   stripRouteBase,
 } from './demoMode';
 import { installDemoInspectionState } from './DemoPage';
+import {
+  adaptUsageAnalyticsData,
+  buildModelTrendSeries,
+  buildUsageModelTimeline,
+  getUsageRangeBounds,
+  resolveUsageGranularity,
+  selectModelTrendIds,
+  USAGE_ANALYTICS_DEFAULT_FILTERS,
+  type UsageAnalyticsFiltersState,
+} from '@/features/usage-analytics/usageAnalyticsModel';
 import { buildUsageDetailsFromAnalyticsEvents } from '@/features/monitoring/model/analyticsAdapters';
 import { buildEventRows } from '@/features/monitoring/model/eventRows';
 import { buildRealtimeSourceDisplay } from '@/features/monitoring/realtimeSourceDisplay';
@@ -914,10 +924,74 @@ describe('DemoPage', () => {
     ).toBe(false);
   });
 
+  it('draws each demo model line over the page range so it adds up to its table row', () => {
+    const nowMs = Date.UTC(2026, 10, 20, 12, 17, 23, 456);
+    // Historical custom ranges shorter than a fixture day, in local time like the page's
+    // range picker. Their end point is excluded and the previous one is a day earlier.
+    const customRange = (startMs: number, endMs: number) => ({
+      timeRange: 'custom' as const,
+      customRange: { startMs, endMs },
+    });
+    const ranges: Array<Pick<UsageAnalyticsFiltersState, 'timeRange' | 'customRange'>> = [
+      { timeRange: '24h', customRange: null },
+      { timeRange: 'today', customRange: null },
+      { timeRange: '7d', customRange: null },
+      { timeRange: '30d', customRange: null },
+      customRange(new Date(2026, 10, 18, 11).getTime(), new Date(2026, 10, 18, 12).getTime()),
+      customRange(new Date(2026, 10, 17, 9, 30).getTime(), new Date(2026, 10, 17, 12).getTime()),
+    ];
+    for (const range of ranges) {
+      const timeRange = range.customRange
+        ? `custom ${new Date(range.customRange.startMs).toISOString()}`
+        : range.timeRange;
+      const filters = { ...USAGE_ANALYTICS_DEFAULT_FILTERS, ...range };
+      const bounds = getUsageRangeBounds(filters, nowMs);
+      if (!bounds) throw new Error(`missing bounds for ${timeRange}`);
+      const granularity = resolveUsageGranularity(filters, nowMs);
+      const request = { from_ms: bounds.fromMs, to_ms: bounds.toMs, now_ms: nowMs };
+      const page = getDemoMonitoringAnalytics({ ...request, include: { granularity } });
+      // The page fills the timeline to its bounds, so only the in-range buckets are drawn.
+      const adapted = adaptUsageAnalyticsData(page, granularity, '', undefined, undefined, bounds);
+      const ids = selectModelTrendIds(adapted.modelRows, 4);
+      expect(ids).toContain('gpt-4.1');
+      const followUp = getDemoMonitoringAnalytics({
+        ...request,
+        filters: { models: ids, exact_models: true },
+        include: { granularity, model_timeline: true },
+      });
+      const modelTimeline = buildUsageModelTimeline(followUp.model_timeline ?? [], granularity);
+      const drawnBuckets = new Set(adapted.timeline.map((point) => point.bucketMs));
+      for (const point of modelTimeline) {
+        expect(drawnBuckets.has(point.bucketMs)).toBe(true);
+      }
+
+      for (const metric of ['requestCount', 'totalTokens', 'estimatedCost'] as const) {
+        const series = buildModelTrendSeries(
+          adapted.modelRows,
+          adapted.timeline,
+          modelTimeline,
+          metric,
+          4
+        );
+        expect(series.map((line) => line.id)).toContain('gpt-4.1');
+        for (const line of series) {
+          const row = adapted.modelRows.find((entry) => entry.id === line.id);
+          if (!row) throw new Error(`missing model row ${line.id}`);
+          const drawn = line.points.reduce((total, point) => total + point.value, 0);
+          expect(drawn, `${timeRange} ${metric} ${line.id}`).toBeCloseTo(row[metric], 6);
+        }
+      }
+    }
+  });
+
   it('returns exact model trend fixtures for the requested models only', () => {
+    // The whole fixture is in range. The range end is off any hour boundary, so the last
+    // bucket, which sits at the range end, is drawn by the page.
+    const toMs = Date.UTC(2026, 10, 20, 12, 17, 23, 456);
     const request = {
       from_ms: 1,
-      to_ms: Date.now(),
+      to_ms: toMs,
+      now_ms: toMs,
       filters: { models: ['claude-sonnet-4-5', ' gpt-4.1 '] },
       include: { model_timeline: true },
     };
@@ -940,33 +1014,28 @@ describe('DemoPage', () => {
     expect(sonnetBuckets).toEqual(timeline.slice(7).map((point) => point.bucket_ms));
     expect(gptBuckets).toEqual(timeline.slice(0, 10).map((point) => point.bucket_ms));
 
-    for (const point of timeline) {
-      const bucketPoints = modelTimeline.filter((entry) => entry.bucket_ms === point.bucket_ms);
-      const sum = (pick: (entry: (typeof bucketPoints)[number]) => number) =>
-        bucketPoints.reduce((total, entry) => total + pick(entry), 0);
-      expect(sum((entry) => entry.calls)).toBeLessThanOrEqual(point.calls);
-      expect(sum((entry) => entry.tokens)).toBeLessThanOrEqual(point.tokens);
-      expect(sum((entry) => entry.cost ?? 0)).toBeLessThanOrEqual((point.cost ?? 0) + 1e-9);
-    }
+    const timelineCalls = new Map(timeline.map((point) => [point.bucket_ms, point.calls]));
     for (const point of modelTimeline) {
       expect(point.calls).toBeGreaterThan(0);
+      expect(point.calls).toBeLessThanOrEqual(timelineCalls.get(point.bucket_ms) ?? 0);
       expect(point.success + point.failure).toBe(point.calls);
     }
 
-    // Every demo model together adds up exactly to the timeline buckets.
+    // Each model's line adds up exactly to its row in the model table.
     const allModels = getDemoMonitoringAnalytics({
       ...request,
       filters: { models: (page.model_stats ?? []).map((row) => row.model) },
     });
-    for (const point of allModels.timeline ?? []) {
-      const bucketPoints = (allModels.model_timeline ?? []).filter(
-        (entry) => entry.bucket_ms === point.bucket_ms
-      );
-      expect(bucketPoints.reduce((total, entry) => total + entry.calls, 0)).toBe(point.calls);
-      expect(bucketPoints.reduce((total, entry) => total + entry.tokens, 0)).toBe(point.tokens);
-      expect(
-        Math.round(bucketPoints.reduce((total, entry) => total + (entry.cost ?? 0), 0) * 100)
-      ).toBe(Math.round((point.cost ?? 0) * 100));
+    const modelRows = allModels.model_stats ?? [];
+    expect(modelRows.length).toBeGreaterThan(2);
+    for (const row of modelRows) {
+      const points = (allModels.model_timeline ?? []).filter((entry) => entry.model === row.model);
+      const sum = (pick: (entry: (typeof points)[number]) => number) =>
+        points.reduce((total, entry) => total + pick(entry), 0);
+      expect(sum((entry) => entry.calls)).toBe(row.calls);
+      expect(sum((entry) => entry.failure)).toBe(row.failure_calls);
+      expect(sum((entry) => entry.total_tokens ?? 0)).toBe(row.total_tokens);
+      expect(Math.round(sum((entry) => entry.cost ?? 0) * 100)).toBe(Math.round(row.cost * 100));
     }
 
     expect(getDemoMonitoringAnalytics(request).model_timeline).toEqual(modelTimeline);

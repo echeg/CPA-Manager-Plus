@@ -142,19 +142,22 @@ func eventFilterConditions(filter AnalyticsFilter, prefix string, projected bool
 		args = append(args, hash)
 	}
 
-	addInCondition := func(expression string, values []string) {
-		normalized := normalizeFilterValues(values)
+	addNormalizedInCondition := func(expression string, normalized []string) {
 		if len(normalized) == 0 {
 			return
 		}
 		conditions = append(conditions, fmt.Sprintf("coalesce(%s, '') in (select value from json_each(?))", expression))
 		args = append(args, encodeJSONFilterValues(normalized))
 	}
+	addInCondition := func(expression string, values []string) {
+		addNormalizedInCondition(expression, normalizeFilterValues(values))
+	}
 	modelExpression := column("analytics_model")
 	if !projected {
 		modelExpression = usageidentity.SQLRequestAnalyticsModelExpression(column("model"), column("requested_model"))
 	}
-	addInCondition(modelExpression, normalizeModelFilterValues(filter.Models))
+	// Not trimmed again: an exact model identity can keep whitespace ("custom (high)" is "custom ").
+	addNormalizedInCondition(modelExpression, normalizeModelFilterValues(filter.Models, filter.ExactModels))
 	addProviderEventCondition(filter.Providers, prefix, &conditions, &args)
 	addAccountEventCondition(filter.Accounts, prefix, &conditions, &args)
 	credentialExpr := fmt.Sprintf("coalesce(nullif(%sauth_file_snapshot, ''), nullif(%sauth_index, ''), nullif(%ssource_hash, ''), nullif(%ssource, ''), '-')", prefix, prefix, prefix, prefix)

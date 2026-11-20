@@ -3775,64 +3775,132 @@ const buildMonitoringAnalytics = (
         requestedAPIKeyTimelineHashes.has(point.api_key_hash)
     );
 
-  // Matches the server's model filter: values are trimmed, and the match is case-sensitive.
+  // Matches the server's model filter case-sensitively: exact_models ids verbatim, model
+  // names trimmed.
+  const exactModelTimelineModels = request?.filters?.exact_models === true;
   const requestedModelTimelineModels = new Set(
-    (request?.filters?.models ?? []).map((model) => model.trim()).filter(Boolean)
+    (request?.filters?.models ?? [])
+      .filter((model) => model.trim() !== '')
+      .map((model) => (exactModelTimelineModels ? model : model.trim()))
   );
-  // Each bucket is split across every demo model, so per-bucket model values add up to the
-  // timeline bucket. Sonnet only starts mid-range and gpt-4.1 stops early, which shows the
-  // difference between exact model buckets and an overall-share estimate.
-  const modelTimelineActiveFrom: Record<string, number> = { 'claude-sonnet-4-5': 7 };
-  const modelTimelineActiveUntil: Record<string, number> = { 'gpt-4.1': 9 };
+  // The page draws a timeline point when its local bucket start lies between the bucket
+  // start of from_ms and to_ms (fillUsageTimelineBuckets). On a range shorter than the 14
+  // fixture days, only some buckets are on screen, for example two on the default 24 hours.
+  const modelTimelineGranularity = request?.include?.granularity === 'day' ? 'day' : 'hour';
+  const demoLocalBucketStartMs = (timestampMs: number) => {
+    const date = new Date(timestampMs);
+    if (modelTimelineGranularity === 'day') date.setHours(0, 0, 0, 0);
+    else date.setMinutes(0, 0, 0);
+    return date.getTime();
+  };
+  const modelTimelineFromMs = request?.from_ms;
+  const modelTimelineToMs = request?.to_ms;
+  const modelTimelineRange =
+    typeof modelTimelineFromMs === 'number' &&
+    typeof modelTimelineToMs === 'number' &&
+    Number.isFinite(modelTimelineFromMs) &&
+    Number.isFinite(modelTimelineToMs) &&
+    modelTimelineFromMs < modelTimelineToMs
+      ? { firstBucketMs: demoLocalBucketStartMs(modelTimelineFromMs), toMs: modelTimelineToMs }
+      : null;
+  const visibleModelTimeline = timeline.flatMap((point, bucketIndex) => {
+    if (modelTimelineRange) {
+      const bucketStartMs = demoLocalBucketStartMs(point.bucket_ms);
+      if (bucketStartMs < modelTimelineRange.firstBucketMs) return [];
+      if (bucketStartMs >= modelTimelineRange.toMs) return [];
+    }
+    return [{ point, bucketIndex, bucketMs: point.bucket_ms, label: point.label }];
+  });
+  // A range shorter than a fixture day can fall between two fixture points: on a historical
+  // 11:00-12:00 the point at 12:00 is excluded and the one before is a day earlier. The
+  // models then get one bucket at the range's last bucket start, shaped like the latest
+  // fixture point, so their lines still add up to the table rows.
+  const latestTimelinePoint = timeline[timeline.length - 1];
+  if (visibleModelTimeline.length === 0 && modelTimelineRange && latestTimelinePoint) {
+    const bucketMs = demoLocalBucketStartMs(modelTimelineRange.toMs - 1);
+    visibleModelTimeline.push({
+      point: latestTimelinePoint,
+      bucketIndex: timeline.length - 1,
+      bucketMs,
+      label:
+        modelTimelineGranularity === 'day'
+          ? new Date(bucketMs).toLocaleDateString()
+          : new Date(bucketMs).toLocaleString(),
+    });
+  }
+  const visibleModelTimelineBuckets = visibleModelTimeline.length;
+  // Each model's model_stats totals are spread over the visible buckets it is active in,
+  // following the timeline's shape, so the line the page draws adds up to the model's row in
+  // the table. The demo table does not depend on the range, so on a short range a model line
+  // can exceed its overall timeline bucket. Sonnet only starts halfway through the visible
+  // buckets and gpt-4.1 stops before the last ones, which shows the difference between exact
+  // model buckets and an overall-share estimate on every range.
+  const isModelTimelineActive = (model: string, position: number) => {
+    if (model === 'claude-sonnet-4-5') {
+      return position >= Math.floor(visibleModelTimelineBuckets / 2);
+    }
+    if (model === 'gpt-4.1' && visibleModelTimelineBuckets > 1) {
+      return (
+        position <
+        visibleModelTimelineBuckets - Math.max(1, Math.floor(visibleModelTimelineBuckets * 0.3))
+      );
+    }
+    return true;
+  };
   const modelTimelineWobble = [1, 0.82, 1.18, 0.94, 1.26, 0.88, 1.08];
-  const modelTimelineWeight = (
+  const modelTimelineWeights = (
     model: string,
     modelIndex: number,
-    bucketIndex: number,
-    base: number
-  ) => {
-    if (bucketIndex < (modelTimelineActiveFrom[model] ?? 0)) return 0;
-    if (bucketIndex > (modelTimelineActiveUntil[model] ?? Number.POSITIVE_INFINITY)) return 0;
-    return base * modelTimelineWobble[(bucketIndex + modelIndex * 3) % modelTimelineWobble.length];
-  };
-  const modelTimeline = timeline
-    .flatMap((point, bucketIndex) => {
-      const callWeights = modelStats.map((row, modelIndex) =>
-        modelTimelineWeight(row.model, modelIndex, bucketIndex, row.calls)
+    base: (point: (typeof timeline)[number]) => number
+  ) =>
+    visibleModelTimeline.map(({ point, bucketIndex }, position) => {
+      if (!isModelTimelineActive(model, position)) return 0;
+      return (
+        base(point) *
+        modelTimelineWobble[(bucketIndex + modelIndex * 3) % modelTimelineWobble.length]
       );
-      const tokenWeights = modelStats.map((row, modelIndex) =>
-        modelTimelineWeight(row.model, modelIndex, bucketIndex, row.total_tokens)
-      );
-      const costWeights = modelStats.map((row, modelIndex) =>
-        modelTimelineWeight(row.model, modelIndex, bucketIndex, row.cost)
-      );
-      const calls = allocateDemoInteger(point.calls, callWeights);
-      const failures = allocateDemoInteger(point.failure, callWeights);
-      const tokens = allocateDemoInteger(point.tokens, tokenWeights);
-      const costCents = allocateDemoInteger(Math.round(point.cost * 100), costWeights);
-      return modelStats.flatMap((row, modelIndex) => {
-        const modelCalls = calls[modelIndex] ?? 0;
+    });
+  const modelTimelineBuckets = modelStats.map((row, modelIndex) => {
+    const callWeights = modelTimelineWeights(row.model, modelIndex, (point) => point.calls);
+    return {
+      calls: allocateDemoInteger(row.calls, callWeights),
+      failures: allocateDemoInteger(row.failure_calls, callWeights),
+      tokens: allocateDemoInteger(
+        row.total_tokens,
+        modelTimelineWeights(row.model, modelIndex, (point) => point.tokens)
+      ),
+      costCents: allocateDemoInteger(
+        Math.round(row.cost * 100),
+        modelTimelineWeights(row.model, modelIndex, (point) => point.cost)
+      ),
+    };
+  });
+  const modelTimeline = visibleModelTimeline
+    .flatMap(({ point, bucketMs, label }, position) =>
+      modelStats.flatMap((row, modelIndex) => {
+        const buckets = modelTimelineBuckets[modelIndex];
+        const modelCalls = buckets?.calls[position] ?? 0;
         if (modelCalls <= 0) return [];
-        const failure = Math.min(modelCalls, failures[modelIndex] ?? 0);
-        const modelTokens = tokens[modelIndex] ?? 0;
+        const failure = Math.min(modelCalls, buckets?.failures[position] ?? 0);
+        const modelTokens = buckets?.tokens[position] ?? 0;
         return [
           {
             model: row.model,
-            bucket_ms: point.bucket_ms,
-            bucket_label: point.label,
+            bucket_ms: bucketMs,
+            bucket_label: label,
             calls: modelCalls,
             tokens: modelTokens,
             success: modelCalls - failure,
             failure,
             ...splitTokens(modelTokens),
-            cost: (costCents[modelIndex] ?? 0) / 100,
+            cost: (buckets?.costCents[position] ?? 0) / 100,
             average_latency_ms: point.average_latency_ms + modelIndex * 40,
             success_rate: safeRate(modelCalls - failure, modelCalls),
             failure_rate: safeRate(failure, modelCalls),
           },
         ];
-      });
-    })
+      })
+    )
     .filter((point) => requestedModelTimelineModels.has(point.model));
 
   const channelShare = accountStats.map((row) => ({

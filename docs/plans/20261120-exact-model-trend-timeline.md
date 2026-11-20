@@ -8,12 +8,12 @@
 
 ## Decisions
 - **Context**: model lines must be exact. The API key trend already solved the same problem with a separate exact request.
-- **Chosen approach**: a separate web request with `filters.models = <top model ids>` and `include.model_timeline = true`. On the server, `model_timeline` is built from the timeline points the service already fetches (raw or hourly rollup), grouped by (model, bucket). Cost is computed per point with the same `costForTimelinePoint` as the main timeline, so the per-model sums match it.
+- **Chosen approach**: a separate web request with `filters.models = <top model ids>`, `filters.exact_models = true` and `include.model_timeline = true`. On the server, `model_timeline` is built from the timeline points the service already fetches (raw or hourly rollup), grouped by (model, bucket). Cost is computed per point with the same `costForTimelinePoint` as the main timeline, so the per-model sums match it.
 - **Rejected alternatives**:
   - Returning `model_timeline` for all models in the main tab response. It avoids the second request, but the response grows to hundreds of KB with hourly granularity over 7-30 days and about ten models. The top models are also unknown until `model_stats` arrives in that same response.
   - A new `ModelTimelineWithFilter` repository query, a full copy of the API key path. It is more code, duplicates the hourly rollup support, and the points it would return are already fetched.
 - **Verified facts**:
-  - `filters.models` (JSON `models`, `Filters.Models`, `service.go:128`) is applied by `analyticsWhere` to `SQLRequestAnalyticsModelExpression` after `normalizeModelFilterValues` (`apps/manager-server/internal/repository/usageevent/analytics.go:3002,3102`). That is the same value as `analytics_model_value`, which `ModelStat.Model` and `TimelinePoint.Model` carry.
+  - `filters.models` (JSON `models`, `Filters.Models`, `service.go:128`) is applied by `analyticsWhere` to `SQLRequestAnalyticsModelExpression` after `normalizeModelFilterValues` (`apps/manager-server/internal/repository/usageevent/analytics.go:3002,3102`). That is the same value as `analytics_model_value`, which `ModelStat.Model` and `TimelinePoint.Model` carry. ⚠️ Corrected in code review: `AnalyticsModel` is not idempotent (`custom(high)(low)` → `custom(high)` → `custom`), so normalizing a returned id a second time selected a different model. ➕ A single string cannot say whether it is an identity or a model name (the monitoring page still offers raw event model names as filter options), so exact matching is opt-in: `filters.exact_models` (`Filters.ExactModels`, carried by `AnalyticsFilter`, `usageaggregate.Filter` and `usagepricing.HourlyFilter`) marks `filters.models` as identities. All repository model filters use `usageidentity.ModelFilterValues(values, exact)`. With the flag, values are matched verbatim. Without it, values are trimmed and reduced by `AnalyticsModel` exactly as before this branch, so legacy requests select the same rows (an earlier review fix that matched every value both ways broadened them: `custom(high)` also selected `custom`). Older servers ignore the flag and normalize. ➕ Identities keep the raw name's whitespace (`custom (high)` → `custom `), so exact values are not trimmed: the generic `addInCondition` in `usageevent` and `usagemonitoring` would trim them a second time and is bypassed for models. ➕ The page model filter still sends trimmed names without the flag (unchanged behavior); filed as `docs/backlog/usage-page-model-filter-trims-model-identities.md`.
   - Web model rows use `id: row.model || '-'` (`usageAnalyticsModel.ts:1353`), so a row id equals the server's model filter value. `'-'` (empty model) must not be sent.
   - Web model rows are sorted by cost, then by requests (`usageAnalyticsModel.ts:1387`), whatever the selected metric. `buildEntityTrendSeries` takes the first 4 rows whose selected metric is above 0. The set of top models can therefore differ between the requests, tokens and cost metrics.
   - The model chart renders on the `trends` tab (`UsageAnalyticsPage.tsx:3135`) and the `models` tab (`UsageAnalyticsPage.tsx:3203`, with `highlightId`). The overview tab does not render it.
@@ -107,7 +107,7 @@
 ### Task 1: Server `include.model_timeline` built from the fetched timeline points
 - [x] add `ModelTimeline bool json:"model_timeline"` to `Include` and `ModelTimeline []ModelTimelinePoint json:"model_timeline,omitempty"` to `Response` in `apps/manager-server/internal/service/monitoring/service.go`. `ModelTimelinePoint` mirrors `APIKeyTimelinePoint` (`:677`) but has `Model string json:"model"` instead of `APIKeyHash`.
 - [x] add `buildModelTimeline(points []store.TimelinePoint, granularity, location, prices) []ModelTimelinePoint`:
-  - group by (`strings.TrimSpace(point.Model)`, `BucketMS`) and skip empty models
+  - group by (`point.Model`, `BucketMS`) and skip blank models. ➕ Changed in code review: the model is used verbatim, like `model_stats`, because an identity can keep whitespace.
   - sum the counters the same way `buildAPIKeyTimeline` does (`:3406`)
   - add `costForTimelinePoint(point, prices)` per raw point
   - weight latency by `LatencySamples`, then set the success and failure rates
@@ -169,11 +169,11 @@
 
 ### Task 5: Demo fixtures return the exact model timeline
 - [x] in `apps/web/src/features/demo/demoFixtures.ts`, emit `model_timeline` when `include.model_timeline` is set and `filters.models` is non-empty:
-  - build one series per requested demo model from the demo timeline, so that each bucket's model values add up to the timeline bucket
+  - build one series per requested demo model from the demo timeline. ➕ Changed in code review: each model's `model_stats` totals are spread over its active buckets following the timeline's shape, so a model's line adds up to its row in the model table. The demo timeline and the model table already disagree in total (20,927 vs 22,280 calls), so per-bucket model sums cannot also equal the timeline without changing every demo response.
   - give at least one model a visibly different time shape, for example active only in the second half of the range, so the demo shows the improvement
   - keep the output deterministic, like the existing `apiKeyTimeline` fixture (`:3725`)
   - do not change the response when `include.model_timeline` is absent
-- [x] write tests in `features/demo/DemoPage.test.tsx`, next to `:874`: the requested models get exact buckets, unrequested models are absent, and the per-bucket sums do not exceed the timeline
+- [x] write tests in `features/demo/DemoPage.test.tsx`, next to `:874`: the requested models get exact buckets, unrequested models are absent, no model point exceeds its timeline bucket when the whole fixture is in range, and each model's buckets add up to its `model_stats` row. ➕ Changed in code review: the demo table does not depend on the range, so the model lines are spread only over the fixture buckets the page draws for the requested range (the `fillUsageTimelineBuckets` rule), and Sonnet's start and gpt-4.1's stop are relative to those buckets. A test applies the page bounds for 24h, today, 7d and 30d and checks that each drawn line adds up to its table row. On a short range a model line can then exceed its overall timeline bucket. ➕ A historical custom range shorter than a fixture day (11:00-12:00, 09:30-12:00) can contain no fixture point, so the models then get one bucket at the range's last bucket start. The same test covers those ranges.
 - [x] run `npm run test` and `npm run check:demo-isolation`. Both must pass before task 6.
 
 ### Task 6: Verify acceptance criteria
@@ -191,7 +191,7 @@
 - **Request** (follow-up, trends and models tabs only):
   ```json
   {
-    "filters": { "...current filters": "...", "models": ["gpt-6.2-sol", "claude-sonnet-5-5"] },
+    "filters": { "...current filters": "...", "models": ["gpt-6.2-sol", "claude-sonnet-5-5"], "exact_models": true },
     "include": { "granularity": "hour", "model_timeline": true }
   }
   ```
@@ -202,8 +202,8 @@
   1. The main response gives `model_stats`.
   2. `selectModelTrendIds` picks up to 12 ids, usually 4.
   3. The follow-up request returns `model_timeline`.
-  4. `buildModelTrendSeries` builds the exact series. Until it arrives, or when the field is missing, `buildEstimatedModelTrendSeries` and the hint are used. That is `buildEntityTrendSeries` without the `'-'` row (shares still count it), so the series and colours do not change when the exact data arrives. (➕ added in code review: the plain estimate drew `'-'`, which the exact builder skips, and shifted the colours.)
-- **Model identity**: the ids are `analytics_model_value` on both sides. The server normalizes filter values with `usageidentity.AnalyticsModel`, which is idempotent.
+  4. `buildModelTrendSeries` builds the exact series. Until it arrives, or when the field is missing, `buildEstimatedModelTrendSeries` and the hint are used. That is `buildEntityTrendSeries` without the `'-'` row (shares still count it), so the series and colours do not change when the exact data arrives. (➕ added in code review: the plain estimate drew `'-'`, which the exact builder skips, and shifted the colours.) ➕ Also from code review: the estimate and the hint are also used while the follow-up request has an error, because the retained response can predate the main one. `refresh()` sets `nowMs` and runs the forced fetches in an effect after that render, so they carry the new range end instead of being dropped by the in-flight dedupe. ➕ Those fetches pass `supersedeInFlight`: a request still in flight for the same scope but an older range end is aborted and replaced, instead of absorbing the refresh and having its older response shown as exact. Re-renders without a manual refresh keep the existing rule that an in-flight request for the same scope is not superseded. ➕ The two responses of a refresh can arrive in either order, so `useMonitoringAnalytics` exposes `dataRequest`, the request its data answers, and the exact series is used only while the follow-up's `from_ms`, `to_ms` and `now_ms` match the displayed main response. Until then the estimate and the hint are shown, instead of the new hours drawn as exact zeros. ➕ Before either response of a refresh arrives, both still answer the previous range end while the page bounds already name the new one. The main timeline is therefore filled over the displayed main response's `dataRequest` range, not the current bounds, so neither the timeline nor the exact series that follow its buckets draw an unqueried hour as zero.
+- **Model identity**: the ids are `analytics_model_value` on both sides. The follow-up sends them with `exact_models`, so the server matches them verbatim (untrimmed) with `usageidentity.ModelFilterValues(values, true)`. `AnalyticsModel` is not idempotent, so normalizing an id again could select another model. Requests without the flag keep the model-name matching. The web keeps ids verbatim too, so `model_stats`, the request and `model_timeline` all name a model the same way.
 
 ## Post-Completion
 **Manual verification**:

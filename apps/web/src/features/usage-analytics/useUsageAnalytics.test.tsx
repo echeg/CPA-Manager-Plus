@@ -12,6 +12,7 @@ import type {
   MonitoringAnalyticsCoverage,
   MonitoringAnalyticsModelStat,
   MonitoringAnalyticsModelTimelinePoint,
+  MonitoringAnalyticsRequest,
   MonitoringAnalyticsResponse,
 } from '@/services/api/usageService';
 import { useUsageAnalytics } from './useUsageAnalytics';
@@ -114,6 +115,12 @@ describe('useUsageAnalytics request orchestration', () => {
   let auxiliaryScopeStale = false;
   let apiKeyTimelineAvailable = true;
   let modelTimelineAvailable = true;
+  let modelTimelineError = '';
+  // The request the model timeline data answers, when it predates the current one (a
+  // refresh the follow-up has not answered yet). By default every response is current.
+  let modelTimelineDataRequest: MonitoringAnalyticsRequest | null = null;
+  // The same for the main response, whose timeline then starts at that request's range.
+  let mainDataRequest: MonitoringAnalyticsRequest | null = null;
   let modelStats: MonitoringAnalyticsModelStat[] = [];
   let mainTimelineBucketCalls = 5;
   let apiKeyStats: MonitoringAnalyticsApiKeyStatRow[] = [createApiKeyStatRow()];
@@ -151,8 +158,13 @@ describe('useUsageAnalytics request orchestration', () => {
     const credentialTimeline = Boolean(params.include?.credential_timeline);
     const apiKeyTimeline = Boolean(params.include?.api_key_timeline);
     const modelTimeline = Boolean(params.include?.model_timeline);
-    const mainTimelineStartMs =
-      typeof params.fromMs === 'number' ? localHourStartMs(params.fromMs) : 0;
+    const currentRequest: MonitoringAnalyticsRequest | null =
+      typeof params.fromMs === 'number' && typeof params.toMs === 'number'
+        ? { from_ms: params.fromMs, to_ms: params.toMs, now_ms: params.nowMs }
+        : null;
+    const answeredRequest =
+      (main ? mainDataRequest : modelTimeline ? modelTimelineDataRequest : null) ?? currentRequest;
+    const mainTimelineStartMs = answeredRequest ? localHourStartMs(answeredRequest.from_ms) : 0;
     const mainData = params.include?.credential_stats
       ? {
           ...emptyAnalyticsResponse,
@@ -202,74 +214,81 @@ describe('useUsageAnalytics request orchestration', () => {
             ...(modelStats.length > 0 ? { model_stats: modelStats } : {}),
           }
         : emptyAnalyticsResponse;
-    return {
+    const result: Omit<UseMonitoringAnalyticsReturn, 'dataRequest'> = {
       enabled: Boolean(params.fromMs && params.toMs),
       loading: credentialTimeline ? credentialTimelineLoading : false,
-      error: selectors ? selectorError : credentialTimeline ? credentialTimelineError : '',
-      data: emptyAuxiliarySnapshot && !main && !selectors
-        ? emptyAnalyticsResponse
-        : selectors
+      error: selectors
         ? selectorError
-          ? null
-          : {
-              ...emptyAnalyticsResponse,
-              filter_options: {
-                models: ['gpt-a'],
-                api_key_hashes: ['key-a'],
-                providers: ['codex'],
-                auth_files: ['account.json'],
-              },
-            }
-        : main
-          ? mainData
-          : apiKeyTimeline && apiKeyTimelineAvailable
-            ? {
-                ...emptyAnalyticsResponse,
-                api_key_timeline: [
-                  {
-                    api_key_hash: 'key-a',
-                    bucket_ms: mainTimelineStartMs,
-                    calls: 2,
-                    tokens: 200,
-                    success: 2,
-                    failure: 0,
+        : credentialTimeline
+          ? credentialTimelineError
+          : modelTimeline
+            ? modelTimelineError
+            : '',
+      data:
+        emptyAuxiliarySnapshot && !main && !selectors
+          ? emptyAnalyticsResponse
+          : selectors
+            ? selectorError
+              ? null
+              : {
+                  ...emptyAnalyticsResponse,
+                  filter_options: {
+                    models: ['gpt-a'],
+                    api_key_hashes: ['key-a'],
+                    providers: ['codex'],
+                    auth_files: ['account.json'],
                   },
-                  {
-                    api_key_hash: 'key-a',
-                    bucket_ms: mainTimelineStartMs + 2 * HOUR_MS,
-                    calls: 4,
-                    tokens: 400,
-                    success: 4,
-                    failure: 0,
-                  },
-                ],
-              }
-            : modelTimeline
-              ? modelTimelineAvailable
+                }
+            : main
+              ? mainData
+              : apiKeyTimeline && apiKeyTimelineAvailable
                 ? {
                     ...emptyAnalyticsResponse,
-                    model_timeline: modelTimelinePoints(mainTimelineStartMs).filter((point) =>
-                      (params.filters?.models ?? []).includes(point.model)
-                    ),
+                    api_key_timeline: [
+                      {
+                        api_key_hash: 'key-a',
+                        bucket_ms: mainTimelineStartMs,
+                        calls: 2,
+                        tokens: 200,
+                        success: 2,
+                        failure: 0,
+                      },
+                      {
+                        api_key_hash: 'key-a',
+                        bucket_ms: mainTimelineStartMs + 2 * HOUR_MS,
+                        calls: 4,
+                        tokens: 400,
+                        success: 4,
+                        failure: 0,
+                      },
+                    ],
                   }
-                : // An older backend answers the request but has no model_timeline field.
-                  { ...emptyAnalyticsResponse }
-            : credentialTimeline && !credentialTimelineError && !credentialTimelineLoading
-              ? {
-                  ...emptyAnalyticsResponse,
-                  credential_timeline: [
-                    {
-                      id: 'credential-a.json',
-                      auth_file_snapshot: 'credential-a.json',
-                      bucket_ms: 1,
-                      calls: 10,
-                      tokens: 150,
-                      success: 9,
-                      failure: 1,
-                    },
-                  ],
-                }
-              : null,
+                : modelTimeline
+                  ? modelTimelineAvailable
+                    ? {
+                        ...emptyAnalyticsResponse,
+                        model_timeline: modelTimelinePoints(mainTimelineStartMs).filter((point) =>
+                          (params.filters?.models ?? []).includes(point.model)
+                        ),
+                      }
+                    : // An older backend answers the request but has no model_timeline field.
+                      { ...emptyAnalyticsResponse }
+                  : credentialTimeline && !credentialTimelineError && !credentialTimelineLoading
+                    ? {
+                        ...emptyAnalyticsResponse,
+                        credential_timeline: [
+                          {
+                            id: 'credential-a.json',
+                            auth_file_snapshot: 'credential-a.json',
+                            bucket_ms: 1,
+                            calls: 10,
+                            tokens: 150,
+                            success: 9,
+                            failure: 1,
+                          },
+                        ],
+                      }
+                    : null,
       dataStale: !main && !selectors && auxiliaryScopeStale,
       lastRefreshedAt: null,
       serviceBase: 'http://manager.local',
@@ -281,6 +300,10 @@ describe('useUsageAnalytics request orchestration', () => {
           : modelTimeline
             ? modelTimelineRefresh
             : auxiliaryRefresh,
+    };
+    return {
+      ...result,
+      dataRequest: result.data ? answeredRequest : null,
     };
   };
 
@@ -305,6 +328,9 @@ describe('useUsageAnalytics request orchestration', () => {
     auxiliaryScopeStale = false;
     apiKeyTimelineAvailable = true;
     modelTimelineAvailable = true;
+    modelTimelineError = '';
+    modelTimelineDataRequest = null;
+    mainDataRequest = null;
     modelStats = [];
     mainTimelineBucketCalls = 5;
     apiKeyStats = [createApiKeyStatRow()];
@@ -705,15 +731,21 @@ describe('useUsageAnalytics request orchestration', () => {
   it('recognizes successful empty auxiliary snapshots but rejects them after scope invalidation', async () => {
     emptyAuxiliarySnapshot = true;
     await renderHook();
-    await act(async () => { latestResult!.setActiveTab('credentials'); });
+    await act(async () => {
+      latestResult!.setActiveTab('credentials');
+    });
     expect(latestResult!.credentialTrendSeries).toEqual([]);
     expect(latestResult!.credentialTrendLoaded).toBe(true);
     expect(latestResult!.heatmapDateLoaded).toBe(true);
     credentialTimelineLoading = true;
-    await act(async () => { latestResult!.setSelectedCredentialId('credential-a.json'); });
+    await act(async () => {
+      latestResult!.setSelectedCredentialId('credential-a.json');
+    });
     expect(latestResult!.credentialTrendLoaded).toBe(true);
     auxiliaryScopeStale = true;
-    await act(async () => { latestResult!.setSelectedCredentialId('credential-b.json'); });
+    await act(async () => {
+      latestResult!.setSelectedCredentialId('credential-b.json');
+    });
     expect(latestResult!.credentialTrendLoaded).toBe(false);
     expect(latestResult!.heatmapDateLoaded).toBe(false);
   });
@@ -751,7 +783,10 @@ describe('useUsageAnalytics request orchestration', () => {
 
         const request = lastParams(isModelTimelineRequest);
         expect(request?.include).toEqual({ granularity: 'hour', model_timeline: true });
-        expect(request?.filters).toMatchObject({ models: ['model-a', 'model-b'] });
+        expect(request?.filters).toMatchObject({
+          models: ['model-a', 'model-b'],
+          exact_models: true,
+        });
         expect(typeof request?.fromMs).toBe('number');
         expect(typeof request?.toMs).toBe('number');
         expect(request?.throttleMs).toBe(0);
@@ -887,13 +922,178 @@ describe('useUsageAnalytics request orchestration', () => {
         await Promise.resolve();
       });
       modelTimelineRefresh.mockClear();
+      mainRefresh.mockClear();
 
       act(() => {
         latestResult?.refresh();
       });
 
+      // A model request still in flight for the previous range end must not absorb the
+      // refresh, so a manual refresh supersedes it.
       expect(modelTimelineRefresh).toHaveBeenCalledTimes(1);
-      expect(modelTimelineRefresh).toHaveBeenCalledWith({ force: true });
+      expect(modelTimelineRefresh).toHaveBeenCalledWith({ force: true, supersedeInFlight: true });
+      expect(mainRefresh).toHaveBeenCalledWith({ force: true, supersedeInFlight: true });
+    });
+
+    it('refreshes with the new range end rather than the previous one', async () => {
+      modelStats = twoModels();
+      await renderHook();
+      await act(async () => {
+        latestResult?.setActiveTab('trends');
+        await Promise.resolve();
+      });
+      const enabledModelRequest = (params: UseMonitoringAnalyticsParams) =>
+        isModelTimelineRequest(params) && params.fromMs !== undefined;
+      const mainRequest = (params: UseMonitoringAnalyticsParams) =>
+        Boolean(params.include?.summary);
+      const refreshedAtMs = (lastParams(enabledModelRequest)?.toMs ?? 0) + 10 * 60 * 1000;
+      // Each forced fetch must start once the hook renders the new bounds. A fetch started with
+      // the old ones would also make the real hook drop the new-range request as a duplicate.
+      const mainToMs: Array<number | null | undefined> = [];
+      const modelToMs: Array<number | null | undefined> = [];
+      mainRefresh.mockImplementation(() => {
+        mainToMs.push(lastParams(mainRequest)?.toMs);
+      });
+      modelTimelineRefresh.mockImplementation(() => {
+        modelToMs.push(lastParams(enabledModelRequest)?.toMs);
+      });
+
+      const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(refreshedAtMs);
+      try {
+        act(() => {
+          latestResult?.refresh();
+        });
+      } finally {
+        nowSpy.mockRestore();
+      }
+
+      expect(mainToMs).toEqual([refreshedAtMs]);
+      expect(modelToMs).toEqual([refreshedAtMs]);
+    });
+
+    it('falls back to the estimate when the model timeline request fails', async () => {
+      modelStats = twoModels();
+      await renderHook();
+      await act(async () => {
+        latestResult?.setActiveTab('trends');
+        await Promise.resolve();
+      });
+      expect(latestResult?.modelTrendEstimated).toBe(false);
+      expect(seriesValues('model-b')).toEqual([0, 0, 4]);
+
+      // Like the real hook, the mock keeps the last good model_timeline next to the error.
+      modelTimelineError = 'model timeline failed';
+      await act(async () => {
+        latestResult?.refresh();
+        await Promise.resolve();
+      });
+
+      expect(latestResult?.modelTrendEstimated).toBe(true);
+      expect(seriesValues('model-b')?.[0]).toBeGreaterThan(0);
+
+      modelTimelineError = '';
+      await act(async () => {
+        latestResult?.refresh();
+        await Promise.resolve();
+      });
+      expect(latestResult?.modelTrendEstimated).toBe(false);
+      expect(seriesValues('model-b')).toEqual([0, 0, 4]);
+    });
+
+    it('keeps the estimate until the model timeline covers the refreshed range', async () => {
+      modelStats = twoModels();
+      await renderHook();
+      await act(async () => {
+        latestResult?.setActiveTab('trends');
+        await Promise.resolve();
+      });
+      expect(latestResult?.modelTrendEstimated).toBe(false);
+      const enabledModelRequest = lastParams(
+        (params) => isModelTimelineRequest(params) && params.fromMs !== undefined
+      );
+      const previousRequest: MonitoringAnalyticsRequest = {
+        from_ms: enabledModelRequest?.fromMs ?? 0,
+        to_ms: enabledModelRequest?.toMs ?? 0,
+        now_ms: enabledModelRequest?.nowMs,
+      };
+      const refreshAt = async (nowMs: number) => {
+        const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(nowMs);
+        try {
+          await act(async () => {
+            latestResult?.refresh();
+            await Promise.resolve();
+          });
+        } finally {
+          nowSpy.mockRestore();
+        }
+      };
+
+      // The main response for the new range end arrived first. The model buckets still end
+      // at the previous one, so drawing them as exact would show the new hours as zero.
+      modelTimelineDataRequest = previousRequest;
+      await refreshAt(previousRequest.to_ms + 10 * 60 * 1000);
+      expect(lastParams((params) => Boolean(params.include?.summary))?.nowMs).not.toBe(
+        previousRequest.now_ms
+      );
+      expect(latestResult?.modelTrendEstimated).toBe(true);
+      expect(seriesValues('model-b')?.[0]).toBeGreaterThan(0);
+
+      // Once the follow-up answers the same range, the exact buckets are back.
+      modelTimelineDataRequest = null;
+      await refreshAt(previousRequest.to_ms + 20 * 60 * 1000);
+      expect(latestResult?.modelTrendEstimated).toBe(false);
+      expect(seriesValues('model-b')).toEqual([0, 0, 4]);
+    });
+
+    it('draws only the range the displayed responses answer while a refresh is pending', async () => {
+      modelStats = twoModels();
+      await renderHook();
+      await act(async () => {
+        latestResult?.setActiveTab('trends');
+        await Promise.resolve();
+      });
+      const mainParams = lastParams((params) => Boolean(params.include?.summary));
+      const previousRequest: MonitoringAnalyticsRequest = {
+        from_ms: mainParams?.fromMs ?? 0,
+        to_ms: mainParams?.toMs ?? 0,
+        now_ms: mainParams?.nowMs,
+      };
+      const refreshAt = async (nowMs: number) => {
+        const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(nowMs);
+        try {
+          await act(async () => {
+            latestResult?.refresh();
+            await Promise.resolve();
+          });
+        } finally {
+          nowSpy.mockRestore();
+        }
+      };
+      const bucketStarts = () => latestResult?.timeline.map((point) => point.bucketMs) ?? [];
+      const refreshedAtMs = previousRequest.to_ms + HOUR_MS;
+
+      // Neither response for the new range end has arrived, so both still answer the previous
+      // one. The hour after it was never queried and must not be drawn as an exact zero.
+      mainDataRequest = previousRequest;
+      modelTimelineDataRequest = previousRequest;
+      await refreshAt(refreshedAtMs);
+      expect(lastParams((params) => Boolean(params.include?.summary))?.toMs).toBe(refreshedAtMs);
+      expect(bucketStarts()[0]).toBe(localHourStartMs(previousRequest.from_ms));
+      expect(Math.max(...bucketStarts())).toBe(localHourStartMs(previousRequest.to_ms - 1));
+      expect(latestResult?.modelTrendEstimated).toBe(false);
+      expect(seriesValues('model-b')).toEqual([0, 0, 4]);
+      latestResult?.modelTrendSeries.forEach((series) => {
+        expect(series.points.map((point) => point.bucketMs)).toEqual(bucketStarts());
+      });
+
+      // Once both responses answer the new range, the timeline follows it.
+      mainDataRequest = null;
+      modelTimelineDataRequest = null;
+      await refreshAt(refreshedAtMs);
+      expect(bucketStarts()[0]).toBe(localHourStartMs(previousRequest.from_ms + HOUR_MS));
+      expect(Math.max(...bucketStarts())).toBe(localHourStartMs(refreshedAtMs - 1));
+      expect(latestResult?.modelTrendEstimated).toBe(false);
+      expect(seriesValues('model-b')).toEqual([0, 0, 4]);
     });
 
     it('keeps the page filters on the model timeline request', async () => {
@@ -907,6 +1107,7 @@ describe('useUsageAnalytics request orchestration', () => {
         providers: ['codex'],
         failed_only: true,
         models: ['model-a', 'model-b'],
+        exact_models: true,
       });
     });
 

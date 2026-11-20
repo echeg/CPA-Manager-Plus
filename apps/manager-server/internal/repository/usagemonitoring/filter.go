@@ -98,13 +98,15 @@ func rawStatsConditions(filter AnalyticsFilter, fromMS, toMS, afterID int64, use
 
 func appendStatsScopeConditions(filter AnalyticsFilter, prefix string, conditions *[]string, args *[]any) {
 	column := func(name string) string { return prefix + name }
-	addInCondition := func(expression string, values []string) {
-		normalized := normalizeFilterValues(values)
+	addNormalizedInCondition := func(expression string, normalized []string) {
 		if len(normalized) == 0 {
 			return
 		}
 		*conditions = append(*conditions, fmt.Sprintf("coalesce(%s, '') in (select value from json_each(?))", expression))
 		*args = append(*args, encodeJSONFilterValues(normalized))
+	}
+	addInCondition := func(expression string, values []string) {
+		addNormalizedInCondition(expression, normalizeFilterValues(values))
 	}
 
 	hash := strings.TrimSpace(strings.ToLower(filter.SearchAPIKeyHash))
@@ -116,7 +118,8 @@ func appendStatsScopeConditions(filter AnalyticsFilter, prefix string, condition
 	if prefix != "" {
 		modelExpression = usageidentity.SQLRequestAnalyticsModelExpression(modelExpression, prefix+"requested_model")
 	}
-	addInCondition(modelExpression, normalizeModelFilterValues(filter.Models))
+	// Not trimmed again: an exact model identity can keep whitespace ("custom (high)" is "custom ").
+	addNormalizedInCondition(modelExpression, normalizeModelFilterValues(filter.Models, filter.ExactModels))
 	addProviderStatsCondition(filter.Providers, prefix, conditions, args)
 	addAccountStatsCondition(filter.Accounts, prefix, conditions, args)
 	credentialExpr := fmt.Sprintf("coalesce(nullif(%sauth_file_snapshot, ''), nullif(%sauth_index, ''), nullif(%ssource_hash, ''), nullif(%ssource, ''), '-')", prefix, prefix, prefix, prefix)
@@ -190,16 +193,8 @@ func normalizeFilterValues(values []string) []string {
 	return result
 }
 
-func normalizeModelFilterValues(values []string) []string {
-	models := make([]string, 0, len(values))
-	for _, value := range values {
-		trimmed := strings.TrimSpace(value)
-		if trimmed == "" {
-			continue
-		}
-		models = append(models, usageidentity.AnalyticsModel(trimmed))
-	}
-	return normalizeFilterValues(models)
+func normalizeModelFilterValues(values []string, exact bool) []string {
+	return usageidentity.ModelFilterValues(values, exact)
 }
 
 func normalizeLowerFilterValues(values []string) []string {

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	sqliteutil "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/sqliteutil"
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/repository/usageprojection"
+	sqliteutil "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/sqliteutil"
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/usage"
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/usageidentity"
 )
@@ -79,9 +79,11 @@ type CatchUpResult struct {
 }
 
 type Filter struct {
-	FromMS           int64
-	ToMS             int64
-	Models           []string
+	FromMS int64
+	ToMS   int64
+	Models []string
+	// ExactModels treats Models as analytics model identities matched verbatim.
+	ExactModels      bool
 	IncludeFailed    bool
 	FailedOnly       bool
 	CollapseBuckets  bool
@@ -802,7 +804,7 @@ func rawConditions(filter Filter, fromMS, toMS, afterID int64, structureRevision
 }
 
 func appendFilterConditions(conditions []string, args []any, filter Filter, modelExpression string) ([]string, []any) {
-	models := normalizeModelValues(filter.Models)
+	models := usageidentity.ModelFilterValues(filter.Models, filter.ExactModels)
 	if len(models) > 0 {
 		placeholders := strings.TrimRight(strings.Repeat("?,", len(models)), ",")
 		conditions = append(conditions, modelExpression+" in ("+placeholders+")")
@@ -817,35 +819,6 @@ func appendFilterConditions(conditions []string, args []any, filter Filter, mode
 		conditions = append(conditions, "failed = 1")
 	}
 	return conditions, args
-}
-
-func normalizeValues(values []string) []string {
-	seen := make(map[string]struct{}, len(values))
-	result := make([]string, 0, len(values))
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			continue
-		}
-		if _, ok := seen[value]; ok {
-			continue
-		}
-		seen[value] = struct{}{}
-		result = append(result, value)
-	}
-	return result
-}
-
-func normalizeModelValues(values []string) []string {
-	models := make([]string, 0, len(values))
-	for _, value := range values {
-		trimmed := strings.TrimSpace(value)
-		if trimmed == "" {
-			continue
-		}
-		models = append(models, usageidentity.AnalyticsModel(trimmed))
-	}
-	return normalizeValues(models)
 }
 
 func mergeRow(grouped map[rowKey]*Row, row Row) {

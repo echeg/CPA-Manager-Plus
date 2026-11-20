@@ -159,6 +159,78 @@ describe('useMonitoringAnalytics', () => {
     expect(getAnalyticsMock).toHaveBeenCalledTimes(2);
   });
 
+  it('lets a manual refresh supersede an in-flight request sent for an older range end', async () => {
+    const requests = installDeferredAnalyticsMock();
+
+    await act(async () => {
+      renderer = create(<Harness nowMs={10_000} />);
+    });
+    await act(async () => {
+      renderer?.update(<Harness nowMs={15_000} />);
+      await flushPromises();
+    });
+    // A plain forced refresh is still absorbed by the request in flight for the same scope.
+    await act(async () => {
+      void latestResult?.refresh({ force: true });
+      await flushPromises();
+    });
+    expect(getAnalyticsMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      void latestResult?.refresh({ force: true, supersedeInFlight: true });
+      await flushPromises();
+    });
+    expect(getAnalyticsMock).toHaveBeenCalledTimes(2);
+    expect((getAnalyticsMock.mock.calls[0]?.[3] as AbortSignal | undefined)?.aborted).toBe(true);
+    expect(getAnalyticsMock.mock.calls[1]?.[2]).toMatchObject({ now_ms: 15_000 });
+
+    // The replacement already carries the current request, so it is not restarted.
+    await act(async () => {
+      void latestResult?.refresh({ force: true, supersedeInFlight: true });
+      await flushPromises();
+    });
+    expect(getAnalyticsMock).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      requests[0]?.resolve(createResponse(1));
+      requests[1]?.resolve(createResponse(2));
+      await flushPromises();
+    });
+    expect(latestResult?.data?.generated_at_ms).toBe(2);
+    expect(latestResult?.loading).toBe(false);
+  });
+
+  it('reports the request the current data answers until the next response arrives', async () => {
+    const requests = installDeferredAnalyticsMock();
+
+    await act(async () => {
+      renderer = create(<Harness nowMs={10_000} />);
+    });
+    expect(latestResult?.dataRequest).toBeNull();
+
+    await act(async () => {
+      requests[0]?.resolve(createResponse(1));
+      await flushPromises();
+    });
+    expect(latestResult?.dataRequest).toMatchObject({ from_ms: 1, to_ms: 10_000, now_ms: 10_000 });
+
+    // A refresh for a later range end keeps the previous data, and says so, while it loads.
+    await act(async () => {
+      renderer?.update(<Harness toMs={20_000} nowMs={20_000} />);
+      await flushPromises();
+    });
+    expect(getAnalyticsMock).toHaveBeenCalledTimes(2);
+    expect(latestResult?.data?.generated_at_ms).toBe(1);
+    expect(latestResult?.dataRequest).toMatchObject({ to_ms: 10_000, now_ms: 10_000 });
+
+    await act(async () => {
+      requests[1]?.resolve(createResponse(2));
+      await flushPromises();
+    });
+    expect(latestResult?.data?.generated_at_ms).toBe(2);
+    expect(latestResult?.dataRequest).toMatchObject({ to_ms: 20_000, now_ms: 20_000 });
+  });
+
   it.each(['apiBase', 'managementKey', 'serviceBase'] as const)(
     'invalidates prior snapshots and late replies on %s change',
     async (field) => {

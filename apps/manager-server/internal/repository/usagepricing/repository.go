@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/model"
-	sqliteutil "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/sqliteutil"
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/repository/usageprojection"
+	sqliteutil "github.com/seakee/cpa-manager-plus/apps/manager-server/internal/sqliteutil"
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/usage"
 	"github.com/seakee/cpa-manager-plus/apps/manager-server/internal/usageidentity"
 )
@@ -64,9 +64,11 @@ type CatchUpResult struct {
 }
 
 type HourlyFilter struct {
-	FromMS           int64
-	ToMS             int64
-	Models           []string
+	FromMS int64
+	ToMS   int64
+	Models []string
+	// ExactModels treats Models as analytics model identities matched verbatim.
+	ExactModels      bool
 	IncludeFailed    bool
 	FailedOnly       bool
 	CollapseBuckets  bool
@@ -901,7 +903,7 @@ func hourlyStatementFromEvents(filter HourlyFilter, fromMS, toMS, afterID int64,
 		conditions = append(conditions, "e.id > ?")
 		args = append(args, afterID)
 	}
-	models := normalizeModelValues(filter.Models)
+	models := usageidentity.ModelFilterValues(filter.Models, filter.ExactModels)
 	if len(models) > 0 {
 		placeholders := strings.TrimRight(strings.Repeat("?,", len(models)), ",")
 		conditions = append(conditions, usageidentity.SQLRequestAnalyticsModelExpression("e.model", "e.requested_model")+" in ("+placeholders+")")
@@ -1366,7 +1368,7 @@ func sortedAccountRows(grouped map[accountKey]*AccountRow) []AccountRow {
 func storedHourlyConditions(revision string, filter HourlyFilter, fromMS, toMS int64) ([]string, []any) {
 	conditions := []string{"structure_revision = ?", "bucket_ms >= ?", "bucket_ms < ?"}
 	args := []any{revision, fromMS, toMS}
-	models := normalizeModelValues(filter.Models)
+	models := usageidentity.ModelFilterValues(filter.Models, filter.ExactModels)
 	if len(models) > 0 {
 		placeholders := strings.TrimRight(strings.Repeat("?,", len(models)), ",")
 		conditions = append(conditions, "model in ("+placeholders+")")
@@ -1398,18 +1400,6 @@ func normalizeValues(values []string) []string {
 		result = append(result, value)
 	}
 	return result
-}
-
-func normalizeModelValues(values []string) []string {
-	models := make([]string, 0, len(values))
-	for _, value := range values {
-		trimmed := strings.TrimSpace(value)
-		if trimmed == "" {
-			continue
-		}
-		models = append(models, usageidentity.AnalyticsModel(trimmed))
-	}
-	return normalizeValues(models)
 }
 
 func ceilHourMS(value int64) int64 {

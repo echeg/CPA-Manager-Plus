@@ -1105,10 +1105,13 @@ export const buildUsageApiKeyTimeline = (
     };
   });
 
-// Model ids match the server's analytics model value; '-' marks a row without a model.
+// Model ids are the server's analytics model value, used verbatim: an identity can keep
+// whitespace ("custom (high)" is "custom "), and the follow-up request, its model_timeline
+// points and the model_stats rows must all name it the same way. '-' marks a row without a
+// model.
 const normalizeModelTrendId = (value: string | null | undefined) => {
-  const normalized = String(value ?? '').trim();
-  return normalized === '-' ? '' : normalized;
+  const id = String(value ?? '');
+  return id.trim() === '' || id === '-' ? '' : id;
 };
 
 export const buildUsageModelTimeline = (

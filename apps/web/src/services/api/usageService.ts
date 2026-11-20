@@ -1001,6 +1001,12 @@ export interface DashboardSummaryParams {
 
 export interface MonitoringAnalyticsFilters {
   models?: string[];
+  /**
+   * Marks `models` as analytics model identities (model_stats rows) matched verbatim. Without
+   * it a value is a model name the server reduces to its identity, so an identity such as
+   * `custom(high)` would select `custom`. Older servers ignore the flag.
+   */
+  exact_models?: boolean;
   providers?: string[];
   accounts?: string[];
   credential_ids?: string[];

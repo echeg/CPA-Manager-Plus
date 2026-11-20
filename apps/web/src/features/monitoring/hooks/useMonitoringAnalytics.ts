@@ -30,6 +30,12 @@ export interface UseMonitoringAnalyticsParams {
 
 export interface MonitoringAnalyticsRefreshOptions {
   force?: boolean;
+  /**
+   * Replace a request already in flight for the same data scope when it was sent with
+   * different parameters, for example an older range end. Without it, the in-flight request
+   * absorbs the refresh and its older response is kept. A manual refresh needs this.
+   */
+  supersedeInFlight?: boolean;
 }
 
 export interface UseMonitoringAnalyticsReturn {
@@ -37,6 +43,11 @@ export interface UseMonitoringAnalyticsReturn {
   loading: boolean;
   error: string;
   data: MonitoringAnalyticsResponse | null;
+  /**
+   * The request `data` answers. After a refresh it still names the previous range end until
+   * the new response arrives, so callers can tell whether two responses cover the same range.
+   */
+  dataRequest: MonitoringAnalyticsRequest | null;
   dataStale: boolean;
   lastRefreshedAt: Date | null;
   serviceBase: string;
@@ -94,6 +105,7 @@ export function useMonitoringAnalytics({
   const apiBase = useAuthStore((state) => state.apiBase);
   const availability = useRequestMonitoringAvailability();
   const [data, setData] = useState<MonitoringAnalyticsResponse | null>(null);
+  const [dataRequest, setDataRequest] = useState<MonitoringAnalyticsRequest | null>(null);
   const [dataScopeStateKey, setDataScopeStateKey] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -102,6 +114,7 @@ export function useMonitoringAnalytics({
   const lastStartedAtRef = useRef(0);
   const lastRequestKeyRef = useRef('');
   const inFlightRequestIdentityKeyRef = useRef('');
+  const inFlightRequestKeyRef = useRef('');
   const inFlightRequestIdRef = useRef(0);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -167,10 +180,12 @@ export function useMonitoringAnalytics({
     requestIdRef.current += 1;
     abortControllerRef.current?.abort();
     inFlightRequestIdentityKeyRef.current = '';
+    inFlightRequestKeyRef.current = '';
     inFlightRequestIdRef.current = 0;
     lastRequestKeyRef.current = '';
     lastStartedAtRef.current = 0;
     setData(null);
+    setDataRequest(null);
     setDataScopeStateKey('');
     setLastRefreshedAt(null);
     setError('');
@@ -187,15 +202,20 @@ export function useMonitoringAnalytics({
         abortControllerRef.current = null;
         requestIdRef.current += 1;
         inFlightRequestIdentityKeyRef.current = '';
+        inFlightRequestKeyRef.current = '';
         inFlightRequestIdRef.current = 0;
         setData(null);
+        setDataRequest(null);
         setDataScopeStateKey('');
         setLastRefreshedAt(null);
         setLoading(false);
         return;
       }
 
-      if (inFlightRequestIdentityKeyRef.current === inFlightRequestIdentityKey) {
+      if (
+        inFlightRequestIdentityKeyRef.current === inFlightRequestIdentityKey &&
+        (!options.supersedeInFlight || inFlightRequestKeyRef.current === requestKey)
+      ) {
         return;
       }
 
@@ -217,6 +237,7 @@ export function useMonitoringAnalytics({
       lastStartedAtRef.current = startedAt;
       lastRequestKeyRef.current = requestKey;
       inFlightRequestIdentityKeyRef.current = inFlightRequestIdentityKey;
+      inFlightRequestKeyRef.current = requestKey;
       inFlightRequestIdRef.current = requestId;
       setLoading(true);
       setError('');
@@ -231,6 +252,7 @@ export function useMonitoringAnalytics({
         if (requestIdRef.current !== requestId || connectionScopeRef.current !== connectionScope)
           return;
         setData(response);
+        setDataRequest(request);
         setDataScopeStateKey(activeDataScopeKey);
         setLastRefreshedAt(new Date());
       } catch (err) {
@@ -241,6 +263,7 @@ export function useMonitoringAnalytics({
       } finally {
         if (inFlightRequestIdRef.current === requestId) {
           inFlightRequestIdentityKeyRef.current = '';
+          inFlightRequestKeyRef.current = '';
           inFlightRequestIdRef.current = 0;
         }
         if (abortControllerRef.current === controller) {
@@ -281,6 +304,7 @@ export function useMonitoringAnalytics({
 
   const dataStale = Boolean(dataScopeKey && data && dataScopeStateKey !== activeDataScopeKey);
   const scopedData = dataScopeKey || dataScopeStateKey === activeDataScopeKey ? data : null;
+  const scopedDataRequest = scopedData ? dataRequest : null;
 
   return useMemo(
     () => ({
@@ -288,6 +312,7 @@ export function useMonitoringAnalytics({
       loading: availability.checking || loading,
       error,
       data: scopedData,
+      dataRequest: scopedDataRequest,
       dataStale,
       lastRefreshedAt,
       serviceBase,
@@ -304,6 +329,7 @@ export function useMonitoringAnalytics({
       loading,
       refresh,
       scopedData,
+      scopedDataRequest,
       serviceBase,
     ]
   );

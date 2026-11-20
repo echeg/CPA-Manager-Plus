@@ -126,7 +126,11 @@ type Request struct {
 }
 
 type Filters struct {
-	Models           []string `json:"models"`
+	Models []string `json:"models"`
+	// ExactModels marks Models as analytics model identities, such as model_stats
+	// rows, matched verbatim. Without it a value is a model name, reduced to its
+	// identity as before. Older servers ignore the flag and normalize.
+	ExactModels      bool     `json:"exact_models"`
 	Providers        []string `json:"providers"`
 	Accounts         []string `json:"accounts"`
 	CredentialIDs    []string `json:"credential_ids"`
@@ -2187,6 +2191,7 @@ func buildFilter(req Request) store.AnalyticsFilter {
 		SearchQuery:      req.SearchQuery,
 		SearchAPIKeyHash: req.SearchAPIKeyHash,
 		Models:           req.Filters.Models,
+		ExactModels:      req.Filters.ExactModels,
 		Providers:        req.Filters.Providers,
 		Accounts:         req.Filters.Accounts,
 		CredentialIDs:    req.Filters.CredentialIDs,
@@ -3519,10 +3524,6 @@ func buildModelTimeline(points []store.TimelinePoint, granularity string, locati
 		if left.BucketMS != right.BucketMS {
 			return left.BucketMS < right.BucketMS
 		}
-		leftModel, rightModel := strings.TrimSpace(left.Model), strings.TrimSpace(right.Model)
-		if leftModel != rightModel {
-			return leftModel < rightModel
-		}
 		if left.Model != right.Model {
 			return left.Model < right.Model
 		}
@@ -3541,7 +3542,9 @@ func buildModelTimeline(points []store.TimelinePoint, granularity string, locati
 	grouped := map[key]*modelTimelineAccumulator{}
 	order := make([]key, 0, len(orderedPoints))
 	for _, point := range orderedPoints {
-		model := strings.TrimSpace(point.Model)
+		// Keyed by the model verbatim, like model_stats: an identity keeps the raw name's
+		// whitespace ("custom (high)" is "custom "), and the web matches the two exactly.
+		model := point.Model
 		mapKey := key{model: model, bucketMS: point.BucketMS}
 		entry := grouped[mapKey]
 		if entry == nil {

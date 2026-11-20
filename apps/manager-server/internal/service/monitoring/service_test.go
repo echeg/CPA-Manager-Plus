@@ -503,6 +503,121 @@ func TestAnalyticsModelTimelineBuildsExactPerModelBuckets(t *testing.T) {
 	}
 }
 
+// The web sends model_stats ids back as filters.models with filters.exact_models for the
+// exact model timeline. AnalyticsModel is not idempotent, so those ids must match verbatim
+// instead of being normalized a second time ("custom(high)" would otherwise query "custom").
+// Requests without the flag keep the long-standing model-name matching unchanged.
+func TestAnalyticsModelFilterMatchesIdentitiesOnlyWhenExact(t *testing.T) {
+	db := newMonitoringTestStore(t)
+	ctx := context.Background()
+	fromMS := int64(1_800_000_000_000)
+	toMS := fromMS + 3*time.Hour.Milliseconds()
+	nextHourMS := fromMS + time.Hour.Milliseconds()
+	if _, err := db.InsertEvents(ctx, []usage.Event{
+		monitoringEvent("identity-custom-low", fromMS+time.Minute.Milliseconds(), "custom(high)(low)", "auth-a", "source-a", false, 10, 1, 0, 0, 11, nil),
+		monitoringEvent("identity-custom-max", nextHourMS+time.Minute.Milliseconds(), "custom(high)(max)", "auth-a", "source-a", false, 20, 2, 0, 0, 22, nil),
+		// The model name "custom(high)" has the identity "custom".
+		monitoringEvent("identity-custom", fromMS+3*time.Minute.Milliseconds(), "custom(high)", "auth-a", "source-a", false, 15, 1, 0, 0, 16, nil),
+		monitoringEvent("identity-other", fromMS+2*time.Minute.Milliseconds(), "other", "auth-b", "source-b", false, 30, 3, 0, 0, 33, nil),
+		// The identity keeps the whitespace before the thinking suffix: "spaced ".
+		monitoringEvent("identity-spaced-high", nextHourMS+2*time.Minute.Milliseconds(), "spaced (high)", "auth-b", "source-b", false, 40, 4, 0, 0, 44, nil),
+		monitoringEvent("identity-spaced", fromMS+4*time.Minute.Milliseconds(), "spaced", "auth-b", "source-b", false, 50, 5, 0, 0, 55, nil),
+	}); err != nil {
+		t.Fatalf("insert events: %v", err)
+	}
+	catchUpMonitoringHourlyRollup(t, ctx, db)
+	request := func(exact bool, models ...string) Request {
+		return Request{
+			FromMS:   fromMS,
+			ToMS:     toMS,
+			NowMS:    toMS,
+			TimeZone: "UTC",
+			Filters:  Filters{Models: models, ExactModels: exact},
+			Include:  Include{Summary: true, ModelStats: true, ModelTimeline: true, Granularity: "hour"},
+		}
+	}
+	type modelCalls struct {
+		model string
+		calls int64
+	}
+	assertModels := func(name string, resp Response, want ...modelCalls) {
+		t.Helper()
+		got := make([]modelCalls, 0, len(resp.ModelStats))
+		var total int64
+		for _, row := range resp.ModelStats {
+			got = append(got, modelCalls{model: row.Model, calls: row.Calls})
+			total += row.Calls
+		}
+		slices.SortFunc(got, func(left, right modelCalls) int { return strings.Compare(left.model, right.model) })
+		if !slices.Equal(got, want) {
+			t.Fatalf("%s: model stats = %#v, want %#v", name, got, want)
+		}
+		if resp.Summary == nil || resp.Summary.TotalCalls != total {
+			t.Fatalf("%s: summary = %#v, want %d calls", name, resp.Summary, total)
+		}
+	}
+
+	all, err := New(db, false).Analytics(ctx, request(false))
+	if err != nil {
+		t.Fatalf("analytics: %v", err)
+	}
+	assertModels("unfiltered", all,
+		modelCalls{"custom", 1}, modelCalls{"custom(high)", 2}, modelCalls{"other", 1},
+		modelCalls{"spaced", 1}, modelCalls{"spaced ", 1})
+
+	for _, useRollup := range []bool{false, true} {
+		label := func(name string) string { return fmt.Sprintf("%s (rollup=%v)", name, useRollup) }
+		service := New(db, useRollup)
+
+		resp, err := service.Analytics(ctx, request(true, "custom(high)"))
+		if err != nil {
+			t.Fatalf("%s: %v", label("exact custom(high)"), err)
+		}
+		assertModels(label("exact custom(high)"), resp, modelCalls{"custom(high)", 2})
+		if len(resp.ModelTimeline) != 2 {
+			t.Fatalf("%s: model timeline = %#v", label("exact custom(high)"), resp.ModelTimeline)
+		}
+		for index, wantBucketMS := range []int64{fromMS, nextHourMS} {
+			point := resp.ModelTimeline[index]
+			if point.Model != "custom(high)" || point.BucketMS != wantBucketMS || point.Calls != 1 {
+				t.Fatalf("%s: model timeline point %d = %#v", label("exact custom(high)"), index, point)
+			}
+		}
+
+		// An identity with whitespace round-trips: its model_timeline points carry the same
+		// model string as its model_stats row.
+		resp, err = service.Analytics(ctx, request(true, "spaced "))
+		if err != nil {
+			t.Fatalf("%s: %v", label("exact spaced"), err)
+		}
+		assertModels(label("exact spaced"), resp, modelCalls{"spaced ", 1})
+		if len(resp.ModelTimeline) != 1 || resp.ModelTimeline[0].Model != "spaced " ||
+			resp.ModelTimeline[0].BucketMS != nextHourMS || resp.ModelTimeline[0].Calls != 1 {
+			t.Fatalf("%s: model timeline = %#v", label("exact spaced"), resp.ModelTimeline)
+		}
+
+		// Without the flag a value is a model name, matched as before: "custom(high)" selects
+		// only "custom", and "spaced " only "spaced", even though both identities exist.
+		resp, err = service.Analytics(ctx, request(false, "custom(high)"))
+		if err != nil {
+			t.Fatalf("%s: %v", label("name custom(high)"), err)
+		}
+		assertModels(label("name custom(high)"), resp, modelCalls{"custom", 1})
+		resp, err = service.Analytics(ctx, request(false, "spaced "))
+		if err != nil {
+			t.Fatalf("%s: %v", label("name spaced"), err)
+		}
+		assertModels(label("name spaced"), resp, modelCalls{"spaced", 1})
+
+		// A raw model name with a thinking suffix selects the identity derived from it.
+		resp, err = service.Analytics(ctx, request(false, "custom(high)(low)"))
+		if err != nil {
+			t.Fatalf("%s: %v", label("name custom(high)(low)"), err)
+		}
+		assertModels(label("name custom(high)(low)"), resp, modelCalls{"custom(high)", 2})
+	}
+}
+
 func TestAnalyticsOmitsModelTimelineUnlessRequested(t *testing.T) {
 	db := newMonitoringTestStore(t)
 	ctx := context.Background()
@@ -847,6 +962,10 @@ func TestBuildModelTimelineIsIndependentOfPointOrderAndSkipsEmptyModels(t *testi
 			CachedTokens: 3, CacheReadTokens: 4, CacheCreationTokens: 5, ReasoningTokens: 6},
 		{BucketMS: 4_000, Model: "tokens", ServiceTier: "priority", Calls: 1, Success: 1, Tokens: 210, InputTokens: 10,
 			OutputTokens: 20, CachedTokens: 30, CacheReadTokens: 40, CacheCreationTokens: 50, ReasoningTokens: 60},
+		// Identities keep whitespace ("spaced (high)" is "spaced "), so these are two models,
+		// keyed exactly like their model_stats rows.
+		{BucketMS: 5_000, Model: "spaced ", Calls: 1, Success: 1},
+		{BucketMS: 5_000, Model: "spaced", Calls: 2, Success: 2},
 	}
 	prices := map[string]store.ModelPrice{
 		"z-big":   {Prompt: 1_000_000},
@@ -869,7 +988,7 @@ func TestBuildModelTimelineIsIndependentOfPointOrderAndSkipsEmptyModels(t *testi
 	for _, point := range forward {
 		gotKeys = append(gotKeys, fmt.Sprintf("%d/%s", point.BucketMS, point.Model))
 	}
-	wantKeys := []string{"1000/a-small", "1000/z-big", "2000/b-model", "3000/tied", "4000/tokens"}
+	wantKeys := []string{"1000/a-small", "1000/z-big", "2000/b-model", "3000/tied", "4000/tokens", "5000/spaced", "5000/spaced "}
 	if !reflect.DeepEqual(gotKeys, wantKeys) {
 		t.Fatalf("model timeline keys = %#v, want %#v", gotKeys, wantKeys)
 	}
