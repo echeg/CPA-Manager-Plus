@@ -766,7 +766,8 @@ export const buildUsageAnalyticsFilters = (
       UsageAnalyticsFiltersState,
       'model' | 'apiKeyHash' | 'provider' | 'authFile' | 'status' | 'minLatencyMs' | 'cacheStatus'
     >
-  >
+  >,
+  options: { exactModel?: boolean } = {}
 ): MonitoringAnalyticsFilters => {
   const payload: MonitoringAnalyticsFilters = {};
   const model = filters.model ?? 'all';
@@ -774,7 +775,15 @@ export const buildUsageAnalyticsFilters = (
   const provider = filters.provider ?? 'all';
   const authFile = filters.authFile ?? 'all';
   if (isActiveSelectValue(model)) {
-    payload.models = [model.trim()];
+    // A model the server listed as an analytics identity is sent verbatim and matched exactly:
+    // trimming or re-normalizing it can select another model ("spaced " vs "spaced"). Anything
+    // else, such as a raw name from an older saved URL, keeps the legacy normalized matching.
+    if (options.exactModel) {
+      payload.models = [model];
+      payload.exact_models = true;
+    } else {
+      payload.models = [model.trim()];
+    }
   }
   if (apiKeyHash) {
     payload.api_key_hashes = [apiKeyHash];
@@ -2937,6 +2946,18 @@ export const buildOptionValues = (values: Array<string | undefined | null>) =>
   Array.from(new Set(values.map((value) => String(value ?? '').trim()).filter(Boolean))).sort(
     (left, right) => left.localeCompare(right)
   );
+
+// Model options are analytics model identities, which can carry whitespace ("spaced " from
+// "spaced (high)"). Keep them verbatim, so "spaced " and "spaced" stay separate options; skip
+// only blank values.
+export const buildModelOptionValues = (values: Array<string | undefined | null>) =>
+  Array.from(
+    new Set(values.map((value) => String(value ?? '')).filter((value) => value.trim() !== ''))
+  ).sort((left, right) => left.localeCompare(right));
+
+// Quotes a model identity whose edge whitespace would otherwise make it look like another one.
+export const formatModelOptionLabel = (value: string) =>
+  value === value.trim() ? value : JSON.stringify(value);
 
 export const formatMetricValue = (key: UsageMetricKey, value: number) => {
   if (key === 'estimatedCost') return formatUsd(value);

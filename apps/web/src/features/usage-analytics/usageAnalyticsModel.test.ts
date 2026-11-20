@@ -19,6 +19,7 @@ import {
   buildEntityTrendSeries,
   buildKeyAnomalies,
   buildModelKeyDistribution,
+  buildModelOptionValues,
   buildEstimatedModelTrendSeries,
   buildModelTrendSeries,
   buildMonitoringDetailUrl,
@@ -39,6 +40,7 @@ import {
   buildUsageModelTimeline,
   buildUsageTimeline,
   fillUsageTimelineBuckets,
+  formatModelOptionLabel,
   computeCacheHitRate,
   computeRowAverageCostPerCall,
   computeRowCacheHitRate,
@@ -173,6 +175,32 @@ describe('usage analytics request model', () => {
     ).toEqual({
       failed_only: true,
     });
+  });
+
+  it('sends a known model identity verbatim with exact matching, and others legacy-trimmed', () => {
+    expect(buildUsageAnalyticsFilters({ model: 'spaced ' }, { exactModel: true })).toEqual({
+      models: ['spaced '],
+      exact_models: true,
+    });
+    expect(buildUsageAnalyticsFilters({ model: 'custom(high)' }, { exactModel: true })).toEqual({
+      models: ['custom(high)'],
+      exact_models: true,
+    });
+    // A raw name the server never listed, such as one from an older saved URL.
+    expect(buildUsageAnalyticsFilters({ model: ' gpt-x(high) ' })).toEqual({
+      models: ['gpt-x(high)'],
+    });
+    expect(buildUsageAnalyticsFilters({ model: 'all' }, { exactModel: true })).toEqual({});
+  });
+
+  it('keeps model options verbatim and quotes edge whitespace in their labels', () => {
+    expect(buildModelOptionValues(['spaced ', 'spaced', '  ', null, 'spaced', 'alpha'])).toEqual([
+      'alpha',
+      'spaced',
+      'spaced ',
+    ]);
+    expect(formatModelOptionLabel('spaced')).toBe('spaced');
+    expect(formatModelOptionLabel('spaced ')).toBe('"spaced "');
   });
 
   it('builds the minimum analytics include for each active tab', () => {

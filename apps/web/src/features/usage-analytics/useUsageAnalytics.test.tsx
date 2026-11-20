@@ -762,6 +762,23 @@ describe('useUsageAnalytics request orchestration', () => {
     expect(latestResult!.credentialTrendLoaded).toBe(false);
     expect(latestResult!.heatmapDateLoaded).toBe(false);
   });
+  it('matches the page model filter exactly only for a model the server listed', async () => {
+    // The selector mock lists 'gpt-a' as an analytics identity.
+    await renderHook('/usage-analytics?model=gpt-a');
+    expect(lastParams((params) => Boolean(params.include?.summary))?.filters).toEqual({
+      models: ['gpt-a'],
+      exact_models: true,
+    });
+
+    // A raw name the server never listed keeps the legacy normalized matching.
+    act(() => {
+      latestResult?.setFilters({ model: ' gpt-x(high) ' });
+    });
+    expect(lastParams((params) => Boolean(params.include?.summary))?.filters).toEqual({
+      models: ['gpt-x(high)'],
+    });
+  });
+
   describe('exact API key trend guards', () => {
     const apiKeyValues = () =>
       latestResult?.apiKeyTrendSeries[0]?.points.slice(0, 3).map((point) => point.value);

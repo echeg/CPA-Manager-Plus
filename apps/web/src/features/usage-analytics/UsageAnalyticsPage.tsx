@@ -39,8 +39,10 @@ import {
   buildUsageHeatmapChartData,
   buildModelKeyDistribution,
   buildMonitoringDetailUrl,
+  buildModelOptionValues,
   buildOptionValues,
   computeRowAverageCostPerCall,
+  formatModelOptionLabel,
   computeRowCacheHitRate,
   summarizeAnomalies,
   anomalyMetricLabelKey,
@@ -431,6 +433,20 @@ const buildStableSelectOptions = (
   return [{ value: 'all', label: allLabel }, ...options];
 };
 
+// Same as buildStableSelectOptions, but model identities stay verbatim: "spaced " and "spaced"
+// are separate options, and the edge-whitespace one gets a quoted label.
+const buildStableModelSelectOptions = (
+  allLabel: string,
+  values: Array<string | null | undefined>,
+  currentValue?: string
+): SelectOption[] => {
+  const options = buildModelOptionValues([
+    ...values,
+    currentValue && currentValue !== 'all' ? currentValue : undefined,
+  ]).map((value) => ({ value, label: formatModelOptionLabel(value) }));
+  return [{ value: 'all', label: allLabel }, ...options];
+};
+
 type StableUsageOptionCache = {
   models: string[];
   providers: string[];
@@ -458,7 +474,7 @@ const mergeStableOptionCache = (
   current: StableUsageOptionCache,
   incoming: StableUsageOptionCache
 ): StableUsageOptionCache => ({
-  models: buildOptionValues([...current.models, ...incoming.models]),
+  models: buildModelOptionValues([...current.models, ...incoming.models]),
   providers: buildOptionValues([...current.providers, ...incoming.providers]),
   authFiles: buildOptionValues([...current.authFiles, ...incoming.authFiles]),
   apiKeys: mergeSelectOptions([...current.apiKeys, ...incoming.apiKeys]),
@@ -2396,7 +2412,7 @@ function UsageAnalyticsPageInner() {
     ]);
 
     return {
-      models: buildOptionValues([
+      models: buildModelOptionValues([
         ...(usage.filterOptions?.models ?? []),
         ...(usage.filterOptions?.model_stats ?? []).map((row) => row.model),
         ...usage.modelRows.map((row) => row.model || row.label),
@@ -2502,7 +2518,11 @@ function UsageAnalyticsPageInner() {
 
   const modelOptions = useMemo<SelectOption[]>(
     () =>
-      buildStableSelectOptions(allModelOptionLabel, displayOptionCache.models, usage.filters.model),
+      buildStableModelSelectOptions(
+        allModelOptionLabel,
+        displayOptionCache.models,
+        usage.filters.model
+      ),
     [allModelOptionLabel, displayOptionCache.models, usage.filters.model]
   );
   const apiKeyOptions = useMemo<SelectOption[]>(() => {

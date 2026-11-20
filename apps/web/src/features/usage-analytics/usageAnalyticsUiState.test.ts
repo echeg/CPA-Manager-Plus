@@ -85,7 +85,9 @@ describe('usageAnalyticsUiState', () => {
       timeRange: 'custom',
       customRange: { startMs: 1_000, endMs: 2_000 },
       granularity: 'day',
-      model: 'gpt-4o',
+      // Model values are analytics identities and stay verbatim; the request decides how to
+      // match them.
+      model: ' gpt-4o ',
       apiKeyHash: 'hash',
       provider: 'all',
       authFile: 'auth.json',
@@ -98,6 +100,17 @@ describe('usageAnalyticsUiState', () => {
     expect('requestType' in filters).toBe(false);
     expect('projectId' in filters).toBe(false);
     expect('excludeZeroToken' in filters).toBe(false);
+  });
+
+  it('keeps model identities verbatim through state and query parameters', () => {
+    expect(normalizeUsageAnalyticsFilters({ model: '   ' }).model).toBe('all');
+
+    const params = buildUsageAnalyticsSearchParams({
+      activeTab: 'overview',
+      filters: { ...USAGE_ANALYTICS_DEFAULT_FILTERS, model: 'spaced ' },
+    });
+    expect(params.get('model')).toBe('spaced ');
+    expect(buildUsageAnalyticsUiStateFromSearchParams(params).filters.model).toBe('spaced ');
   });
 
   it('falls back to safe defaults for dirty persisted values', () => {

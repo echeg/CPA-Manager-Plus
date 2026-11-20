@@ -72,6 +72,11 @@ const normalizeSelectValue = (value: unknown): string => {
   return normalized || 'all';
 };
 
+// A model value is an analytics model identity, which can carry edge whitespace: keep it
+// verbatim, and treat only a blank value as "all".
+const normalizeModelSelectValue = (value: unknown): string =>
+  typeof value === 'string' && value.trim() !== '' ? value : 'all';
+
 const normalizeInputValue = (value: unknown): string =>
   typeof value === 'string' ? value : '';
 
@@ -111,7 +116,7 @@ export const normalizeUsageAnalyticsFilters = (value: unknown): UsageAnalyticsFi
     timeRange: timeRange === 'custom' && !customRange ? defaults.timeRange : timeRange,
     customRange,
     granularity: normalizeGranularity(record.granularity),
-    model: normalizeSelectValue(record.model),
+    model: normalizeModelSelectValue(record.model),
     apiKeyHash: normalizeSelectValue(record.apiKeyHash),
     provider: normalizeSelectValue(record.provider),
     authFile: normalizeSelectValue(record.authFile),
@@ -247,7 +252,9 @@ export const buildUsageAnalyticsSearchParams = (state: UsageAnalyticsUiState) =>
   if (filters.granularity !== defaults.granularity) {
     params.set('granularity', filters.granularity);
   }
-  setNonDefaultParam(params, 'model', filters.model, defaults.model);
+  if (filters.model.trim() && filters.model !== defaults.model) {
+    params.set('model', filters.model);
+  }
   setNonDefaultParam(params, 'api_key_hash', filters.apiKeyHash, defaults.apiKeyHash);
   setNonDefaultParam(params, 'provider', filters.provider, defaults.provider);
   setNonDefaultParam(params, 'auth_file', filters.authFile, defaults.authFile);

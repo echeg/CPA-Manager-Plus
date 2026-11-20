@@ -264,13 +264,43 @@ export function useUsageAnalytics() {
     () => resolveUsageGranularity(filters, nowMs),
     [filters, nowMs]
   );
+  const filterSelectorsInclude = useMemo(() => buildUsageAnalyticsFilterSelectorsInclude(), []);
+  const filterSelectorsDataScopeKey = useMemo(
+    () =>
+      JSON.stringify({
+        presentationRangeScopeKey,
+        searchQuery: debouncedSearchQuery,
+      }),
+    [presentationRangeScopeKey, debouncedSearchQuery]
+  );
+  const filterSelectorsAnalytics = useMonitoringAnalytics({
+    fromMs: bounds?.fromMs,
+    toMs: bounds?.toMs,
+    nowMs,
+    dataScopeKey: filterSelectorsDataScopeKey,
+    searchQuery: debouncedSearchQuery,
+    include: filterSelectorsInclude,
+    throttleMs: 0,
+  });
+  // The selected model is matched exactly only when the server listed it as an analytics
+  // identity. A raw name from an older saved URL keeps the legacy normalized matching. The
+  // check reads the retained selector data, not only the current scope's, so a range change
+  // does not flip the filter back to legacy matching while the new options load.
+  const selectorModelIds = filterSelectorsAnalytics.data?.filter_options?.models;
+  const exactModelFilter = useMemo(
+    () => filters.model !== 'all' && (selectorModelIds ?? []).includes(filters.model),
+    [filters.model, selectorModelIds]
+  );
   const analyticsFilters = useMemo(
     () =>
-      buildUsageAnalyticsFilters({
-        ...filters,
-        apiKeyHash: getSelectableApiKeyHash(filters.apiKeyHash) || 'all',
-      }),
-    [filters]
+      buildUsageAnalyticsFilters(
+        {
+          ...filters,
+          apiKeyHash: getSelectableApiKeyHash(filters.apiKeyHash) || 'all',
+        },
+        { exactModel: exactModelFilter }
+      ),
+    [exactModelFilter, filters]
   );
 
   useEffect(() => {
@@ -322,25 +352,6 @@ export function useUsageAnalytics() {
     searchQuery: debouncedSearchQuery,
     filters: analyticsFilters,
     include,
-    throttleMs: 0,
-  });
-
-  const filterSelectorsInclude = useMemo(() => buildUsageAnalyticsFilterSelectorsInclude(), []);
-  const filterSelectorsDataScopeKey = useMemo(
-    () =>
-      JSON.stringify({
-        presentationRangeScopeKey,
-        searchQuery: debouncedSearchQuery,
-      }),
-    [presentationRangeScopeKey, debouncedSearchQuery]
-  );
-  const filterSelectorsAnalytics = useMonitoringAnalytics({
-    fromMs: bounds?.fromMs,
-    toMs: bounds?.toMs,
-    nowMs,
-    dataScopeKey: filterSelectorsDataScopeKey,
-    searchQuery: debouncedSearchQuery,
-    include: filterSelectorsInclude,
     throttleMs: 0,
   });
 
@@ -645,9 +656,12 @@ export function useUsageAnalytics() {
   const selectedApiKeyTimelineFilters = useMemo(
     () =>
       selectedApiKeyFilterHash
-        ? buildUsageAnalyticsFilters({ ...filters, apiKeyHash: selectedApiKeyFilterHash })
+        ? buildUsageAnalyticsFilters(
+            { ...filters, apiKeyHash: selectedApiKeyFilterHash },
+            { exactModel: exactModelFilter }
+          )
         : {},
-    [filters, selectedApiKeyFilterHash]
+    [exactModelFilter, filters, selectedApiKeyFilterHash]
   );
   const selectedApiKeyTimelineInclude = useMemo(
     () => ({
