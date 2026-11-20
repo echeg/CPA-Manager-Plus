@@ -184,8 +184,8 @@
 - [x] check that the new Go and TS code is covered by the tests above, with no untested branch in `buildModelTimeline`, `buildModelTrendSeries` or `selectModelTrendIds` (added a web test for empty-model timeline points, the bucket label fallback and padded-id dedupe)
 
 ### Task 7: [Final] Update documentation
-- [ ] if a draft or unreleased release-notes file exists in `docs/release-notes/`, add a note there in English and Chinese, modelled on `v1.11.5-en.md:20`. The note says that model trends now use exact per-model buckets instead of overall share, that they fall back to the estimate on older backends, and that the "estimated" hint appears only in that case. If there is no draft, do not create a release file, and note this in the completion report.
-- [ ] add a short note to `docs/usage-analytics-implementation-plan.zh-CN.md` next to `:61`: entity trends for models now use the exact `include.model_timeline`, and the estimate is only a fallback
+- [x] if a draft or unreleased release-notes file exists in `docs/release-notes/`, add a note there in English and Chinese, modelled on `v1.11.5-en.md:20`. The note says that model trends now use exact per-model buckets instead of overall share, that they fall back to the estimate on older backends, and that the "estimated" hint appears only in that case. If there is no draft, do not create a release file, and note this in the completion report. (no draft found: every file in `docs/release-notes/` up to v1.14.10 is a prepared release, so no release note was added)
+- [x] add a short note to `docs/usage-analytics-implementation-plan.zh-CN.md` next to `:61`: entity trends for models now use the exact `include.model_timeline`, and the estimate is only a fallback
 
 ## Technical Details
 - **Request** (follow-up, trends and models tabs only):

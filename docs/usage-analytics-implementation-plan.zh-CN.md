@@ -66,6 +66,7 @@
 - 新增 `UsageProviderRow`、`UsageEntityTrendSeries`、`UsageMatrix`、`UsageKeyAnomalyRow`、`UsageCredentialQuotaRow`、`UsageInsight` 等模型。
 - Analytics 请求 include 增加 `channel_share`。
 - 新增矩阵、趋势、异常、配额和洞察构建函数。
+  - 后续更新：模型实体趋势（趋势页的模型对比图和模型页的对比图）改为使用精确的 `include.model_timeline`，按 `filters.models` 请求头部模型，并按模型的真实时间桶绘制；不再用“总体时间线 × 模型占比”估算。只有在后端未返回 `model_timeline`（旧版 Manager Server）时才回退为估算，此时才显示 `entity_trend_hint` 估算提示。
 - 下钻预览成本改为按模型 cost/token 估算。
 
 问题记录：
