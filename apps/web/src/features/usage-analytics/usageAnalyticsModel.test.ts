@@ -2193,4 +2193,27 @@ describe('exact model trends', () => {
     expect(selectModelTrendIds([modelRow('-', 5, 5, 5), modelRow('idle', 0, 0, 0)])).toEqual([]);
     expect(selectModelTrendIds([])).toEqual([]);
   });
+
+  it('ignores model timeline points without a model and dedupes padded ids', () => {
+    const modelTimeline = buildUsageModelTimeline(
+      [
+        { model: '-', bucket_ms: NOW_MS, calls: 7, tokens: 70, success: 7, failure: 0 },
+        { model: '  ', bucket_ms: NOW_MS, calls: 9, tokens: 90, success: 9, failure: 0 },
+        { model: 'model-a', bucket_ms: NOW_MS + HOUR_MS, calls: 3, tokens: 30, success: 3, failure: 0 },
+      ],
+      'hour'
+    );
+    expect(modelTimeline.map((point) => point.model)).toEqual(['', '', 'model-a']);
+    // A missing bucket_label falls back to the local bucket label.
+    expect(modelTimeline[2].bucketLabel).not.toBe('');
+
+    const rows = [modelRow('-', 50, 500, 5), modelRow('model-a', 10, 100, 1)];
+    const result = buildModelTrendSeries(rows, timeline, modelTimeline, 'requestCount');
+    expect(result.map((series) => series.id)).toEqual(['model-a']);
+    expect(result[0].points.map((point) => point.value)).toEqual([0, 3, 0, 0]);
+
+    expect(
+      selectModelTrendIds([modelRow(' model-a ', 10, 0, 0), modelRow('model-a', 0, 100, 1)])
+    ).toEqual(['model-a']);
+  });
 });

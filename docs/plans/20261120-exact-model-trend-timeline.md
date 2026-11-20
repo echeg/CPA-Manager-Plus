@@ -177,11 +177,11 @@
 - [x] run `npm run test` and `npm run check:demo-isolation`. Both must pass before task 6.
 
 ### Task 6: Verify acceptance criteria
-- [ ] verify that a model active only in part of the range is drawn as 0 outside its active buckets on both the trends and models tabs (hook-level test with exact data)
-- [ ] verify the fallback: a backend without `model_timeline` gives today's estimated lines and the hint, and a request without `include.model_timeline` gives an unchanged server response
-- [ ] run `npm run manager-server:test` and `cd apps/manager-server && go test -race ./...`
-- [ ] run `npm run test`, `npm run type-check`, `npm run lint`, `npm run check:demo-isolation` and `npm run build`
-- [ ] check that the new Go and TS code is covered by the tests above, with no untested branch in `buildModelTimeline`, `buildModelTrendSeries` or `selectModelTrendIds`
+- [x] verify that a model active only in part of the range is drawn as 0 outside its active buckets on both the trends and models tabs (hook-level test with exact data)
+- [x] verify the fallback: a backend without `model_timeline` gives today's estimated lines and the hint, and a request without `include.model_timeline` gives an unchanged server response
+- [x] run `npm run manager-server:test` and `cd apps/manager-server && go test -race ./...`
+- [x] run `npm run test`, `npm run type-check`, `npm run lint`, `npm run check:demo-isolation` and `npm run build`
+- [x] check that the new Go and TS code is covered by the tests above, with no untested branch in `buildModelTimeline`, `buildModelTrendSeries` or `selectModelTrendIds` (added a web test for empty-model timeline points, the bucket label fallback and padded-id dedupe)
 
 ### Task 7: [Final] Update documentation
 - [ ] if a draft or unreleased release-notes file exists in `docs/release-notes/`, add a note there in English and Chinese, modelled on `v1.11.5-en.md:20`. The note says that model trends now use exact per-model buckets instead of overall share, that they fall back to the estimate on older backends, and that the "estimated" hint appears only in that case. If there is no draft, do not create a release file, and note this in the completion report.
