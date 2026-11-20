@@ -476,7 +476,13 @@ export function useUsageAnalytics() {
     () => buildUsageApiKeyTimeline(apiKeyTrendData?.api_key_timeline ?? [], resolvedGranularity),
     [apiKeyTrendData, resolvedGranularity]
   );
-  const hasExactAPIKeyTimeline = Array.isArray(apiKeyTrendData?.api_key_timeline);
+  // Same guard as the model trend below: a failed follow-up keeps its last good response, and
+  // after a refresh the follow-up can still answer the previous range. Either way its buckets
+  // would draw the new hours as exact zeros, so use the estimate until it matches again.
+  const hasExactAPIKeyTimeline =
+    !apiKeyTrendAnalytics.error &&
+    isSameAnalyticsRange(apiKeyTrendAnalytics.dataRequest, analytics.dataRequest) &&
+    Array.isArray(apiKeyTrendData?.api_key_timeline);
   const modelTrendIds = useMemo(
     () =>
       isModelTrendTab(activeTabState)

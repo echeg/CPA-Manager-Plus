@@ -119,6 +119,9 @@ describe('useUsageAnalytics request orchestration', () => {
   // The request the model timeline data answers, when it predates the current one (a
   // refresh the follow-up has not answered yet). By default every response is current.
   let modelTimelineDataRequest: MonitoringAnalyticsRequest | null = null;
+  let apiKeyTimelineError = '';
+  // The same for the API key timeline follow-up.
+  let apiKeyTimelineDataRequest: MonitoringAnalyticsRequest | null = null;
   // The same for the main response, whose timeline then starts at that request's range.
   let mainDataRequest: MonitoringAnalyticsRequest | null = null;
   let modelStats: MonitoringAnalyticsModelStat[] = [];
@@ -163,7 +166,13 @@ describe('useUsageAnalytics request orchestration', () => {
         ? { from_ms: params.fromMs, to_ms: params.toMs, now_ms: params.nowMs }
         : null;
     const answeredRequest =
-      (main ? mainDataRequest : modelTimeline ? modelTimelineDataRequest : null) ?? currentRequest;
+      (main
+        ? mainDataRequest
+        : modelTimeline
+          ? modelTimelineDataRequest
+          : apiKeyTimeline
+            ? apiKeyTimelineDataRequest
+            : null) ?? currentRequest;
     const mainTimelineStartMs = answeredRequest ? localHourStartMs(answeredRequest.from_ms) : 0;
     const mainData = params.include?.credential_stats
       ? {
@@ -223,7 +232,9 @@ describe('useUsageAnalytics request orchestration', () => {
           ? credentialTimelineError
           : modelTimeline
             ? modelTimelineError
-            : '',
+            : apiKeyTimeline
+              ? apiKeyTimelineError
+              : '',
       data:
         emptyAuxiliarySnapshot && !main && !selectors
           ? emptyAnalyticsResponse
@@ -330,6 +341,8 @@ describe('useUsageAnalytics request orchestration', () => {
     modelTimelineAvailable = true;
     modelTimelineError = '';
     modelTimelineDataRequest = null;
+    apiKeyTimelineError = '';
+    apiKeyTimelineDataRequest = null;
     mainDataRequest = null;
     modelStats = [];
     mainTimelineBucketCalls = 5;
@@ -749,6 +762,71 @@ describe('useUsageAnalytics request orchestration', () => {
     expect(latestResult!.credentialTrendLoaded).toBe(false);
     expect(latestResult!.heatmapDateLoaded).toBe(false);
   });
+  describe('exact API key trend guards', () => {
+    const apiKeyValues = () =>
+      latestResult?.apiKeyTrendSeries[0]?.points.slice(0, 3).map((point) => point.value);
+    // The estimate follows the main timeline's shape (5, 0, 5); the exact buckets are 2, 0, 4.
+    const expectEstimate = () => {
+      const values = apiKeyValues() ?? [];
+      expect(values[0]).toBeGreaterThan(0);
+      expect(values[0]).toBe(values[2]);
+    };
+    const refreshAt = async (nowMs: number) => {
+      const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(nowMs);
+      try {
+        await act(async () => {
+          latestResult?.refresh();
+          await Promise.resolve();
+        });
+      } finally {
+        nowSpy.mockRestore();
+      }
+    };
+
+    it('falls back to the estimate when the API key timeline request fails', async () => {
+      await renderHook();
+      expect(apiKeyValues()).toEqual([2, 0, 4]);
+
+      // Like the real hook, the mock keeps the last good api_key_timeline next to the error.
+      apiKeyTimelineError = 'api key timeline failed';
+      await act(async () => {
+        latestResult?.refresh();
+        await Promise.resolve();
+      });
+      expectEstimate();
+
+      apiKeyTimelineError = '';
+      await act(async () => {
+        latestResult?.refresh();
+        await Promise.resolve();
+      });
+      expect(apiKeyValues()).toEqual([2, 0, 4]);
+    });
+
+    it('keeps the estimate until the API key timeline covers the refreshed range', async () => {
+      await renderHook();
+      expect(apiKeyValues()).toEqual([2, 0, 4]);
+      const apiKeyParams = lastParams(
+        (params) => Boolean(params.include?.api_key_timeline) && params.fromMs !== undefined
+      );
+      const previousRequest: MonitoringAnalyticsRequest = {
+        from_ms: apiKeyParams?.fromMs ?? 0,
+        to_ms: apiKeyParams?.toMs ?? 0,
+        now_ms: apiKeyParams?.nowMs,
+      };
+
+      // The main response for the new range end arrived first; the API key buckets still
+      // answer the previous one.
+      apiKeyTimelineDataRequest = previousRequest;
+      await refreshAt(previousRequest.to_ms + 10 * 60 * 1000);
+      expectEstimate();
+
+      apiKeyTimelineDataRequest = null;
+      await refreshAt(previousRequest.to_ms + 20 * 60 * 1000);
+      expect(apiKeyValues()).toEqual([2, 0, 4]);
+    });
+  });
+
   describe('exact model trend timeline', () => {
     const twoModels = () => [
       createModelStat({ model: 'model-a', calls: 6, total_tokens: 600, cost: 6 }),
