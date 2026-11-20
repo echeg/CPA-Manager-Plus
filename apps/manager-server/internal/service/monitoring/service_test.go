@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -406,6 +407,146 @@ func TestAnalyticsAPIKeyTimelineBuildsExactPerKeyBuckets(t *testing.T) {
 	}
 }
 
+func TestAnalyticsModelTimelineBuildsExactPerModelBuckets(t *testing.T) {
+	db := newMonitoringTestStore(t)
+	ctx := context.Background()
+	fromMS := int64(1_778_000_000_000)
+	toMS := fromMS + 3*60*60*1000
+	if err := db.SaveModelPrices(ctx, map[string]store.ModelPrice{
+		"gpt-a": {Prompt: 1, Completion: 2},
+		"gpt-b": {Prompt: 3, Completion: 4},
+		"gpt-c": {Prompt: 5},
+	}); err != nil {
+		t.Fatalf("save model prices: %v", err)
+	}
+	latency100 := int64(100)
+	latency400 := int64(400)
+	nextHourMS := fromMS + 60*60*1000
+	events := []usage.Event{
+		monitoringEvent("model-timeline-a1", fromMS+1_000, "gpt-a", "auth-1", "source-a", false, 1_000_000, 10, 0, 0, 1_000_010, &latency100),
+		monitoringEvent("model-timeline-a2", fromMS+2_000, "gpt-a", "auth-1", "source-a", true, 2_000_000, 20, 0, 0, 2_000_020, &latency400),
+		monitoringEvent("model-timeline-a3", nextHourMS+1_000, "gpt-a", "auth-2", "source-b", false, 500_000, 5, 0, 0, 500_005, nil),
+		monitoringEvent("model-timeline-b1", nextHourMS+2_000, "gpt-b", "auth-2", "source-b", false, 3_000_000, 30, 0, 0, 3_000_030, &latency100),
+		monitoringEvent("model-timeline-c1", fromMS+3_000, "gpt-c", "auth-3", "source-c", false, 4_000_000, 0, 0, 0, 4_000_000, nil),
+	}
+	if _, err := db.InsertEvents(ctx, events); err != nil {
+		t.Fatalf("insert events: %v", err)
+	}
+
+	resp, err := New(db).Analytics(ctx, Request{
+		FromMS:  fromMS,
+		ToMS:    toMS,
+		Filters: Filters{Models: []string{"gpt-a", "gpt-b"}},
+		Include: Include{
+			Timeline:      true,
+			ModelTimeline: true,
+			Granularity:   "hour",
+		},
+	})
+	if err != nil {
+		t.Fatalf("analytics: %v", err)
+	}
+	if len(resp.ModelTimeline) != 3 {
+		t.Fatalf("model timeline = %#v", resp.ModelTimeline)
+	}
+	firstBucketMS := time.UnixMilli(fromMS).UTC().Truncate(time.Hour).UnixMilli()
+	secondBucketMS := time.UnixMilli(nextHourMS).UTC().Truncate(time.Hour).UnixMilli()
+	byModelBucket := make(map[string]ModelTimelinePoint, len(resp.ModelTimeline))
+	for _, point := range resp.ModelTimeline {
+		if point.Model == "gpt-c" {
+			t.Fatalf("model excluded by filters.models is present: %#v", point)
+		}
+		byModelBucket[fmt.Sprintf("%s/%d", point.Model, point.BucketMS)] = point
+	}
+	if _, ok := byModelBucket[fmt.Sprintf("gpt-b/%d", firstBucketMS)]; ok {
+		t.Fatalf("gpt-b has a bucket in an hour without calls: %#v", resp.ModelTimeline)
+	}
+	firstA := byModelBucket[fmt.Sprintf("gpt-a/%d", firstBucketMS)]
+	if firstA.Calls != 2 || firstA.Success != 1 || firstA.Failure != 1 || firstA.TotalTokens != 3_000_030 ||
+		firstA.InputTokens != 3_000_000 || firstA.OutputTokens != 30 || firstA.Cost <= 0 ||
+		firstA.SuccessRate != 0.5 || firstA.FailureRate != 0.5 || firstA.BucketLabel == "" {
+		t.Fatalf("first gpt-a bucket = %#v", firstA)
+	}
+	if firstA.AvgLatencyMS == nil || math.Abs(*firstA.AvgLatencyMS-250) > 1e-9 {
+		t.Fatalf("first gpt-a latency = %#v", firstA.AvgLatencyMS)
+	}
+	secondA := byModelBucket[fmt.Sprintf("gpt-a/%d", secondBucketMS)]
+	if secondA.Calls != 1 || secondA.TotalTokens != 500_005 || secondA.AvgLatencyMS != nil {
+		t.Fatalf("second gpt-a bucket = %#v", secondA)
+	}
+	secondB := byModelBucket[fmt.Sprintf("gpt-b/%d", secondBucketMS)]
+	if secondB.Calls != 1 || secondB.TotalTokens != 3_000_030 || secondB.Cost <= 0 {
+		t.Fatalf("second gpt-b bucket = %#v", secondB)
+	}
+
+	type bucketTotals struct {
+		calls  int64
+		tokens int64
+		cost   float64
+	}
+	modelTotals := map[int64]bucketTotals{}
+	for _, point := range resp.ModelTimeline {
+		total := modelTotals[point.BucketMS]
+		total.calls += point.Calls
+		total.tokens += point.TotalTokens
+		total.cost += point.Cost
+		modelTotals[point.BucketMS] = total
+	}
+	if len(resp.Timeline) != len(modelTotals) {
+		t.Fatalf("timeline buckets = %#v, model buckets = %#v", resp.Timeline, modelTotals)
+	}
+	for _, point := range resp.Timeline {
+		total := modelTotals[point.BucketMS]
+		if total.calls != point.Calls || total.tokens != point.TotalTokens || math.Abs(total.cost-point.Cost) > 1e-9 {
+			t.Fatalf("bucket %d model sums = %#v, timeline = %#v", point.BucketMS, total, point)
+		}
+	}
+}
+
+func TestAnalyticsOmitsModelTimelineUnlessRequested(t *testing.T) {
+	db := newMonitoringTestStore(t)
+	ctx := context.Background()
+	fromMS := int64(1_778_000_000_000)
+	toMS := fromMS + 60*60*1000
+	if _, err := db.InsertEvents(ctx, []usage.Event{
+		monitoringEvent("model-timeline-omitted", fromMS+1_000, "gpt-a", "auth-1", "source-a", false, 10, 1, 0, 0, 11, nil),
+	}); err != nil {
+		t.Fatalf("insert events: %v", err)
+	}
+
+	resp, err := New(db).Analytics(ctx, Request{
+		FromMS:  fromMS,
+		ToMS:    toMS,
+		Include: Include{Timeline: true, Granularity: "hour"},
+	})
+	if err != nil {
+		t.Fatalf("analytics: %v", err)
+	}
+	if len(resp.Timeline) != 1 || resp.ModelTimeline != nil {
+		t.Fatalf("timeline = %#v, model timeline = %#v", resp.Timeline, resp.ModelTimeline)
+	}
+	encoded, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("marshal response: %v", err)
+	}
+	if strings.Contains(string(encoded), "model_timeline") {
+		t.Fatalf("response without include.model_timeline has the field: %s", encoded)
+	}
+
+	modelOnly, err := New(db).Analytics(ctx, Request{
+		FromMS:  fromMS,
+		ToMS:    toMS,
+		Include: Include{ModelTimeline: true, Granularity: "hour"},
+	})
+	if err != nil {
+		t.Fatalf("model-only analytics: %v", err)
+	}
+	if modelOnly.Timeline != nil || modelOnly.AnomalyPoints != nil || len(modelOnly.ModelTimeline) != 1 ||
+		modelOnly.ModelTimeline[0].Model != "gpt-a" || modelOnly.ModelTimeline[0].Calls != 1 {
+		t.Fatalf("model-only response timeline=%#v anomaly=%#v model=%#v", modelOnly.Timeline, modelOnly.AnomalyPoints, modelOnly.ModelTimeline)
+	}
+}
+
 func TestAnalyticsSummaryComparisonReturnsPreviousPeriod(t *testing.T) {
 	db := newMonitoringTestStore(t)
 	ctx := context.Background()
@@ -650,6 +791,57 @@ func TestBuildTimelineIsIndependentOfPointOrder(t *testing.T) {
 	reverse := buildTimeline([]store.TimelinePoint{points[2], points[1], points[0]}, nil, "hour", time.UTC, prices)
 	if !reflect.DeepEqual(forward, reverse) {
 		t.Fatalf("timeline changed with point order\nforward=%#v\nreverse=%#v", forward, reverse)
+	}
+}
+
+func TestBuildModelTimelineIsIndependentOfPointOrderAndSkipsEmptyModels(t *testing.T) {
+	points := []store.TimelinePoint{
+		{BucketMS: 2_000, Model: "b-model", BillingModel: "b-model", Calls: 1, Success: 1, InputTokens: 7},
+		{BucketMS: 1_000, Model: "z-big", BillingModel: "z-big", Calls: 1, Success: 1, InputTokens: 10_000_000_000_000_000},
+		{BucketMS: 1_000, Model: "z-big", BillingModel: "z-big", ServiceTier: "priority", Calls: 1, Failure: 1, InputTokens: 1,
+			AvgLatencyMS: sql.NullFloat64{Float64: 100, Valid: true}, LatencySamples: 1},
+		{BucketMS: 1_000, Model: "z-big", BillingModel: "a-small", Calls: 2, Success: 2, InputTokens: 1,
+			AvgLatencyMS: sql.NullFloat64{Float64: 400, Valid: true}, LatencySamples: 2},
+		{BucketMS: 1_000, Model: "a-small", BillingModel: "a-small", Calls: 1, Success: 1, InputTokens: 1},
+		{BucketMS: 1_000, Model: "", Calls: 5, Success: 5, InputTokens: 5},
+		{BucketMS: 2_000, Model: "   ", Calls: 3, Success: 3, InputTokens: 3},
+	}
+	prices := map[string]store.ModelPrice{
+		"z-big":   {Prompt: 1_000_000},
+		"a-small": {Prompt: 1_000_000},
+		"b-model": {Prompt: 1_000_000},
+	}
+
+	forward := buildModelTimeline(points, "hour", time.UTC, prices)
+	reversed := make([]store.TimelinePoint, 0, len(points))
+	for index := len(points) - 1; index >= 0; index-- {
+		reversed = append(reversed, points[index])
+	}
+	reverse := buildModelTimeline(reversed, "hour", time.UTC, prices)
+	if !reflect.DeepEqual(forward, reverse) {
+		t.Fatalf("model timeline changed with point order\nforward=%#v\nreverse=%#v", forward, reverse)
+	}
+
+	gotKeys := make([]string, 0, len(forward))
+	for _, point := range forward {
+		gotKeys = append(gotKeys, fmt.Sprintf("%d/%s", point.BucketMS, point.Model))
+	}
+	wantKeys := []string{"1000/a-small", "1000/z-big", "2000/b-model"}
+	if !reflect.DeepEqual(gotKeys, wantKeys) {
+		t.Fatalf("model timeline keys = %#v, want %#v", gotKeys, wantKeys)
+	}
+	big := forward[1]
+	if big.Calls != 4 || big.Success != 3 || big.Failure != 1 || big.SuccessRate != 0.75 || big.FailureRate != 0.25 {
+		t.Fatalf("z-big counters = %#v", big)
+	}
+	if big.AvgLatencyMS == nil || math.Abs(*big.AvgLatencyMS-300) > 1e-9 {
+		t.Fatalf("z-big latency = %#v", big.AvgLatencyMS)
+	}
+	if forward[0].AvgLatencyMS != nil {
+		t.Fatalf("a-small latency without samples = %#v", forward[0].AvgLatencyMS)
+	}
+	if empty := buildModelTimeline(nil, "hour", time.UTC, prices); len(empty) != 0 {
+		t.Fatalf("empty model timeline = %#v", empty)
 	}
 }
 
@@ -3241,12 +3433,16 @@ func TestAnalyticsHourlyRollupMatchesRawCoreComparisonAndTimeline(t *testing.T) 
 			Timeline:          true,
 			ModelStats:        true,
 			AnomalyPoints:     true,
+			ModelTimeline:     true,
 			Granularity:       "day",
 		},
 	}
 	raw, err := New(db, false).Analytics(ctx, req)
 	if err != nil {
 		t.Fatalf("raw analytics: %v", err)
+	}
+	if len(raw.ModelTimeline) == 0 {
+		t.Fatalf("raw model timeline is empty")
 	}
 	catchUpMonitoringHourlyRollup(t, ctx, db)
 	rolled, err := New(db, true).Analytics(ctx, req)
@@ -3321,10 +3517,11 @@ func TestAnalyticsHourlyRollupMatchesRawForModelAndOutcomeFilters(t *testing.T) 
 				TimeZone: "UTC",
 				Filters:  test.filters,
 				Include: Include{
-					Summary:     true,
-					Timeline:    true,
-					ModelStats:  true,
-					Granularity: "hour",
+					Summary:       true,
+					Timeline:      true,
+					ModelStats:    true,
+					ModelTimeline: true,
+					Granularity:   "hour",
 				},
 			}
 			raw, err := New(db, false).Analytics(ctx, req)
@@ -3591,6 +3788,38 @@ func TestAnalyticsReportsArchivedCoverageAndKeepsProjectionBackedCoreExact(t *te
 	}
 	if rawOnlyCore.Coverage == nil || !slices.Contains(rawOnlyCore.Coverage.FidelityLimitations, "core_metrics_require_raw_events") {
 		t.Fatalf("raw-only core coverage = %#v", rawOnlyCore.Coverage)
+	}
+
+	rollupModelTimeline, err := New(db, true).Analytics(ctx, Request{
+		FromMS:  fromMS,
+		ToMS:    toMS,
+		Include: Include{ModelTimeline: true, Granularity: "hour"},
+	})
+	if err != nil {
+		t.Fatalf("rollup model timeline analytics: %v", err)
+	}
+	rollupModelCalls := int64(0)
+	for _, point := range rollupModelTimeline.ModelTimeline {
+		rollupModelCalls += point.Calls
+	}
+	if rollupModelCalls != 3 || rollupModelTimeline.Coverage == nil || !rollupModelTimeline.Coverage.CoreAggregateUsed ||
+		slices.Contains(rollupModelTimeline.Coverage.FidelityLimitations, "timeline_metrics_require_raw_events") {
+		t.Fatalf("rollup model timeline = %#v, coverage = %#v", rollupModelTimeline.ModelTimeline, rollupModelTimeline.Coverage)
+	}
+
+	rawModelTimeline, err := New(db, true).Analytics(ctx, Request{
+		FromMS:      fromMS,
+		ToMS:        toMS,
+		SearchQuery: "%",
+		Include:     Include{ModelTimeline: true, Granularity: "hour"},
+	})
+	if err != nil {
+		t.Fatalf("raw model timeline analytics: %v", err)
+	}
+	if rawModelTimeline.Coverage == nil ||
+		!slices.Contains(rawModelTimeline.Coverage.FidelityLimitations, "timeline_metrics_require_raw_events") ||
+		slices.Contains(rawModelTimeline.Coverage.FidelityLimitations, "timeline_latency_percentiles_require_raw_events") {
+		t.Fatalf("raw model timeline coverage = %#v", rawModelTimeline.Coverage)
 	}
 }
 

@@ -105,26 +105,26 @@
 ## Implementation Steps
 
 ### Task 1: Server `include.model_timeline` built from the fetched timeline points
-- [ ] add `ModelTimeline bool json:"model_timeline"` to `Include` and `ModelTimeline []ModelTimelinePoint json:"model_timeline,omitempty"` to `Response` in `apps/manager-server/internal/service/monitoring/service.go`. `ModelTimelinePoint` mirrors `APIKeyTimelinePoint` (`:677`) but has `Model string json:"model"` instead of `APIKeyHash`.
-- [ ] add `buildModelTimeline(points []store.TimelinePoint, granularity, location, prices) []ModelTimelinePoint`:
+- [x] add `ModelTimeline bool json:"model_timeline"` to `Include` and `ModelTimeline []ModelTimelinePoint json:"model_timeline,omitempty"` to `Response` in `apps/manager-server/internal/service/monitoring/service.go`. `ModelTimelinePoint` mirrors `APIKeyTimelinePoint` (`:677`) but has `Model string json:"model"` instead of `APIKeyHash`.
+- [x] add `buildModelTimeline(points []store.TimelinePoint, granularity, location, prices) []ModelTimelinePoint`:
   - group by (`strings.TrimSpace(point.Model)`, `BucketMS`) and skip empty models
   - sum the counters the same way `buildAPIKeyTimeline` does (`:3406`)
   - add `costForTimelinePoint(point, prices)` per raw point
   - weight latency by `LatencySamples`, then set the success and failure rates
   - sort the output by bucket, then model, so it does not depend on input order
-- [ ] fetch the points when `req.Include.Timeline || req.Include.AnomalyPoints || req.Include.ModelTimeline`, in the block at `:1389`. Set `response.ModelTimeline = buildModelTimeline(points, …)` only when `ModelTimeline` is requested. Extend `needsHourlyTimeline` (`:1026`) with `ModelTimeline`, so the hourly rollup serves it when the filter allows.
-- [ ] add `req.Include.ModelTimeline` to the coverage condition at `:1641`, so `timeline_metrics_require_raw_events` is reported when the points do not come from the rollup and raw events were deleted
-- [ ] write a service test modelled on `TestAnalyticsAPIKeyTimelineBuildsExactPerKeyBuckets`:
+- [x] fetch the points when `req.Include.Timeline || req.Include.AnomalyPoints || req.Include.ModelTimeline`, in the block at `:1389`. Set `response.ModelTimeline = buildModelTimeline(points, …)` only when `ModelTimeline` is requested. Extend `needsHourlyTimeline` (`:1026`) with `ModelTimeline`, so the hourly rollup serves it when the filter allows.
+- [x] add `req.Include.ModelTimeline` to the coverage condition at `:1641`, so `timeline_metrics_require_raw_events` is reported when the points do not come from the rollup and raw events were deleted
+- [x] write a service test modelled on `TestAnalyticsAPIKeyTimelineBuildsExactPerKeyBuckets`:
   - seed two models in different hours and request with `filters.models` set to both
   - assert that each model has only its own buckets: no calls for a model in an hour where it had none
   - assert that the per-bucket sums of calls, tokens and cost match `response.Timeline` requested in the same call
   - assert that a third model excluded by `filters.models` is absent
-- [ ] write tests for the edge cases:
+- [x] write tests for the edge cases:
   - without `include.model_timeline` the response has no `model_timeline` field
   - `buildModelTimeline` gives the same result regardless of point order and skips empty-model points (a unit test like `TestBuildTimelineIsIndependentOfPointOrder`)
   - the hourly rollup path gives the same `model_timeline` as the raw path (extend or mirror `TestAnalyticsHourlyRollupMatchesRawCoreComparisonAndTimeline`)
   - `model_timeline` adds the coverage limitation when raw events are archived (mirror the assertion at `:3572`)
-- [ ] run `npm run manager-server:test` and `cd apps/manager-server && go test -race ./internal/service/monitoring/...`. Both must pass before task 2.
+- [x] run `npm run manager-server:test` and `cd apps/manager-server && go test -race ./internal/service/monitoring/...`. Both must pass before task 2.
 
 ### Task 2: Web API types and exact model trend builder
 - [ ] in `apps/web/src/services/api/usageService.ts`, add `model_timeline?: boolean` to `MonitoringAnalyticsInclude`, a `MonitoringAnalyticsModelTimelinePoint` type that mirrors `MonitoringAnalyticsApiKeyTimelinePoint` with `model` in place of `api_key_hash`, and `model_timeline?: MonitoringAnalyticsModelTimelinePoint[]` to `MonitoringAnalyticsResponse`. If the response is normalized, the new field must pass through.

@@ -161,6 +161,7 @@ type Include struct {
 	CredentialStats    bool              `json:"credential_stats"`
 	CredentialTimeline bool              `json:"credential_timeline"`
 	APIKeyTimeline     bool              `json:"api_key_timeline"`
+	ModelTimeline      bool              `json:"model_timeline"`
 	APIKeyStats        bool              `json:"api_key_stats"`
 	FilterOptions      bool              `json:"filter_options"`
 	FilterSelectors    bool              `json:"filter_selectors"`
@@ -206,6 +207,7 @@ type Response struct {
 	CredentialStats    []CredentialStatRow       `json:"credential_stats,omitempty"`
 	CredentialTimeline []CredentialTimelinePoint `json:"credential_timeline,omitempty"`
 	APIKeyTimeline     []APIKeyTimelinePoint     `json:"api_key_timeline,omitempty"`
+	ModelTimeline      []ModelTimelinePoint      `json:"model_timeline,omitempty"`
 	APIKeyStats        []APIKeyStatRow           `json:"api_key_stats,omitempty"`
 	FilterOptions      *FilterOptions            `json:"filter_options,omitempty"`
 	TaskBuckets        []TaskBucketRow           `json:"task_buckets,omitempty"`
@@ -695,6 +697,27 @@ type APIKeyTimelinePoint struct {
 	FailureRate         float64  `json:"failure_rate"`
 }
 
+type ModelTimelinePoint struct {
+	Model               string   `json:"model"`
+	BucketMS            int64    `json:"bucket_ms"`
+	BucketLabel         string   `json:"bucket_label"`
+	Calls               int64    `json:"calls"`
+	Tokens              int64    `json:"tokens"`
+	Success             int64    `json:"success"`
+	Failure             int64    `json:"failure"`
+	InputTokens         int64    `json:"input_tokens"`
+	OutputTokens        int64    `json:"output_tokens"`
+	CachedTokens        int64    `json:"cached_tokens"`
+	CacheReadTokens     int64    `json:"cache_read_tokens"`
+	CacheCreationTokens int64    `json:"cache_creation_tokens"`
+	ReasoningTokens     int64    `json:"reasoning_tokens"`
+	TotalTokens         int64    `json:"total_tokens"`
+	Cost                float64  `json:"cost"`
+	AvgLatencyMS        *float64 `json:"average_latency_ms"`
+	SuccessRate         float64  `json:"success_rate"`
+	FailureRate         float64  `json:"failure_rate"`
+}
+
 type AccountModelStatRow struct {
 	Model               string  `json:"model"`
 	Calls               int64   `json:"calls"`
@@ -1023,7 +1046,7 @@ func (s *Service) analytics(ctx context.Context, req Request) (Response, error) 
 	summaryComputed := false
 	rollupEligible := analyticsHourlyRollupEligible(filter)
 	needsHourlyAggregates := req.Include.Summary || req.Include.ModelShare || req.Include.ModelStats
-	needsHourlyTimeline := req.Include.Timeline || req.Include.AnomalyPoints
+	needsHourlyTimeline := req.Include.Timeline || req.Include.AnomalyPoints || req.Include.ModelTimeline
 	hourlyTimelineRepresentable := rollupEligible && needsHourlyTimeline && s.hourlyReader.CanRepresentAnalyticsTimeline(req.FromMS, req.ToMS, granularity, location)
 	needsHourlyCore := needsHourlyAggregates || hourlyTimelineRepresentable
 	var hourlySnapshot usagehourly.Snapshot
@@ -1386,7 +1409,7 @@ func (s *Service) analytics(ctx context.Context, req Request) (Response, error) 
 	}
 	var timeline []TimelinePoint
 	timelineDerived := false
-	if req.Include.Timeline || req.Include.AnomalyPoints {
+	if req.Include.Timeline || req.Include.AnomalyPoints || req.Include.ModelTimeline {
 		var points []store.TimelinePoint
 		pointsAvailable := false
 		if hourlySnapshotAvailable && hourlyTimelineRepresentable {
@@ -1399,12 +1422,17 @@ func (s *Service) analytics(ctx context.Context, req Request) (Response, error) 
 				return Response{}, err
 			}
 		}
-		timeline = buildTimeline(points, latencyPercentiles, granularity, location, prices)
+		if req.Include.Timeline || req.Include.AnomalyPoints {
+			timeline = buildTimeline(points, latencyPercentiles, granularity, location, prices)
+		}
 		if req.Include.Timeline {
 			response.Timeline = timeline
 		}
 		if req.Include.AnomalyPoints {
 			response.AnomalyPoints = buildAnomalyPoints(timeline, granularity)
+		}
+		if req.Include.ModelTimeline {
+			response.ModelTimeline = buildModelTimeline(points, granularity, location, prices)
 		}
 	}
 	if req.Include.HourlyDistribution {
@@ -1637,10 +1665,10 @@ func buildAnalyticsCoverage(
 		if req.Include.Summary && (req.Include.SummaryProfile != "compact" || req.Include.SummaryPercentiles) {
 			appendLimitation("extended_summary_metrics_require_raw_events")
 		}
+		if (req.Include.Timeline || req.Include.AnomalyPoints || req.Include.ModelTimeline) && !sources.Timeline {
+			appendLimitation("timeline_metrics_require_raw_events")
+		}
 		if req.Include.Timeline || req.Include.AnomalyPoints {
-			if !sources.Timeline {
-				appendLimitation("timeline_metrics_require_raw_events")
-			}
 			appendLimitation("timeline_latency_percentiles_require_raw_events")
 		}
 		if req.Include.HourlyDistribution || req.Include.Heatmap || req.Include.TaskBuckets {
@@ -3447,6 +3475,93 @@ func buildAPIKeyTimeline(points []store.APIKeyTimelinePoint, granularity string,
 	}
 
 	result := make([]APIKeyTimelinePoint, 0, len(order))
+	for _, mapKey := range order {
+		entry := grouped[mapKey]
+		if entry.latencySamples > 0 {
+			value := entry.latencySum / float64(entry.latencySamples)
+			entry.point.AvgLatencyMS = &value
+		}
+		entry.point.SuccessRate = ratio(entry.point.Success, entry.point.Calls)
+		entry.point.FailureRate = ratio(entry.point.Failure, entry.point.Calls)
+		result = append(result, entry.point)
+	}
+	return result
+}
+
+type modelTimelineAccumulator struct {
+	point          ModelTimelinePoint
+	latencySum     float64
+	latencySamples int64
+}
+
+// buildModelTimeline regroups the same points buildTimeline merges into
+// exact (model, bucket) series. Points are summed in a fixed order so float
+// cost sums, and therefore the output, do not depend on the input order.
+func buildModelTimeline(points []store.TimelinePoint, granularity string, location *time.Location, prices map[string]store.ModelPrice) []ModelTimelinePoint {
+	type key struct {
+		model    string
+		bucketMS int64
+	}
+	orderedPoints := make([]store.TimelinePoint, 0, len(points))
+	for _, point := range points {
+		if strings.TrimSpace(point.Model) != "" {
+			orderedPoints = append(orderedPoints, point)
+		}
+	}
+	sort.SliceStable(orderedPoints, func(i, j int) bool {
+		left, right := orderedPoints[i], orderedPoints[j]
+		if left.BucketMS != right.BucketMS {
+			return left.BucketMS < right.BucketMS
+		}
+		leftModel, rightModel := strings.TrimSpace(left.Model), strings.TrimSpace(right.Model)
+		if leftModel != rightModel {
+			return leftModel < rightModel
+		}
+		if left.Model != right.Model {
+			return left.Model < right.Model
+		}
+		if left.BillingModel != right.BillingModel {
+			return left.BillingModel < right.BillingModel
+		}
+		return left.ServiceTier < right.ServiceTier
+	})
+
+	grouped := map[key]*modelTimelineAccumulator{}
+	order := make([]key, 0, len(orderedPoints))
+	for _, point := range orderedPoints {
+		model := strings.TrimSpace(point.Model)
+		mapKey := key{model: model, bucketMS: point.BucketMS}
+		entry := grouped[mapKey]
+		if entry == nil {
+			entry = &modelTimelineAccumulator{
+				point: ModelTimelinePoint{
+					Model:       model,
+					BucketMS:    point.BucketMS,
+					BucketLabel: timelineLabel(point.BucketMS, granularity, location),
+				},
+			}
+			grouped[mapKey] = entry
+			order = append(order, mapKey)
+		}
+		entry.point.Calls += point.Calls
+		entry.point.Tokens += point.Tokens
+		entry.point.TotalTokens += point.Tokens
+		entry.point.Success += point.Success
+		entry.point.Failure += point.Failure
+		entry.point.InputTokens += point.InputTokens
+		entry.point.OutputTokens += point.OutputTokens
+		entry.point.CachedTokens += point.CachedTokens
+		entry.point.CacheReadTokens += point.CacheReadTokens
+		entry.point.CacheCreationTokens += point.CacheCreationTokens
+		entry.point.ReasoningTokens += point.ReasoningTokens
+		entry.point.Cost += costForTimelinePoint(point, prices)
+		if point.AvgLatencyMS.Valid && point.LatencySamples > 0 {
+			entry.latencySum += point.AvgLatencyMS.Float64 * float64(point.LatencySamples)
+			entry.latencySamples += point.LatencySamples
+		}
+	}
+
+	result := make([]ModelTimelinePoint, 0, len(order))
 	for _, mapKey := range order {
 		entry := grouped[mapKey]
 		if entry.latencySamples > 0 {
